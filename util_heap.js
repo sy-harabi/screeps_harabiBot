@@ -1,6 +1,7 @@
 global.Heap = {
   rooms: {},
-  creeps: {}
+  creeps: {},
+  sources: {}
 }
 
 Object.defineProperties(Room.prototype, {
@@ -17,6 +18,15 @@ Object.defineProperties(Creep.prototype, {
     get() {
       Heap.creeps[this.name] = Heap.creeps[this.name] || {}
       return Heap.creeps[this.name]
+    },
+  }
+})
+
+Object.defineProperties(Source.prototype, {
+  heap: {
+    get() {
+      Heap.sources[this.id] = Heap.sources[this.id] || {}
+      return Heap.sources[this.id]
     },
   }
 })

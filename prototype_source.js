@@ -22,19 +22,32 @@ Object.defineProperties(Source.prototype, {
             if (this._link) {
                 return this._link
             }
-            this._link = this.pos.findInRange(this.room.structures.link, 2)[0]
-            return this._link
+            if (Game.getObjectById(this.heap.linkId)) {
+                this._link = Game.getObjectById(this.heap.linkId)
+                return this._link
+            }
+            try {
+                const linkPos = this.room.parsePos(this.room.memory.basePlan.linkPositions[this.id])
+                const link = linkPos.lookFor(LOOK_STRUCTURES).filter(structure => structure.structureType === 'link')[0]
+                if (!link) {
+                    return undefined
+                }
+                this.heap.linkId = link.id
+                return this._link = link
+            } catch (error) {
+                return undefined
+            }
         }
     },
     linked: {
         get() {
-            if (!this.link) {
+            if (!this.link || !this.link.isActive()) {
                 return false
             }
             if (!this.room.storage) {
                 return false
             }
-            if (!this.room.storage.link) {
+            if (!this.room.storage.link || !this.room.storage.link.isActive()) {
                 return false
             }
             return true

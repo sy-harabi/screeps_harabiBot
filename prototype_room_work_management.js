@@ -70,14 +70,14 @@ Creep.prototype.upgradeRCL = function () {
     }
 
     if (this.pos.getRangeTo(controller) > 3) {
-        return this.moveMy(controller, 3)
+        return this.moveMy(controller, { range: 3 })
     }
 
     if (!this.isWorkable(this.pos)) {
         const workingSpot = this.pos.findClosestByRange(this.getWorkingSpots(controller.pos))
         if (workingSpot) {
             this.heap.workingSpot = { id: controller.id, pos: workingSpot }
-            this.moveMy(workingSpot, 0)
+            this.moveMy(workingSpot)
         }
     }
 
@@ -102,7 +102,7 @@ Creep.prototype.buildTask = function () {
     }
 
     if (this.pos.getRangeTo(constructionSite) > 3) {
-        return this.moveMy(constructionSite, 3)
+        return this.moveMy(constructionSite, { range: 3 })
     }
 
     if (this.pos.isEqualTo(constructionSite.pos)) {
@@ -114,7 +114,7 @@ Creep.prototype.buildTask = function () {
         const workingSpot = this.pos.findClosestByRange(this.getWorkingSpots(constructionSite.pos))
         if (workingSpot) {
             this.heap.workingSpot = { id: this.memory.task, pos: workingSpot }
-            this.moveMy(workingSpot, 0)
+            this.moveMy(workingSpot)
         }
     }
 
@@ -125,7 +125,7 @@ Creep.prototype.buildTask = function () {
 
 Room.prototype.manageWork = function () {
     // laborer 동작 및 이용가능한 laborer 찾기
-    let laborers = this.creeps.laborer
+    let laborers = getCreepsByRole(this.name, 'laborer')
     this.heap.laborersNeedDelivery = false
 
     let controllerLink = undefined
@@ -145,6 +145,11 @@ Room.prototype.manageWork = function () {
         }
 
         if (!laborer.working && !laborer.memory.task && this.controller.linked) {
+            const tombstones = laborer.pos.findInRange(FIND_TOMBSTONES, 3).filter(tombstone => tombstone.store[RESOURCE_ENERGY])
+            if (tombstones.length) {
+                laborer.getEnergyFrom(tombstones[0].id)
+                continue
+            }
             laborer.getEnergyFrom(controllerLink.id)
             continue
         }

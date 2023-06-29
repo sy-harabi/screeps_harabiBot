@@ -1,3 +1,86 @@
+Room.prototype.manageConstruction = function () {
+    if (!this.memory.level || Game.time % 3000 === 0) {
+        this.memory.level = 0
+    }
+
+    if (this.controller.level < this.memory.level) {
+        return this.memory.level = 0
+    }
+
+    if (this.controller.level === this.memory.level) {
+        return
+    }
+
+    if (this.memory.optimizeBasePlanLeftTick > 0) {
+        this.memory.optimizeBasePlanLeftTick--
+        return this.optimizeBasePlan(this.memory.optimizeBasePlanLeftTick)
+    }
+
+    if (Game.time % 20 === 0 && this.constructByBasePlan(this.memory.level + 1)) {
+        this.memory.level++
+    }
+}
+
+Room.prototype.constructByBasePlan = function (level) {
+    const basePlan = this.basePlan
+    if (!basePlan) {
+        const spawn = this.structures.spawn[0]
+        if (!spawn) {
+            const TICKS_TO_OPTIMIZE_BASE_PLAN = 50
+            this.memory.optimizeBasePlanLeftTick = TICKS_TO_OPTIMIZE_BASE_PLAN
+            return false
+        }
+        if (!this.getBasePlanBySpawn(spawn)) {
+            return false
+        }
+    }
+    let numConstructionSites = Object.keys(Game.constructionSites).length
+    let newConstructionSites = 0
+    for (let i = 1; i <= level; i++) {
+        basePlan[`lv${i}`].sort((a, b) => BUILD_PRIORITY[a.structureType] - BUILD_PRIORITY[b.structureType])
+        for (const structure of basePlan[`lv${i}`]) {
+            if (structure.structureType === 'spawn') {
+                structure.pos.createConstructionSite(structure.structureType, `Spawn${Object.keys(Game.spawns).length + 1}`)
+            }
+            if (structure.pos.createConstructionSite(structure.structureType) === OK) {
+                numConstructionSites++
+                newConstructionSites++
+            }
+            this.visual.structure(structure.pos.x, structure.pos.y, structure.structureType)
+        }
+    }
+
+    if (newConstructionSites === 0 && this.constructionSites.length === 0) {
+        return true
+    }
+    return false
+}
+
+Room.prototype.visualizeBasePlan = function () {
+    const basePlan = this.basePlan
+    if (!basePlan) {
+        return false
+    }
+    for (let i = 1; i <= 8; i++) {
+        for (const structure of basePlan[`lv${i}`]) {
+            this.visual.structure(structure.pos.x, structure.pos.y, structure.structureType)
+        }
+    }
+    this.visual.connectRoads()
+    return true
+}
+
+Room.prototype.unpackBasePlan = function () {
+    const basePlan = {}
+    for (i = 1; i <= 8; i++) {
+        basePlan[`lv${i}`] = []
+        for (const packed of this.memory.basePlan[`lv${i}`]) {
+            basePlan[`lv${i}`].push(this.unpack(packed))
+        }
+    }
+    return basePlan
+}
+
 Room.prototype.optimizeBasePlan = function (numFirstAnchor = 10) {
     // Make cost matrix
     const costs = this.basicCostMatrixForRoomPlan.clone()
@@ -80,85 +163,6 @@ Room.prototype.optimizeBasePlan = function (numFirstAnchor = 10) {
     return OK
 }
 
-Room.prototype.getFirstAnchorsByDT = function (costs, numFirstAnchor) {
-    if (this.heap.possibleAnchors) {
-        return this.heap.possibleAnchors
-    }
-
-    const importantPositions = []
-    importantPositions.push(this.controller.pos)
-    importantPositions.push(...this.sources.map(source => source.pos))
-    importantPositions.push(...this.find(FIND_MINERALS).map(mineral => mineral.pos))
-
-    const DT = this.getDistanceTransform()
-    const result = []
-
-    for (i = 25; i > 2; i--) {
-        for (const pos of DT[i]) {
-            const anchor = pos.getClusterAnchor(costs)
-            if (!anchor) {
-                continue
-            }
-            result.push(anchor)
-            this.visual.text(i, pos)
-            this.visual.circle(pos, { fill: 'green' })
-        }
-    }
-    result.sort((a, b) => a.pos.getAverageRange(importantPositions) - b.pos.getAverageRange(importantPositions))
-    result.splice(3 * numFirstAnchor)
-
-    this.heap.possibleAnchors = _.shuffle(result)
-    return this.heap.possibleAnchors
-}
-
-Room.prototype.getBasePlanBySpawn = function () {
-    const spawn = this.structures.spawn[0]
-    const pos = new RoomPosition(spawn.pos.x, spawn.pos.y + 1, this.name)
-
-    const costs = this.basicCostMatrixForRoomPlan.clone()
-    for (const pos of this.controller.pos.getAtDiagonalRange(2)) {
-        if (costs.get(pos.x, pos.y) < 10) {
-            costs.set(pos.x, pos.y, 30)
-        }
-    }
-    for (const pos of this.controller.pos.getAtDiagonalRange(1)) {
-        if (costs.get(pos.x, pos.y) < 10) {
-            costs.set(pos.x, pos.y, 30)
-        }
-    }
-    for (const source of this.sources) {
-        for (const pos of source.pos.getInRange(1)) {
-            if (costs.get(pos.x, pos.y) < 10) {
-                costs.set(pos.x, pos.y, 30)
-            }
-        }
-        for (const pos of source.pos.getAtRange(2)) {
-            if (costs.get(pos.x, pos.y) < 10) {
-                costs.set(pos.x, pos.y, 4)
-            }
-        }
-    }
-    for (const pos of this.mineral.pos.getInRange(1)) {
-        if (costs.get(pos.x, pos.y) < 10) {
-            costs.set(pos.x, pos.y, 30)
-        }
-    }
-
-    const firstAnchor = pos.getClusterAnchor(costs)
-
-    const result = this.getBasePlan(firstAnchor, costs)
-
-    if (result.cost === Infinity) {
-        return false
-    }
-
-    this.memory.basePlan = result.basePlan
-    this.heap.basePlanResult = result
-    console.log('first basePlan')
-    this.visualizeBasePlan()
-    return OK
-}
-
 Room.prototype.getBasePlan = function (firstAnchor, costs) {
     const basePlan = {}
     for (let i = 1; i <= 8; i++) {
@@ -216,13 +220,16 @@ Room.prototype.getBasePlan = function (firstAnchor, costs) {
             costs.set(areaPos.x, areaPos.y, 255)
             mincutSources.push(areaPos)
             structures[stamp.structureType].push(areaPos)
+            if (stamp.structureType === 'road') {
+                basePlan[`lv6`].push(areaPos.packPos('road'))
+            }
         }
 
         for (const borderPos of anchor.border) {
             costs.set(borderPos.x, borderPos.y, 1)
             mincutSources.push(borderPos)
             structures.road.push(borderPos)
-            basePlan[`lv6`].push(pos.packPos('road'))
+            basePlan[`lv6`].push(borderPos.packPos('road'))
         }
         break
     }
@@ -331,7 +338,7 @@ Room.prototype.getBasePlan = function (firstAnchor, costs) {
         costsForRoad.set(pos.x, pos.y, 1)
     }
 
-    const path = PathFinder.search(firstSpawnPos, { pos: this.controller.pos, range: 2 }, {
+    const controllerPathSearch = PathFinder.search(firstSpawnPos, { pos: this.controller.pos, range: 2 }, {
         plainCost: 2,
         swampCost: 2,
         roomCallback: function (roomName) {
@@ -339,7 +346,14 @@ Room.prototype.getBasePlan = function (firstAnchor, costs) {
         },
         maxOps: 10000,
         maxRooms: 1
-    }).path
+    })
+
+    if (controllerPathSearch.incomplete) {
+        console.log('cannot find roads')
+        return { basePlan: basePlan, cost: Infinity }
+    }
+
+    const path = controllerPathSearch.path
     pathCost += path.length
 
     const controllerLinkPos = path.pop()
@@ -360,8 +374,9 @@ Room.prototype.getBasePlan = function (firstAnchor, costs) {
     }
 
     // roads to sources
-    for (const source of this.sources.sort((a, b) => b.info.maxCarry - a.info.maxCarry)) {
-        const path = PathFinder.search(firstSpawnPos, { pos: source.pos, range: 1 }, {
+    const sources = this.sources.sort((a, b) => b.info.maxCarry - a.info.maxCarry)
+    for (const source of sources) {
+        const sourcePathSearch = PathFinder.search(firstSpawnPos, { pos: source.pos, range: 1 }, {
             plainCost: 2,
             swampCost: 2,
             roomCallback: function (roomName) {
@@ -369,12 +384,22 @@ Room.prototype.getBasePlan = function (firstAnchor, costs) {
             },
             maxOps: 10000,
             maxRooms: 1
-        }).path
-        pathCost += path.length * 2 / 3
+        })
+
+        if (sourcePathSearch.incomplete) {
+            console.log('cannot find roads')
+            return { basePlan: basePlan, cost: Infinity }
+        }
+
+        const path = sourcePathSearch.path
+        pathCost += path.length
+
         const containerPos = path.pop()
         structures.container.push(containerPos)
+
         costs.set(containerPos.x, containerPos.y, 255)
         costsForRoad.set(containerPos.x, containerPos.y, 255)
+
         structures.road.push(...path)
         for (const pos of path) {
             basePlan[`lv3`].push(pos.packPos('road'))
@@ -383,7 +408,7 @@ Room.prototype.getBasePlan = function (firstAnchor, costs) {
             costs.set(pos.x, pos.y, 5)
             costsForRoad.set(pos.x, pos.y, 1)
         }
-        const linkPos = structures.link[0].findClosestByRange(containerPos.getAtRange(1).filter(pos => (pos.getRangeTo(source) < 2 && pos.walkable) || costs.get(pos.x, pos.y) < 5))
+        const linkPos = structures.link[0].findClosestByRange(containerPos.getAtRange(1).filter(pos => ![1, 5, 255].includes(costs.get(pos.x, pos.y))))
         if (!linkPos) {
             continue
         }
@@ -394,8 +419,7 @@ Room.prototype.getBasePlan = function (firstAnchor, costs) {
 
     // roads to mineral + extractor
     structures.extractor.push(this.mineral.pos)
-
-    const mineralPath = PathFinder.search(firstSpawnPos, { pos: this.mineral.pos, range: 1 }, {
+    const mineralPathSearch = PathFinder.search(firstSpawnPos, { pos: this.mineral.pos, range: 1 }, {
         plainCost: 2,
         swampCost: 2,
         roomCallback: function (roomName) {
@@ -403,7 +427,15 @@ Room.prototype.getBasePlan = function (firstAnchor, costs) {
         },
         maxOps: 10000,
         maxRooms: 1
-    }).path
+    })
+    if (mineralPathSearch.incomplete) {
+        console.log('cannot find roads')
+        return { basePlan: basePlan, cost: Infinity }
+    }
+
+    const mineralPath = mineralPathSearch.path
+    pathCost += mineralPath.length
+
     const mineralContainerPos = mineralPath.pop()
     structures.container.push(mineralContainerPos)
     costs.set(mineralContainerPos.x, mineralContainerPos.y, 255)
@@ -448,6 +480,17 @@ Room.prototype.getBasePlan = function (firstAnchor, costs) {
     }
 
     // packPos
+    // link : storage -> controller -> 먼 source -> 가까운 source
+    const linkPositions = {
+        storage: structures.link[0].pack(),
+        controller: structures.link[1].pack()
+    }
+    linkPositions[sources[0].id] = structures.link[2].pack()
+    if (sources[1] && structures.link[3]) {
+        linkPositions[sources[1].id] = structures.link[3].pack()
+    }
+
+    basePlan.linkPositions = linkPositions
 
     for (const structureType of Object.keys(CONTROLLER_STRUCTURES)) {
         const structurePositions = structures[structureType]
@@ -458,7 +501,7 @@ Room.prototype.getBasePlan = function (firstAnchor, costs) {
 
         if (structureType === 'rampart') {
             for (const pos of structurePositions) {
-                basePlan[`lv7`].push(pos.packPos('rampart'))
+                basePlan[`lv5`].push(pos.packPos('rampart'))
             }
             continue
         }
@@ -490,6 +533,58 @@ Room.prototype.getBasePlan = function (firstAnchor, costs) {
     console.log('CPU used: ' + Game.cpu.getUsed())
 
     return { basePlan: basePlan, cost: cost }
+}
+
+Room.prototype.getBasePlanBySpawn = function () {
+    const spawn = this.structures.spawn[0]
+    if (!spawn) {
+        console.log('no spawn in this room')
+        return
+    }
+    const pos = new RoomPosition(spawn.pos.x, spawn.pos.y + 1, this.name)
+
+    const costs = this.basicCostMatrixForRoomPlan.clone()
+    for (const pos of this.controller.pos.getAtDiagonalRange(2)) {
+        if (costs.get(pos.x, pos.y) < 10) {
+            costs.set(pos.x, pos.y, 30)
+        }
+    }
+    for (const pos of this.controller.pos.getAtDiagonalRange(1)) {
+        if (costs.get(pos.x, pos.y) < 10) {
+            costs.set(pos.x, pos.y, 30)
+        }
+    }
+    for (const source of this.sources) {
+        for (const pos of source.pos.getInRange(1)) {
+            if (costs.get(pos.x, pos.y) < 10) {
+                costs.set(pos.x, pos.y, 30)
+            }
+        }
+        for (const pos of source.pos.getAtRange(2)) {
+            if (costs.get(pos.x, pos.y) < 10) {
+                costs.set(pos.x, pos.y, 4)
+            }
+        }
+    }
+    for (const pos of this.mineral.pos.getInRange(1)) {
+        if (costs.get(pos.x, pos.y) < 10) {
+            costs.set(pos.x, pos.y, 30)
+        }
+    }
+
+    const firstAnchor = pos.getClusterAnchor(costs)
+
+    const result = this.getBasePlan(firstAnchor, costs)
+
+    if (result.cost === Infinity) {
+        return false
+    }
+
+    this.memory.basePlan = result.basePlan
+    this.heap.basePlanResult = result
+    console.log('first basePlan')
+    this.visualizeBasePlan()
+    return OK
 }
 
 const CLUSTER_STAMP = [
@@ -530,44 +625,35 @@ const LABS_STAMP = [
     { x: +1, y: 0, structureType: 'road' },
 ]
 
-RoomPosition.prototype.getFastFillerAnchor = function (costs) {
-    const anchor = {
-        pos: this,
-        size: 4,
+Room.prototype.getFirstAnchorsByDT = function (costs, numFirstAnchor) {
+    if (this.heap.possibleAnchors) {
+        return this.heap.possibleAnchors
     }
 
-    const area = this.getInRange(2)
-    for (const pos of area) {
-        if (!isValidCoord(pos.x, pos.y) || costs.get(pos.x, pos.y) > 0) {
-            return undefined
-        }
-    }
+    const importantPositions = []
+    importantPositions.push(this.controller.pos)
+    importantPositions.push(...this.sources.map(source => source.pos))
+    importantPositions.push(...this.find(FIND_MINERALS).map(mineral => mineral.pos))
 
-    const border = []
-    for (const x of [-3, 3]) {
-        for (let y = -2; y <= 2; y++) {
-            if (!isValidCoord(this.x + x, this.y + y) || costs.get(this.x + x, this.y + y) > 0) {
-                return undefined
+    const DT = this.getDistanceTransform()
+    const result = []
+
+    for (i = 25; i > 2; i--) {
+        for (const pos of DT[i]) {
+            const anchor = pos.getClusterAnchor(costs)
+            if (!anchor) {
+                continue
             }
-            border.push(new RoomPosition(this.x + x, this.y + y, this.roomName))
+            result.push(anchor)
+            this.visual.text(i, pos)
+            this.visual.circle(pos, { fill: 'green' })
         }
-
-    }
-    for (const y of [-3, 3]) {
-        for (let x = -2; x <= 2; x++) {
-            if (!isValidCoord(this.x + x, this.y + y) || costs.get(this.x + x, this.y + y) > 0) {
-                return undefined
-            }
-            border.push(new RoomPosition(this.x + x, this.y + y, this.roomName))
-        }
-
     }
 
-    anchor.area = area
-    anchor.border = border
-
-    return anchor
+    this.heap.possibleAnchors = _.shuffle(result)
+    return this.heap.possibleAnchors
 }
+
 
 RoomPosition.prototype.getClusterAnchor = function (costs) {
     const anchor = {
@@ -665,17 +751,6 @@ Room.prototype.unpack = function (packed) {
     return result
 }
 
-Room.prototype.unpackBasePlan = function () {
-    const basePlan = {}
-    for (i = 1; i <= 8; i++) {
-        basePlan[`lv${i}`] = []
-        for (const packed of this.memory.basePlan[`lv${i}`]) {
-            basePlan[`lv${i}`].push(this.unpack(packed))
-        }
-    }
-    return basePlan
-}
-
 Object.defineProperties(Room.prototype, {
     basePlan: {
         get() {
@@ -710,55 +785,6 @@ Object.defineProperties(Room.prototype, {
         }
     },
 })
-
-const TICKS_TO_OPTIMIZE_BASE_PLAN = 50
-
-Room.prototype.constructByBasePlan = function (level) {
-    const basePlan = this.basePlan
-    if (!basePlan) {
-        const spawn = this.structures.spawn[0]
-        if (!spawn) {
-            this.memory.optimizeBasePlanLeftTick = TICKS_TO_OPTIMIZE_BASE_PLAN
-            return false
-        }
-        if (!this.getBasePlanBySpawn(spawn)) {
-            return false
-        }
-    }
-    let numConstructionSites = Object.keys(Game.constructionSites).length
-    let newConstructionSites = 0
-    for (let i = 1; i <= level; i++) {
-        for (const structure of basePlan[`lv${i}`]) {
-            if (structure.structureType === 'spawn') {
-                structure.pos.createConstructionSite(structure.structureType, `Spawn${Object.keys(Game.spawns).length + 1}`)
-            }
-            if (structure.pos.createConstructionSite(structure.structureType) === OK) {
-                numConstructionSites++
-                newConstructionSites++
-            }
-            this.visual.structure(structure.pos.x, structure.pos.y, structure.structureType)
-        }
-    }
-
-    if (newConstructionSites === 0 && numConstructionSites < 90) {
-        return true
-    }
-    return false
-}
-
-Room.prototype.visualizeBasePlan = function () {
-    const basePlan = this.basePlan
-    if (!basePlan) {
-        return false
-    }
-    for (let i = 1; i <= 8; i++) {
-        for (const structure of basePlan[`lv${i}`]) {
-            this.visual.structure(structure.pos.x, structure.pos.y, structure.structureType)
-        }
-    }
-    this.visual.connectRoads()
-    return true
-}
 
 Room.prototype.floodFill = function (structures, maxLevel) {
     const sources = []

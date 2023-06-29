@@ -153,12 +153,15 @@ global.checkCPU = function (name) {
     data.cpu = cpu
 }
 
-global.colonize = function (baseName, colonyName) {
-
-    baseName = baseName.toUpperCase()
+global.colonize = function (colonyName, baseName) {
     colonyName = colonyName.toUpperCase()
-    const base = Game.rooms[baseName.toUpperCase()]
-    delete base.memory.colony
+    const base = baseName ? Game.rooms[baseName.toUpperCase()] : findClosestMyRoom(colonyName)
+    baseName = base.name
+    if (base.memory.colony && base.memory.colony[colonyName]) {
+        delete base.memory.colony[colonyName]
+    }
+
+
     if (!(base && base.isMy)) {
         console.log(`Base ${baseName} is not your room`)
         return
@@ -174,4 +177,93 @@ global.colonize = function (baseName, colonyName) {
     base.memory.colony = base.memory.colony || {}
     base.memory.colony[colonyName] = {}
     return
+}
+
+global.classifyCreeps = function () {
+    const creepAction = require('creepAction')
+
+    if (Game._classifiedCreeps) {
+        return Game._classifiedCreeps
+    }
+    const creeps = Object.values(Game.creeps)
+    const result = {}
+    for (const roomName of Object.keys(Game.rooms)) {
+        result[roomName] = {}
+        for (const creepRole of CREEP_ROELS) {
+            result[roomName][creepRole] = []
+        }
+        result[roomName].wounded = []
+    }
+    for (const creep of creeps) {
+        if (creep.owner.username !== MY_NAME) {
+            continue
+        }
+
+        if (!result[creep.assignedRoom]) {
+            result[creep.assignedRoom] = {}
+        }
+
+        if (creep.hitsMax - creep.hits) {
+            if (!result[creep.assignedRoom].wounded) {
+                result[creep.assignedRoom].wounded = []
+            }
+            result[creep.assignedRoom].wounded.push(creep)
+        }
+
+        if (creep.memory.role) {
+            if (!creep.spawning && SELF_DIRECTED_CREEP_ROELS.includes(creep.memory.role)) {
+                creepAction[creep.memory.role](creep)
+            }
+
+            if (!result[creep.assignedRoom][creep.memory.role]) {
+                result[creep.assignedRoom][creep.memory.role] = []
+            }
+            result[creep.assignedRoom][creep.memory.role].push(creep)
+        }
+    }
+    Game._classifiedCreeps = result
+    return Game._classifiedCreeps
+}
+
+global.getNumCreepsByRole = function (roomName, role) {
+    const creeps = classifyCreeps()
+    if (!creeps[roomName]) {
+        return 0
+    }
+    if (!creeps[roomName][role]) {
+        return 0
+    }
+    return creeps[roomName][role].length
+}
+
+global.getCreepsByRole = function (roomName, role) {
+    const creeps = classifyCreeps()
+    if (!creeps[roomName]) {
+        return []
+    }
+    if (!creeps[roomName][role]) {
+        return []
+    }
+    return creeps[roomName][role]
+}
+
+global.findClosestMyRoom = function (fromRoomName, level = 0) {
+    const closestRoomName = Object.keys(Game.rooms).filter(roomName => roomName !== fromRoomName && Game.rooms[roomName].isMy && Game.rooms[roomName].controller.level >= level).sort((a, b) => {
+        return Game.map.findRoute(fromRoomName, a, {
+            routeCallback(roomName) {
+                if (ROOMNAMES_TO_AVOID.includes(roomName)) {
+                    return Infinity;
+                }
+                return 1;
+            }
+        }).length - Game.map.findRoute(fromRoomName, b, {
+            routeCallback(roomName) {
+                if (ROOMNAMES_TO_AVOID.includes(roomName)) {
+                    return Infinity;
+                }
+                return 1;
+            }
+        }).length
+    })[0]
+    return Game.rooms[closestRoomName]
 }

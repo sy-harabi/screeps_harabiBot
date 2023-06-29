@@ -16,7 +16,7 @@ Creep.prototype.giveEnergyTo = function (id) {
     const target = Game.getObjectById(id)
     if (target) {
         if (this.transfer(target, RESOURCE_ENERGY) === -9) {
-            this.moveMy(target, 1)
+            this.moveMy(target, { range: 1 })
         }
     }
 }

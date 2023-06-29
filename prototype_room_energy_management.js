@@ -20,7 +20,7 @@ function Applicant(creep) {
     this.creep = creep
     this.pos = creep.pos
     this.amount = creep.store.getUsedCapacity(RESOURCE_ENERGY)
-    this.isManager = creep.memory.manager
+    this.isManager = creep.memory.role === 'manager' ? true : false
     this.engaged = null
 }
 
@@ -65,11 +65,11 @@ Room.prototype.getEnergyRequests = function (numApplicants) {
         requests.push(new Request(storage))
     }
 
-    if (terminal && terminal.store[RESOURCE_ENERGY] < (this.controller.level > 7 ? 60000 : 3000)) {
+    if (terminal && terminal.store.getFreeCapacity(RESOURCE_ENERGY) && terminal.store[RESOURCE_ENERGY] < (this.controller.level > 7 ? 60000 : 3000)) {
         requests.push(new Request(terminal))
     }
 
-    if (factory && factory.store.getUsedCapacity(RESOURCE_ENERGY) < 2000) {
+    if (factory && factory.store.getFreeCapacity(RESOURCE_ENERGY) && factory.store.getUsedCapacity(RESOURCE_ENERGY) < 2000) {
         requests.push(new Request(factory))
     }
 
@@ -84,7 +84,9 @@ Room.prototype.getEnergyRequests = function (numApplicants) {
     this.heap.emptyControllerLink = false
     if (controllerLink && storageLink && controllerLink.store.getFreeCapacity(RESOURCE_ENERGY) > 400) {
         this.heap.emptyControllerLink = true
-        requests.push(new Request(storageLink))
+        if (storageLink.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
+            requests.push(new Request(storageLink))
+        }
     }
     this.heap.storageUse = requests.length - numApplicants - 1
 
@@ -230,7 +232,6 @@ Room.prototype.manageEnergyFetch = function (arrayOfCreeps) {
             if (!request.threshold && bestApplicant.amount > request.amount) {
                 continue
             }
-
             if (!bestApplicant.engaged) {
                 request.amount -= bestApplicant.amount
                 bestApplicant.engaged = request
@@ -259,7 +260,8 @@ Room.prototype.manageEnergyFetch = function (arrayOfCreeps) {
 Room.prototype.manageEnergy = function () {
     let suppliers = []
     let fetchers = []
-    for (const creep of this.creeps.hauler) {
+    const haulers = this.creeps.hauler.concat(this.creeps.manager)
+    for (const creep of haulers) {
         if (creep.ticksToLive < 15) {
             creep.getRecycled()
             continue

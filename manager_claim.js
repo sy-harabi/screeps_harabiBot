@@ -1,6 +1,10 @@
 function run(flag) { //플래그를 대입하는 함수 (이름 아님)
     if (flag.room && flag.room.controller.my) { // 방 보이고 먹었으면
-        flag.memory.spawnPioneer = true
+
+        flag.memory.spawnPioneer = flag.room.controller.level < 2 ? true : false
+
+        flag.memory.spawnDefender = true
+
         if (!flag.memory.removeHostileConstructionSites) {
             for (const site of flag.room.find(FIND_HOSTILE_CONSTRUCTION_SITES)) {
                 site.remove()
@@ -19,71 +23,51 @@ function run(flag) { //플래그를 대입하는 함수 (이름 아님)
             flag.memory.destroyStructures = true
         }
 
-        if (flag.memory.removeHostileConstructionSites && flag.memory.destroyStructures && flag.room.structures.spawn.length && flag.room.controller.level >= 3) {
+        if (flag.memory.removeHostileConstructionSites && flag.memory.destroyStructures && flag.room.structures.spawn.length && flag.room.structures.tower.length) {
             flag.remove(); // 깃발 지워라
             return
         }
     }
 
     const roomName = flag.pos.roomName
-    const closestMyRoom = flag.findClosestMyRoomAvoidEnemy(5)
+    const closestMyRoom = flag.findClosestMyRoomAvoidEnemy(4)
+    const distance = flag.memory.distanceToClosestRoom || 10
+
     if (!closestMyRoom) {
         flag.remove()
         return
     }
-    flag.memory.creeps = [
-        `${flag.name} claimer`,
-        `${flag.name} pioneer 1`,
-        `${flag.name} pioneer 2`,
-        `${flag.name} pioneer 3`,
-        `${flag.name} pioneer 4`
-    ]
 
-    if ((!Game.rooms[roomName] || !Game.rooms[roomName].controller.my) && Object.keys(Game.creeps).indexOf(flag.memory.creeps[0]) === -1) { // 방 안보이고 claimer 없으면
-        const spawn = closestMyRoom.structures.spawn.find(s => !s.spawning)
-        if (!spawn) {
-            return
-        }
-        if (spawn.spawnCreep([CLAIM, MOVE, MOVE, MOVE, MOVE, MOVE], flag.memory.creeps[0], {
-            memory: {
-                role: 'claimer',
-                targetRoom: roomName,
-                flag: flag.name
-            }
-        }) === OK) {
-            return
-        }
+    if ((!Game.rooms[roomName] || !Game.rooms[roomName].controller.my) && !getNumCreepsByRole(flag.pos.roomName, 'claimer')) { // 방 안보이고 claimer 없으면
+        return closestMyRoom.requestClaimer(flag.pos.roomName)
     }
 
-    if (flag.isInvader) {
-        closestMyRoom.spawnColonyDefender(flag.pos.roomName)
-    }
+
     if (flag.isInvaderCore) {
-        closestMyRoom.spawnColonyCoreDefender(flag.pos.roomName)
+        if (!getNumCreepsByRole(flag.pos.roomName, 'colonyDefender')) {
+            return closestMyRoom.requestColonyCoreDefender(flag.pos.roomName)
+        }
     }
 
     if (flag.memory.spawnPioneer) {
-        for (let i = 1; i < 5; i++) { // romoteBuilder 생산
-            if (Object.keys(Game.creeps).indexOf(flag.memory.creeps[i]) === -1) { // 해당 번호의 remoteBuilder 없으면 만들어라
-                const spawn = closestMyRoom.structures.spawn.filter(s => !s.spawning)[0]
-                if (!spawn) {
-                    return
-                }
-                let pioneerBody = []
-                for (j = 0; j < Math.min(10, Math.floor(closestMyRoom.energyAvailable / 200)); j++) {
-                    pioneerBody.push(WORK, MOVE, CARRY)
-                }
-                if (spawn.spawnCreep(pioneerBody, flag.memory.creeps[i], {
-                    memory: {
-                        role: 'pioneer',
-                        targetRoom: roomName,
-                        working: false
-                    }
-                }) === OK) {
-                    return
-                }
-            }
+        let pioneers = getCreepsByRole(flag.pos.roomName, 'pioneer').filter(creep => creep.ticksToLive > distance * 50)
+        let numWork = 0
+        for (const pioneer of pioneers) {
+            numWork += pioneer.getNumParts('work')
+        }
+        let number = pioneers.length ? Math.max(...pioneers.map(pioneer => pioneer.memory.number)) : 0
+        if (numWork < 40) {
+            number++
+            return closestMyRoom.requestPioneer(flag.pos.roomName, number)
         }
     }
+
+    if (flag.memory.spawnDefender) {
+        let colonyDefenders = getCreepsByRole(flag.pos.roomName, 'colonyDefender').filter(creep => creep.ticksToLive > distance * 50)
+        if (!colonyDefenders.length) {
+            return closestMyRoom.requestColonyDefender(flag.pos.roomName)
+        }
+    }
+
 }
 module.exports = { run }

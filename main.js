@@ -21,7 +21,7 @@ require('prototype_room_information')
 const manager_attack = require('manager_attack')
 require('manager_room')
 require('manager_colony')
-require('manager_fast_filler')
+require('manager_defense')
 require('prototype_flag')
 const manager_claim = require('manager_claim')
 require('global_business')
@@ -65,31 +65,11 @@ module.exports.loop = () => {
         data.isEnoughCredit = true
     }
 
+    // creeps 방별로, 역할별로 분류
+
+    classifyCreeps()
+
     global.MY_ROOMS = Object.values(Game.rooms).filter(r => r.isMy).sort((a, b) => b.controller.totalProgress - a.controller.totalProgress)
-
-    // 방마다 roomManager 동작
-    for (const room of Object.values(Game.rooms)) {
-        room.runRoomManager()
-    }
-
-    // powerCreep 실행
-    for (const powerCreep of Object.values(Game.powerCreeps)) {
-        const roomName = powerCreep.name.split(' ')[0]
-        if (!Game.rooms[roomName]) {
-            continue
-        }
-        if (!powerCreep.room) {
-            Game.rooms[roomName].memory.hasOperator = false
-            const powerSpawn = Game.rooms[roomName].structures.powerSpawn[0]
-            if (!powerSpawn) {
-                continue
-            }
-            powerCreep.spawn(powerSpawn)
-            continue
-        }
-        Game.rooms[roomName].memory.hasOperator = true
-        powerCreep.actRoomOperator()
-    }
 
     // flag 실행
 
@@ -124,6 +104,30 @@ module.exports.loop = () => {
             data.recordLog(e)
             Game.notify(e)
         }
+    }
+
+    // 방마다 roomManager 동작
+    for (const room of Object.values(Game.rooms)) {
+        room.runRoomManager()
+    }
+
+    // powerCreep 실행
+    for (const powerCreep of Object.values(Game.powerCreeps)) {
+        const roomName = powerCreep.name.split(' ')[0]
+        if (!Game.rooms[roomName]) {
+            continue
+        }
+        if (!powerCreep.room) {
+            Game.rooms[roomName].memory.hasOperator = false
+            const powerSpawn = Game.rooms[roomName].structures.powerSpawn[0]
+            if (!powerSpawn) {
+                continue
+            }
+            powerCreep.spawn(powerSpawn)
+            continue
+        }
+        Game.rooms[roomName].memory.hasOperator = true
+        powerCreep.actRoomOperator()
     }
 
     // 없어진 flag 메모리 삭제

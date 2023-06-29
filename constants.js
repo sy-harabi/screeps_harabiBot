@@ -67,10 +67,11 @@ global.CREEP_ROELS = [
     'depositWorker',
     'looter',
     'scouter',
-    'filler'
+    'filler',
+    'manager'
 ]
 
-global.ROOM_MANAGED_CREEP_ROELS = [
+global.SELF_DIRECTED_CREEP_ROELS = [
     'miner',
     'extractor',
     'reserver',
@@ -81,6 +82,7 @@ global.ROOM_MANAGED_CREEP_ROELS = [
     'colonyHauler',
     'colonyDefender',
     'wallMaker',
+    'researcher'
 ]
 
 global.CROSS = [
@@ -156,6 +158,11 @@ global.WORK_BY_CONTROLLER_LEVEL = [
 global.ROOMNAMES_TO_AVOID = [
     'W5N8',
     'W13S1',
+    'W18S5',
+    'W19S5',
+    'W19S1',
+    'W16S9',
+    'W20N4'
 ]
 
 global.BASIC_MINERALS = {

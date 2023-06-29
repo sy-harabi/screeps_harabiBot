@@ -1,5 +1,3 @@
-const creepAction = require('creepAction')
-
 Room.prototype.runRoomManager = function () {
     if (!data.rooms[this.name]) {
         data.rooms[this.name] = {}
@@ -10,9 +8,10 @@ Room.prototype.runRoomManager = function () {
     }
 
     if (!this.isMy) {
-        this.manageCreep()
         return
     }
+
+    // this.visualizeBasePlan()
 
     this.heap.needResearcher = false
 
@@ -24,7 +23,7 @@ Room.prototype.runRoomManager = function () {
 
     this.manageInfo()
     this.manageLink()
-    this.manageTower()
+    this.manageDefense()
 
     this.manageExtractor()
     this.manageLab()
@@ -35,9 +34,75 @@ Room.prototype.runRoomManager = function () {
 
     // this.manageHighWay()
 
+    this.manageSource()
     this.manageSpawn()
-    this.manageCreep()
     this.manageVisual()
+}
+
+Room.prototype.manageSource = function () {
+
+    this.heap.sourceUtilizationRate = 0
+    for (const source of this.sources) {
+        // RoomVisual
+        this.visual.text(`⛏️${source.info.numWork}/6`, source.pos.x + 0.5, source.pos.y - 0.25, { font: 0.5, align: 'left' })
+        this.visual.text(`🚚${source.info.numCarry}/${source.info.maxCarry}`, source.pos.x + 0.5, source.pos.y + 0.5, { font: 0.5, align: 'left' })
+
+        // source 근처 energy 저장량 (container + dropped energy)
+        const droppedEnergies = source.droppedEnergies
+        let energyAmount = 0
+        for (const droppedEnergy of droppedEnergies) {
+            energyAmount += droppedEnergy.amount
+        }
+        const container = source.container
+        if (container) {
+            energyAmount += (container.store[RESOURCE_ENERGY] || 0)
+        }
+        this.visual.text(` 🔋${energyAmount}/2000`, source.pos.x + 0.5, source.pos.y + 1.25, { font: 0.5, align: 'left' })
+
+        // miner 비율 : 5 넘으면 1로 고정
+        const minerRatio = Math.min(1, source.info.numWork / 5)
+        this.heap.sourceUtilizationRate += minerRatio
+
+        if (source.linked) {
+            // miner가 부족한 경우
+            if (source.info.numMiner === 0) {
+                this.requestMiner(source, 0)
+                continue
+            }
+
+            if (source.info.numMiner < source.available && source.info.numWork < 5) {
+                this.requestMiner(source, 2)
+                continue
+            }
+
+            // source container에 에너지가 넘치는 경우
+            if (energyAmount > 2000 && source.info.numCarry === 0) {
+                this.requestHauler(10, { isUrgent: true, isManager: false, office: source })
+                continue
+            }
+        } else {
+            if (source.info.numWork === 0) {
+                this.requestMiner(source, 0)
+                continue
+            }
+            if (source.info.numCarry === 0) {
+                this.requestHauler(source.info.maxCarry, { isUrgent: true, isManager: false, office: source })
+                continue
+            }
+            if (source.info.numMiner < source.available && source.info.numWork < 5) {
+                this.requestMiner(source, 2)
+                continue
+            }
+
+            // hauler는 miner에 비레해서 생산
+            if (source.info.numCarry < Math.ceil(minerRatio * source.info.maxCarry) && source.info.numHauler < source.info.maxNumHauler) {
+                this.requestHauler(source.info.maxCarry - source.info.numCarry, { isUrgent: false, isManager: false, office: source })
+                continue
+            }
+        }
+
+    }
+    this.heap.sourceUtilizationRate = this.heap.sourceUtilizationRate / (this.sources.length || 1) // 가동률 평균
 }
 
 Room.prototype.manageExtractor = function () {
@@ -53,42 +118,6 @@ Room.prototype.manageExtractor = function () {
             return
         }
         researcher.getDeliveryRequest(mineralContainer, terminal, this.mineral.mineralType)
-    }
-}
-
-Room.prototype.manageCreep = function () {
-    for (const role of ROOM_MANAGED_CREEP_ROELS) {
-        for (const creep of this.creeps[role]) {
-            creepAction[role](creep)
-        }
-    }
-
-    const researcher = this.creeps.researcher[0]
-    if (researcher) {
-        researcher.delivery()
-    }
-}
-
-Room.prototype.manageConstruction = function () {
-    if (!this.memory.level || Game.time % 3000 === 0) {
-        this.memory.level = 0
-    }
-
-    if (this.controller.level < this.memory.level) {
-        return this.memory.level = 0
-    }
-
-    if (this.controller.level === this.memory.level) {
-        return
-    }
-
-    if (this.memory.optimizeBasePlanLeftTick > 0) {
-        this.memory.optimizeBasePlanLeftTick--
-        return this.optimizeBasePlan(this.memory.optimizeBasePlanLeftTick)
-    }
-
-    if (Game.time % 20 === 0 && this.constructByBasePlan(this.memory.level + 1)) {
-        this.memory.level++
     }
 }
 
@@ -149,7 +178,7 @@ Room.prototype.manageInfo = function () {
         return
     }
 
-    if (Game.time - this.memory.info[this.memory.info.length - 1].tick >= 5000) {
+    if (Game.time - this.memory.info[this.memory.info.length - 1].tick >= 1000) {
         this.memory.info.push({ progress: this.controller.totalProgress, tick: Game.time, time: new Date().getTime() })
         this.memory.info.splice(0, this.memory.info.length - 2)
     }
@@ -185,32 +214,6 @@ Room.prototype.manageLink = function () {
 
     if (storageLink.store.getUsedCapacity(RESOURCE_ENERGY) > 700 && controllerLink.store.getFreeCapacity(RESOURCE_ENERGY) > 400) {
         storageLink.transferEnergy(controllerLink)
-    }
-}
-
-Room.prototype.manageTower = function () {
-    const targets = this.find(FIND_HOSTILE_CREEPS)
-    for (const tower of this.structures.tower) {
-        if (targets.length) {
-            tower.attack(tower.pos.findClosestByRange(targets))
-            continue
-        }
-        if (this.creeps.wounded.length) {
-            tower.heal(tower.pos.findClosestByRange(this.creeps.wounded))
-            continue
-        }
-        if (this.structures.damaged.length && !data.cpuEmergency) {
-            tower.repair(tower.pos.findClosestByRange(this.structures.damaged))
-            break;
-        }
-        if (this.controller.level > 6 && !data.cpuEmergency) {
-            if (this.structures.constructedWall.length > 0 || this.structures.rampart.length > 0) {
-                const toRepair = this.structures.constructedWall.concat(this.structures.rampart).sort((a, b) => { return a.hits - b.hits })[0]
-                if (toRepair.hits < 300000) {
-                    tower.repair(toRepair)
-                }
-            }
-        }
     }
 }
 
@@ -306,22 +309,7 @@ Room.prototype.manageVisual = function () {
     this.visual.text(`🔄${Math.round(100 * controller.progress / controller.progressTotal)}%`, controller.pos.x + 0.75, controller.pos.y + 0.5, { align: 'left' })
 
     if (this.storage) {
-        this.visual.text(`🔋${Math.floor(this.storage.store.getUsedCapacity(RESOURCE_ENERGY) / 1000)}K`, this.storage.pos.x, this.storage.pos.y - 1)
-    }
-
-    for (const source of this.sources) {
-        this.visual.text(`⛏️${source.info.numWork}/6`, source.pos.x + 0.5, source.pos.y - 0.25, { font: 0.5, align: 'left' })
-        this.visual.text(`🚚${source.info.numCarry}/${source.info.maxCarry}`, source.pos.x + 0.5, source.pos.y + 0.5, { font: 0.5, align: 'left' })
-        const droppedEnergies = source.droppedEnergies
-        let energyAmount = 0
-        for (const droppedEnergy of droppedEnergies) {
-            energyAmount += droppedEnergy.amount
-        }
-        const container = source.container
-        if (container) {
-            energyAmount += (container.store[RESOURCE_ENERGY] || 0)
-            this.visual.text(`🔋${energyAmount}/2000`, source.pos.x + 0.5, source.pos.y + 1.25, { font: 0.5, align: 'left' })
-        }
+        this.visual.text(` 🔋${Math.floor(this.storage.store.getUsedCapacity(RESOURCE_ENERGY) / 1000)}K`, this.storage.pos.x - 2.9, this.storage.pos.y, { font: 0.5, align: 'left' })
     }
 
     if (this.structures.lab.length > 2 && this.memory.labObjective) {

@@ -1,127 +1,3 @@
-Object.defineProperties(Flag.prototype, {
-    isInvader: {
-        get() {
-            if (!this.room) {
-                return this.memory.isInvader
-            }
-            if (!this.memory.isInvader && this.room.find(FIND_HOSTILE_CREEPS).length) {
-                this.memory.isInvader = true
-                this.room.memory.isInvader = true
-            } else if (this.memory.isInvader && !this.room.find(FIND_HOSTILE_CREEPS).length) {
-                this.memory.isInvader = false
-                this.room.memory.isInvader = false
-            }
-            return this.memory.isInvader
-        }
-    },
-    isInvaderCore: {
-        get() {
-            if (!this.room) {
-                return this.memory.isInvaderCore
-            }
-            if (!this.memory.isInvaderCore && this.room.find(FIND_HOSTILE_STRUCTURES).length) {
-                this.memory.isInvaderCore = true
-            } else if (this.memory.isInvaderCore && !this.room.find(FIND_HOSTILE_STRUCTURES).length) {
-                this.memory.isInvaderCore = false
-            }
-            return this.memory.isInvaderCore
-        }
-    },
-})
-
-Room.prototype.manageColony = function () {
-    if (!this.memory.colony) {
-        return
-    }
-
-    for (const colonyName of Object.keys(this.memory.colony)) {
-        this.ruleColony(colonyName)
-    }
-    return
-}
-
-Creep.prototype.checkBodyParts = function (type) {
-    if (!Array.isArray(type)) {
-        type = [type]
-    }
-    return this.body.find(part => type.includes(part.type)) ? true : false
-}
-
-Room.prototype.abandonColony = function (colonyName) {
-    return delete this.memory.colony[colonyName]
-}
-
-Room.prototype.checkColonyInvader = function (colonyName) {
-    const colony = Game.rooms[colonyName]
-    const status = this.memory.colony[colonyName]
-    if (!colony) {
-        return status.isInvader
-    }
-    const hostileCreeps = colony.find(FIND_HOSTILE_CREEPS).filter(creep => creep.checkBodyParts(['work', 'attack', 'ranged_attack']))
-    if (!status.isInvader && hostileCreeps.length) {
-        data.recordLog(`Invader have appeared in ${colonyName}`)
-        status.isInvader = true
-        colony.memory.isInvader = true
-    } else if (status.isInvader && !hostileCreeps.length) {
-        data.recordLog(`Invader has been defeated in ${colonyName}`)
-        status.isInvader = false
-        colony.memory.isInvader = false
-    }
-    return status.isInvader
-}
-
-Room.prototype.checkColonyInvaderCore = function (colonyName) {
-    const colony = Game.rooms[colonyName]
-    const status = this.memory.colony[colonyName]
-    if (!colony) {
-        return status.isInvaderCore
-    }
-    const hostileStructures = colony.find(FIND_HOSTILE_STRUCTURES)
-    if (!status.isInvaderCore && hostileStructures.length) {
-        data.recordLog(`InvaderCore have appeared in ${colonyName}`)
-        status.isInvaderCore = true
-    } else if (status.isInvaderCore && !hostileStructures.length) {
-        data.recordLog(`InvaderCore has been destroyed in ${colonyName}`)
-        status.isInvaderCore = false
-    }
-    return status.isInvaderCore
-}
-
-Room.prototype.addColonyCost = function (colonyName, amount) {
-    const status = this.memory.colony ? this.memory.colony[colonyName] : undefined
-    if (!status) {
-        return
-    }
-    status.cost = status.cost || 0
-    status.cost += amount
-}
-
-Room.prototype.addColonyProfit = function (colonyName, amount) {
-    const status = this.memory.colony ? this.memory.colony[colonyName] : undefined
-    if (!status) {
-        return
-    }
-    status.profit = status.profit || 0
-    status.profit += amount
-}
-
-Room.prototype.resetColonyEfficiency = function (colonyName) {
-    const status = this.memory.colony ? this.memory.colony[colonyName] : undefined
-    if (!status) {
-        return
-    }
-    if (status.tick) {
-        const numSource = Object.keys(status.infraPlan).length
-        const efficiency = Math.floor(10 * (status.profit - status.cost) / (Game.time - status.tick) / numSource) / 100
-        status.lastEfficiency = efficiency
-        data.recordLog(`${colonyName} has efficiency ${efficiency * 100}%`)
-    }
-
-    status.tick = Game.time
-    status.profit = 0
-    status.cost = 0
-}
-
 Room.prototype.ruleColony = function (colonyName) {
     const colony = Game.rooms[colonyName]
     const status = this.memory.colony[colonyName]
@@ -133,7 +9,7 @@ Room.prototype.ruleColony = function (colonyName) {
         this.resetColonyEfficiency(colonyName)
     }
     new RoomVisual(colonyName).text(`🏭${Math.floor(100 * (status.profit - status.cost) / (Game.time - status.tick)) / 100}e/tick`, visualPos.x + 1, visualPos.y + 2, { align: 'left' })
-
+    Game.map.visual.text(`🏭${Math.floor(100 * (status.profit - status.cost) / (Game.time - status.tick)) / 100}e/tick`, visualPos)
     if (colony && colony.controller.owner && !['Invader'].includes(colony.controller.owner.username)) {
         return this.abandonColony(colonyName)
     }
@@ -143,13 +19,17 @@ Room.prototype.ruleColony = function (colonyName) {
     }
 
     if (this.checkColonyInvader(colonyName)) {
-        new RoomVisual(colonyName).text(`👿Invader`, visualPos.x + 1, visualPos.y + 1, { align: 'left' })
-        return this.spawnColonyDefender(colonyName)
+        new RoomVisual(colonyName).text(`👿Invader`, visualPos.x + 1, visualPos.y - 1, { align: 'left' })
+        if (!getNumCreepsByRole(colonyName, 'colonyDefender')) {
+            return this.requestColonyDefender(colonyName)
+        }
     }
 
     if (this.checkColonyInvaderCore(colonyName)) {
-        new RoomVisual(colonyName).text(`👿InvaderCore`, visualPos.x + 1, visualPos.y + 1, { align: 'left' })
-        return this.spawnColonyCoreDefender(colonyName)
+        new RoomVisual(colonyName).text(`👿InvaderCore`, visualPos.x + 1, visualPos.y - 1, { align: 'left' })
+        if (!getNumCreepsByRole(colonyName, 'colonyDefender')) {
+            return this.requestColonyCoreDefender(colonyName)
+        }
     }
 
     if (status.state === 'init') {
@@ -163,15 +43,15 @@ Room.prototype.ruleColony = function (colonyName) {
     if (status.state === 'reservation') {
         if (colony && colony.controller.reservation && colony.controller.reservation.username === MY_NAME) {
             status.state = 'build'
-        } else if (!Game.creeps[`${colonyName} reserver`]) {
-            this.spawnReserver(colonyName)
+        } else if (!getNumCreepsByRole(colonyName, 'reserver')) {
+            this.requestReserver(colonyName)
         }
         return
     }
 
     if (!colony || !colony.controller.reservation || colony.controller.reservation.username === 'Invader' || colony.controller.reservation.ticksToEnd < 500) {
-        if (!Game.creeps[`${colonyName} reserver`]) {
-            this.spawnReserver(colonyName)
+        if (!getNumCreepsByRole(colonyName, 'reserver')) {
+            this.requestReserver(colonyName)
         }
     }
 
@@ -208,10 +88,10 @@ Room.prototype.ruleColony = function (colonyName) {
             const laborers = Object.values(Game.creeps).filter(creep => creep.memory.role === 'colonyLaborer' && creep.memory.sourceId === source.id)
             let numWork = 0;
             for (const laborer of laborers) {
-                numWork += laborer.body.filter(part => part.type === WORK && part.hits >= 100).length
+                numWork += laborer.getNumParts('work')
             }
-            if (laborers.length < source.available && numWork < 10) {
-                this.spawnColonyLaborer(colonyName, source.id)
+            if (laborers.length < source.available && numWork < 20) {
+                this.requestColonyLaborer(colonyName, source.id)
             }
         }
         return
@@ -270,21 +150,155 @@ Room.prototype.ruleColony = function (colonyName) {
                 const container = source.container
                 if (container) {
                     energyAmount += (container.store[RESOURCE_ENERGY] || 0)
-                    colony.visual.text(`🔋${energyAmount}/2000`, source.pos.x + 0.5, source.pos.y + 1.25, { font: 0.5, align: 'left' })
+                    colony.visual.text(` 🔋${energyAmount}/2000`, source.pos.x + 0.5, source.pos.y + 1.25, { font: 0.5, align: 'left' })
                 }
             }
 
             if (colonyMiners.length < source.available && numWork < 6) {
-                this.spawnColonyMiner(colonyName, source.id)
+                this.requestColonyMiner(colonyName, source.id)
                 continue;
             }
 
             if (colonyHaulers.length < maxNumHauler && numCarry < maxCarry && source.container.hits >= 180000) {
-                this.spawnColonyHauler(colonyName, source.id, maxCarry - numCarry, status.infraPlan[source.id].pathLength)
+                this.requestColonyHauler(colonyName, source.id, maxCarry - numCarry, status.infraPlan[source.id].pathLength)
                 continue;
             }
         }
     }
+}
+
+Object.defineProperties(Flag.prototype, {
+    isInvader: {
+        get() {
+            if (!this.room) {
+                return this.memory.isInvader
+            }
+            const hostileCreeps = this.room.find(FIND_HOSTILE_CREEPS).filter(creep => creep.checkBodyParts(['work', 'attack', 'ranged_attack']))
+            if (!this.memory.isInvader && hostileCreeps.length) {
+                this.memory.isInvader = true
+                this.room.memory.isInvader = true
+            } else if (this.memory.isInvader && !hostileCreeps.length) {
+                this.memory.isInvader = false
+                this.room.memory.isInvader = false
+            }
+            return this.memory.isInvader
+        }
+    },
+    isInvaderCore: {
+        get() {
+            if (!this.room) {
+                return this.memory.isInvaderCore
+            }
+            if (!this.memory.isInvaderCore && this.room.find(FIND_HOSTILE_STRUCTURES).length) {
+                this.memory.isInvaderCore = true
+            } else if (this.memory.isInvaderCore && !this.room.find(FIND_HOSTILE_STRUCTURES).length) {
+                this.memory.isInvaderCore = false
+            }
+            return this.memory.isInvaderCore
+        }
+    },
+})
+
+Room.prototype.manageColony = function () {
+    if (!this.memory.colony) {
+        return
+    }
+
+    for (const colonyName of Object.keys(this.memory.colony)) {
+        this.ruleColony(colonyName)
+    }
+    return
+}
+
+Creep.prototype.checkBodyParts = function (type) {
+    if (!Array.isArray(type)) {
+        type = [type]
+    }
+    return this.body.find(part => type.includes(part.type)) ? true : false
+}
+
+Room.prototype.abandonColony = function (colonyName) {
+    return delete this.memory.colony[colonyName]
+}
+
+Room.prototype.checkColonyInvader = function (colonyName) {
+    const colony = Game.rooms[colonyName]
+    const status = this.memory.colony[colonyName]
+    if (!colony) {
+        return status.isInvader
+    }
+    const hostileCreeps = colony.find(FIND_HOSTILE_CREEPS).filter(creep => creep.checkBodyParts(['work', 'attack', 'ranged_attack', 'claim']))
+    const killerCreeps = hostileCreeps.filter(creep => creep.checkBodyParts(['attack', 'ranged_attack']))
+    if (!status.isInvader && hostileCreeps.length) {
+        data.recordLog(`Invader have appeared in ${colonyName}`)
+        status.isInvader = true
+        colony.memory.isInvader = true
+
+    } else if (status.isInvader && !hostileCreeps.length) {
+        data.recordLog(`Invader has been defeated in ${colonyName}`)
+        status.isInvader = false
+        colony.memory.isInvader = false
+    }
+
+    if (!colony.memory.isKiller && killerCreeps.length) {
+        colony.memory.isKiller = true
+
+    } else if (colony.memory.isKiller && !killerCreeps.length) {
+        colony.memory.isKiller = false
+    }
+    return status.isInvader
+}
+
+Room.prototype.checkColonyInvaderCore = function (colonyName) {
+    const colony = Game.rooms[colonyName]
+    const status = this.memory.colony[colonyName]
+    if (!colony) {
+        return status.isInvaderCore
+    }
+    const hostileStructures = colony.find(FIND_HOSTILE_STRUCTURES)
+    if (!status.isInvaderCore && hostileStructures.length) {
+        data.recordLog(`InvaderCore have appeared in ${colonyName}`)
+        status.isInvaderCore = true
+    } else if (status.isInvaderCore && !hostileStructures.length) {
+        data.recordLog(`InvaderCore has been destroyed in ${colonyName}`)
+        status.isInvaderCore = false
+    }
+    return status.isInvaderCore
+}
+
+Room.prototype.addColonyCost = function (colonyName, amount) {
+    const status = this.memory.colony ? this.memory.colony[colonyName] : undefined
+    if (!status) {
+        return
+    }
+    status.cost = status.cost || 0
+    status.cost += amount
+}
+
+Room.prototype.addColonyProfit = function (colonyName, amount) {
+    const status = this.memory.colony ? this.memory.colony[colonyName] : undefined
+    if (!status) {
+        return
+    }
+    status.profit = status.profit || 0
+    status.profit += amount
+}
+
+Room.prototype.resetColonyEfficiency = function (colonyName) {
+    const status = this.memory.colony ? this.memory.colony[colonyName] : undefined
+    if (!status) {
+        return
+    }
+    if (status.tick && status.infraPlan) {
+        const numSource = Object.keys(status.infraPlan).length
+        const efficiency = Math.floor(10 * (status.profit - status.cost) / (Game.time - status.tick) / numSource) / 100
+        status.lastEfficiency = efficiency
+        data.recordLog(`${colonyName} has efficiency ${efficiency * 100}%`)
+    }
+
+    status.tick = Game.time
+    status.profit = 0
+    status.cost = 0
 }
 
 Room.prototype.getColonyInfraPlan = function (colonyName, status) {
@@ -309,6 +323,7 @@ Room.prototype.getColonyInfraPlan = function (colonyName, status) {
                         costs.set(pos.x, pos.y, 1)
                     }
                 }
+
                 room.find(FIND_STRUCTURES).forEach(function (structure) {
                     if (structure.structureType === STRUCTURE_ROAD) {
                         costs.set(structure.pos.x, structure.pos.y, 1)
@@ -319,6 +334,15 @@ Room.prototype.getColonyInfraPlan = function (colonyName, status) {
                         }
                     }
                 })
+
+                for (const source of room.sources) {
+                    for (const pos of source.pos.getInRange(1)) {
+                        if (!pos.isWall && costs.get(pos) < 30) {
+                            costs.set(pos.x, pos.y, 30)
+                        }
+                    }
+                }
+
                 return costs;
             }
         }).path

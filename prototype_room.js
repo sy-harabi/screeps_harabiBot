@@ -60,29 +60,8 @@ Object.defineProperties(Room.prototype, {
             if (this._creeps) {
                 return this._creeps
             }
-            this._creeps = {}
-            for (const creepRole of CREEP_ROELS) {
-                this._creeps[creepRole] = []
-            }
-            this._creeps.wounded = []
-            this._creeps.manager = []
-            const creepsInThisRoom = this.find(FIND_MY_CREEPS)
-            for (const spawn of this.find(FIND_MY_SPAWNS)) {
-                if (spawn.spawning) {
-                    creepsInThisRoom.push(Game.creeps[spawn.spawning.name])
-                }
-            }
-            for (const creep of creepsInThisRoom) {
-                if (creep.hitsMax - creep.hits) {
-                    this._creeps.wounded.push(creep)
-                }
-                if (creep.memory.manager) {
-                    this._creeps.manager.push(creep)
-                }
-                if (creep.memory.role) {
-                    this._creeps[creep.memory.role].push(creep)
-                }
-            }
+            const creeps = classifyCreeps()
+            this._creeps = creeps[this.name]
             return this._creeps
         }
     },
@@ -136,7 +115,7 @@ Object.defineProperties(Room.prototype, {
                 }
                 for (const r of this.structures.rampart) {
                     if (!r.my && !r.isPublic) {
-                        costs.set(r.pos.x, r.pos.y, 255)
+                        costs.set(r.pos.x, r.pos.y, 50)
                     }
                 }
                 this._basicCostmatrix = costs

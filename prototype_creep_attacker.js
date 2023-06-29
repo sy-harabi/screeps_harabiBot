@@ -31,13 +31,16 @@ Creep.prototype.attackSpawn = function (roomName) {
             const controller = this.room.controller
             if (controller && (!controller.sign || controller.sign.username !== this.owner.username)) {
                 if (this.signController(controller, "I will come back and take this room") === -9) {
-                    this.moveMy(controller, 1)
+                    this.moveMy(controller, { range: 1 })
                 }
+                return
             }
             else {
                 if (this.pos.getRangeTo(controller) > 1) {
-                    this.moveMy(controller, 1)
+                    this.moveMy(controller, { range: 1 })
                 }
+                this.memory.role = 'colonyDefender'
+                this.memory.colony = this.room.name
                 for (const flag of this.room.find(FIND_FLAGS)) {
                     flag.remove()
                 }
@@ -47,7 +50,7 @@ Creep.prototype.attackSpawn = function (roomName) {
 
         if (!spawn) {
             if (healer.fatigue === 0) {
-                this.moveMy(target, 1)
+                this.moveMy(target, { range: 1 })
             }
             this.attack(target)
             this.attackNear()
@@ -100,7 +103,7 @@ Creep.prototype.attackSpawn = function (roomName) {
         } else {
             if (this.attack(spawn) === -9) {
                 if (healer.fatigue === 0) {
-                    this.moveMy(spawn, 1)
+                    this.moveMy(spawn, { range: 1 })
                 }
             } else {
                 this.rangedAttack(spawn)
@@ -122,10 +125,11 @@ Creep.prototype.retreat = function () {
     const base = new RoomPosition(25, 25, this.memory.base)
     const healer = Game.creeps[this.memory.healer]
     if (healer && this.room.name === healer.room.name && this.pos.getRangeTo(healer) > 1) {
+        this.moveMy(healer, { range: 1 })
         this.attackNear()
         return
     }
-    this.moveMy(base, 22)
+    this.moveMy(base, { range: 20 })
     this.attackNear()
 }
 

@@ -34,14 +34,54 @@ Flag.prototype.findClosestMyRoomAvoidEnemy = function (level = 0) {
                 if (ROOMNAMES_TO_AVOID.includes(roomName)) {
                     return Infinity;
                 }
-                return 1;
+                const roomCoord = roomName.match(/[a-zA-Z]+|[0-9]+/g)
+                roomCoord[1] = Number(roomCoord[1])
+                roomCoord[3] = Number(roomCoord[3])
+                const x = roomCoord[1]
+                const y = roomCoord[3]
+                if (x % 10 === 0 || y % 10 === 0) {
+                    return 1
+                }
+                const isMy = Game.rooms[roomName] && Game.rooms[roomName].isMy
+                if (isMy) {
+                    return 1
+                }
+                return 2.5;
             }
         })
     }
+    const flag = this
+    const roomNamesAvailable = Object.keys(Game.rooms).filter(function (roomName) {
+        if (roomName === flag.pos.roomName) {
+            return false
+        }
+        const room = Game.rooms[roomName]
+        if (!room.isMy) {
+            return false
+        }
+        if (room.controller.level < level) {
+            return false
+        }
+        if (!room.structures.spawn.length) {
+            return false
+        }
+        if (!room.storage) {
+            return false
+        }
+        if (room.energyCapacityAvailable < 1300) {
+            return false
+        }
+        return true
+    })
 
-    const closestRoomName = Object.keys(Game.rooms).filter(roomName => roomName !== this.pos.roomName && Game.rooms[roomName].isMy && Game.rooms[roomName].controller.level >= level).sort((a, b) => {
+    if (!roomNamesAvailable.length) {
+        return undefined
+    }
+
+    const closestRoomName = roomNamesAvailable.sort((a, b) => {
         return route(this.pos.roomName, a).length - route(this.pos.roomName, b).length
     })[0]
     this.memory.closestRoom = closestRoomName
+    this.memory.distanceToClosestRoom = route(this.pos.roomName, closestRoomName).length
     return Game.rooms[closestRoomName]
 }

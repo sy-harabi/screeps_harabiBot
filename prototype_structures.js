@@ -4,12 +4,20 @@ Object.defineProperties(StructureController.prototype, {
             if (this._link) {
                 return this._link
             }
-            if (this.room.memory.controllerLink) {
-                this._link = Game.getObjectById(this.room.memory.controllerLink)
-                return this.link
+            if (Game.getObjectById(this.room.heap.controllerLinkId)) {
+                return this._link = Game.getObjectById(this.room.heap.controllerLinkId)
             }
-            this._link = this.pos.findInRange(this.room.structures.link, 2)[0]
-            return this._link
+            try {
+                const linkPos = this.room.parsePos(this.room.memory.basePlan.linkPositions.controller)
+                const link = linkPos.lookFor(LOOK_STRUCTURES).filter(structure => structure.structureType === 'link')[0]
+                if (!link) {
+                    return undefined
+                }
+                this.room.heap.controllerLinkId = link.id
+                return this._link = link
+            } catch (error) {
+                return undefined
+            }
         }
     },
     linked: {
@@ -73,8 +81,21 @@ Object.defineProperties(StructureStorage.prototype, {
             if (this._link) {
                 return this._link
             }
-            this._link = this.pos.findInRange(this.room.structures.link, 2)[0]
-            return this._link
+            const linkByHeap = Game.getObjectById(this.room.heap.storageLinkId)
+            if (linkByHeap) {
+                return this._link = linkByHeap
+            }
+            try {
+                const linkPos = this.room.parsePos(this.room.memory.basePlan.linkPositions.storage)
+                const link = linkPos.lookFor(LOOK_STRUCTURES).filter(structure => structure.structureType === 'link')[0]
+                if (!link) {
+                    return undefined
+                }
+                this.room.heap.storageLinkId = link.id
+                return this._link = link
+            } catch (error) {
+                return undefined
+            }
         }
     }
 })

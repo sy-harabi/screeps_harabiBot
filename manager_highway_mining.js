@@ -61,31 +61,21 @@ global.DepositRequest = function (room, deposit) {
 
 Room.prototype.runDepositWork = function (depositRequest) {
 
-    let numWorker = 0
-    for (let i = 0; i < depositRequest.available; i++) {
-        const depositWorker = Game.creeps[`deposit ${depositRequest.depositId} worker ${i}`]
-
-        if (depositWorker || depositRequest.lastCooldown <= depositRequest.maxCooldown) {
-            numWorker++
-        }
-
-        if (!depositWorker && depositRequest.lastCooldown <= depositRequest.maxCooldown) {
-            this.spawnDepositWorker(depositRequest, i)
-            continue
-        }
-
-        if (depositWorker) {
-            depositWorker.depositWork(depositRequest)
-        }
+    const depositWorkers = getCreepsByRole(depositRequest.depositId, 'depositWorker')
+    for (const worker of depositWorkers) {
+        worker.depositWork(depositRequest)
     }
-
+    const numDepositWorker = depositWorkers.length
+    if (numDepositWorker < depositRequest.available && depositRequest.lastCooldown <= depositRequest.maxCooldown) {
+        this.requestDepositWorker(depositRequest)
+    }
     const deposit = Game.getObjectById(depositRequest.depositId)
 
     if (deposit) {
         depositRequest.lastCooldown = deposit.lastCooldown
     }
 
-    if (depositRequest.lastCooldown > depositRequest.maxCooldown && numWorker === 0) {
+    if (depositRequest.lastCooldown > depositRequest.maxCooldown && numDepositWorker === 0) {
         delete this.memory.depositRequests[depositRequest.depositId]
         return
     }
@@ -121,7 +111,7 @@ Creep.prototype.depositWork = function (depositRequest) {
 
     if (this.room.name !== depositRequest.roomName) {
         const targetPos = new RoomPosition(depositRequest.pos.x, depositRequest.pos.y, depositRequest.pos.roomName)
-        this.moveMy(targetPos, 1)
+        this.moveMy(targetPos, { range: 1 })
         return
     }
 
@@ -132,7 +122,7 @@ Creep.prototype.depositWork = function (depositRequest) {
     }
 
     if (this.harvest(deposit) === -9) {
-        this.moveMy(deposit, 1)
+        this.moveMy(deposit, { range: 1 })
         return
     }
 }

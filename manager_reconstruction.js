@@ -41,7 +41,7 @@ Flag.prototype.manageReconstruction = function () {
             const maxWork = 60
             const maxLaborer = Math.ceil(maxWork / (thisRoom.laborer.numWorkEach)) + 2
             if (thisRoom.laborer.numWork < maxWork && thisRoom.creeps.laborer.filter(creep => (creep.ticksToLive || 1500) > 3 * creep.body.length).length < maxLaborer) {
-                thisRoom.spawnLaborer(Math.min((maxWork - thisRoom.laborer.numWork), thisRoom.laborer.numWorkEach))
+                thisRoom.requestLaborer(Math.min((maxWork - thisRoom.laborer.numWork), thisRoom.laborer.numWorkEach))
             }
 
             if (this.memory.lastSpawnId && thisRoom.structures.spawn.length > 1) {

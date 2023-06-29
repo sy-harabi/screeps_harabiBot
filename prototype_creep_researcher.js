@@ -1,7 +1,7 @@
 Creep.prototype.giveCompoundTo = function (target, resourceType) {
     const result = this.transfer(target, resourceType)
     if (result === -9) {
-        this.moveMy(target, 1)
+        this.moveMy(target, { range: 1 })
     }
     return result
 }
@@ -9,7 +9,7 @@ Creep.prototype.giveCompoundTo = function (target, resourceType) {
 Creep.prototype.getCompoundFrom = function (target, resourceType) {
     const result = this.withdraw(target, resourceType)
     if (result === -9) {
-        this.moveMy(target, 1)
+        this.moveMy(target, { range: 1 })
     }
     return result
 }
@@ -117,7 +117,7 @@ Creep.prototype.delivery = function () {
         if (this.pos.getRangeTo(centerLab) < 2) {
             return
         }
-        return this.moveMy(centerLab, 1)
+        return this.moveMy(centerLab, { range: 1 })
     }
 
     const deliveryRequest = data.creeps[this.name].deliveryRequest

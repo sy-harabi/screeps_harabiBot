@@ -2,42 +2,42 @@ Flag.prototype.lootRoom = function () {
     const closestMyRoom = this.findClosestMyRoom()
     const targetRoomName = this.pos.roomName
     const targetRoom = Game.rooms[targetRoomName]
-    
-    if (targetRoom && targetRoom.memory.depleted){
-        this.remove()
-    }
-    //logistics
-    
-    if(!this.memory.state) {
-        this.memory.state = 'init'
-    }
-    
-    if (this.memory.state==='init' && this.memory.findRouteLength && targetRoom) {
-        this.memory.state ='loot'
-    }
-    
-    if (this.memory.state==='loot' && (!data.enoughCPU || !closestMyRoom.storage || closestMyRoom.storage.store.getUsedCapacity()>=800000)) {
-        this.memory.state = 'standBy'
-    }
-    
-    if (this.memory.state==='standBy' && data.enoughCPU && closestMyRoom.storage && closestMyRoom.storage.store.getUsedCapacity()<600000) {
-        this.memory.state='loot'
-    }
-    
+
     if (targetRoom && targetRoom.memory.depleted) {
         this.remove()
     }
-    
+    //logistics
+
+    if (!this.memory.state) {
+        this.memory.state = 'init'
+    }
+
+    if (this.memory.state === 'init' && this.memory.findRouteLength && targetRoom) {
+        this.memory.state = 'loot'
+    }
+
+    if (this.memory.state === 'loot' && (!data.enoughCPU || !closestMyRoom.storage || closestMyRoom.storage.store.getUsedCapacity() >= 800000)) {
+        this.memory.state = 'standBy'
+    }
+
+    if (this.memory.state === 'standBy' && data.enoughCPU && closestMyRoom.storage && closestMyRoom.storage.store.getUsedCapacity() < 600000) {
+        this.memory.state = 'loot'
+    }
+
+    if (targetRoom && targetRoom.memory.depleted) {
+        this.remove()
+    }
+
     //check state
-    
+
     const state = this.memory.state
-    
-    
+
+
     // init
-    
+
     const scouterName = `${targetRoomName} scouter`
     const scouter = Game.creeps[scouterName]
-    
+
     if (state === 'init') {
         if (!this.memory.findRouteLength) {
             const route = Game.map.findRoute(closestMyRoom, targetRoomName, {
@@ -62,31 +62,31 @@ Flag.prototype.lootRoom = function () {
             })
             this.memory.findRouteLength = route.length
         }
-        if(!scouter) {
-            return closestMyRoom.spawnScouter(targetRoomName, scouterName) 
+        if (!scouter) {
+            return closestMyRoom.spawnScouter(targetRoomName, scouterName)
         }
-        return scouter.moveMy(new RoomPosition(25,25,targetRoomName),22)
+        return scouter.moveMy(new RoomPosition(25, 25, targetRoomName), { range: 20 })
     }
-    
+
     // prepare
-    
+
     const findRouteLength = this.memory.findRouteLength
-    
+
     const looterNames = [
         `${targetRoomName} looter1`,
         `${targetRoomName} looter2`,
         `${targetRoomName} looter3`,
     ]
-    
+
     // loot
 
     if (state === 'loot') {
         if (!scouter) {
-            closestMyRoom.spawnScouter(targetRoomName, scouterName) 
+            closestMyRoom.spawnScouter(targetRoomName, scouterName)
         } else {
-            scouter.moveMy(new RoomPosition(25,25,targetRoomName),22)
+            scouter.moveMy(new RoomPosition(25, 25, targetRoomName), { range: 20 })
         }
-        
+
         for (const name of looterNames) {
             const creep = Game.creeps[name]
             if (!creep) {
@@ -97,7 +97,7 @@ Flag.prototype.lootRoom = function () {
         }
         return
     }
-    
+
     // standBy
 
     if (state === 'standBy') {
@@ -165,7 +165,7 @@ Creep.prototype.lootRoom = function () {
         }
 
         if (this.room.name !== this.memory.base) {
-            return this.moveMy(storage.pos, 1)
+            return this.moveMy(storage.pos, { range: 1 })
         }
 
         return this.returnAll()

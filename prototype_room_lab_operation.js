@@ -269,7 +269,7 @@ Room.prototype.operateBoostLaborer = function () {
         return
     }
     if (reactionLab.boostCreep(laborer) === -9) {
-        laborer.moveMy(reactionLab, 1)
+        laborer.moveMy(reactionLab, { range: 1 })
         return
     }
     if (reactionLab.boostCreep(laborer) === -5) {

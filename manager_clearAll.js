@@ -31,8 +31,8 @@ Flag.prototype.manageClearAll = function () {
         return
     }
 
-    if ((!targetRoom || !targetRoom.controller.reservation || targetRoom.controller.reservation.ticksToEnd < 200) && !Game.creeps[`${targetRoomName} claimer`]) {
-        closestMyRoom.spawnClaimer(targetRoomName)
+    if ((!targetRoom || !targetRoom.controller.reservation || targetRoom.controller.reservation.ticksToEnd < 200) && !getNumCreepsByRole(targetRoomName, 'claimer')) {
+        closestMyRoom.requestClaimer(targetRoomName)
         return
     }
 }
