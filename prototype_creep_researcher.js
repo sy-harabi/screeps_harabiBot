@@ -25,7 +25,7 @@ global.DeliveryRequest = function (from, to, resourceType) {
     }
     this.to = to.id
     this.resourceType = resourceType
-    this.deadline = Game.time + 50
+    this.deadline = Game.time + 150
     return
 }
 
@@ -135,7 +135,7 @@ Creep.prototype.delivery = function () {
     if (Game.time > deliveryRequest.deadline) {
         data.recordLog(`${this.name} couldn't finished request for ${deliveryRequest.to} until deadline`)
         delete data.creeps[this.name].deliveryRequest
-        this.say('deadline')
+        this.say('deadline', true)
         return
     }
 

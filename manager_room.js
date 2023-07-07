@@ -8,35 +8,78 @@ Room.prototype.runRoomManager = function () {
     }
 
     if (!this.isMy) {
+        this.checkTombstone()
         return
     }
 
-    // this.visualizeBasePlan()
+    if (data.visualize) {
+        this.visualizeBasePlan()
+    }
 
     this.heap.needResearcher = false
 
     this.manageConstruction()
 
+    this.manageDefense()
     this.manageWork()
 
     this.manageEnergy()
 
     this.manageInfo()
     this.manageLink()
-    this.manageDefense()
 
-    this.manageExtractor()
     this.manageLab()
-    this.manageFactory()
-    this.managePowerSpawn()
 
-    this.manageColony()
+    // 여기서부터는 전시에는 안함
+    if (!this.memory.militaryThreat) {
+        this.manageExtractor()
+        this.manageColony()
+        this.manageHighWay()
+        this.manageFactory()
+        this.managePowerSpawn()
+        this.manageScout()
+        this.manageSource()
+    }
 
-    // this.manageHighWay()
 
-    this.manageSource()
     this.manageSpawn()
     this.manageVisual()
+}
+
+Room.prototype.checkTombstone = function () {
+    // 내 creep의 tombstone 찾자. 자연적으로 죽은 건 제외
+    const myTombstone = this.find(FIND_TOMBSTONES).find(tombstone => tombstone.creep.my && tombstone.creep.ticksToLive > 1)
+    // 없으면 return
+    if (!myTombstone) {
+        return
+    }
+
+    const map = Memory.map = Memory.map || {}
+
+    map[this.name] = map[this.name] || {}
+
+    // 이미 확인한거면 넘어가자
+    if (map[this.name].inaccessible && map[this.name].inaccessible > Game.time) {
+        return
+    }
+
+    console.log(this.name + ' has tombstone')
+    // 있으면 여러가지 확인
+    const hostileStructures = this.structures.tower
+
+
+    // tower 있다는건 다른 사람 방이거나 InvaderCore 있다는 뜻.
+    if (hostileStructures.length) {
+        map[this.name].inaccessible = Game.time + 20000
+        map[this.name].lastScout = this.time
+        return
+    }
+    const hostileCreeps = this.find(FIND_HOSTILE_CREEPS).filter(creep => creep.checkBodyParts(['attack', 'ranged_attack']) && creep.owner.username !== 'Invader')
+    if (hostileCreeps.length) {
+        map[this.name].inaccessible = Game.time + 1500
+        map[this.name].lastScout = this.time
+        return
+    }
 }
 
 Room.prototype.manageSource = function () {
@@ -222,8 +265,12 @@ Room.prototype.manageLab = function () {
         return
     }
 
-    if (this.controller.level < 8) {
-        this.operateBoostLaborer()
+    const terminal = this.terminal
+    if (!terminal) {
+        return
+    }
+
+    if (this.controller.level < 8 && this.operateBoostLaborer() !== ERR_NOT_ENOUGH_RESOURCES) {
         return
     }
 
@@ -231,10 +278,7 @@ Room.prototype.manageLab = function () {
         return
     }
 
-    const terminal = this.terminal
-    if (!terminal) {
-        return
-    }
+
 
     if (!this.labs) {
         return
@@ -311,15 +355,4 @@ Room.prototype.manageVisual = function () {
     if (this.storage) {
         this.visual.text(` 🔋${Math.floor(this.storage.store.getUsedCapacity(RESOURCE_ENERGY) / 1000)}K`, this.storage.pos.x - 2.9, this.storage.pos.y, { font: 0.5, align: 'left' })
     }
-
-    if (this.structures.lab.length > 2 && this.memory.labObjective) {
-        this.visual.text('lab: ' + ((this.memory.labState + ' ') || '') + (this.memory.labObjective ? this.memory.labObjective.resourceType : ''), 0, 43, { align: 'left' })
-        this.visual.text(this.memory.boost ? this.memory.boostState : '', this.structures.lab[0].pos)
-    }
-
-    if (this.memory.factoryObjective) {
-        this.visual.text('factory: ' + this.memory.factoryObjective, 0, 44, { align: 'left' })
-    }
-
-    this.visual.text(`savingMode: ${this.savingMod || false}`, 0, 45, { align: 'left' })
 }

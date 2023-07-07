@@ -20,7 +20,7 @@ data.recordLog = function (text) {
   const koreaDate = new Date(koreaNow)
   const koreaDateText = `${koreaDate.getFullYear()}.${koreaDate.getMonth() + 1}.${koreaDate.getDate()}. ${koreaDate.getHours()}:${koreaDate.getMinutes()}:${koreaDate.getSeconds()}`
 
-  const logContents = `[${koreaDateText}] ${text}`
+  const logContents = `[${koreaDateText}] ${text} at tick ${Game.time}`
   this._log.push(logContents)
   Game.notify(logContents, 180)
   if (this._log.length > 100) {
@@ -38,4 +38,3 @@ global.log = function () {
   }
   return 'end.'
 }
-

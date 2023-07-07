@@ -1,7 +1,7 @@
 function run(flag) { //플래그를 대입하는 함수 (이름 아님)
     if (flag.room && flag.room.controller.my) { // 방 보이고 먹었으면
 
-        flag.memory.spawnPioneer = flag.room.controller.level < 2 ? true : false
+        flag.memory.spawnPioneer = (flag.room.controller.level < 2 || !flag.room.structures.spawn.length)
 
         flag.memory.spawnDefender = true
 
@@ -32,6 +32,10 @@ function run(flag) { //플래그를 대입하는 함수 (이름 아님)
     const roomName = flag.pos.roomName
     const closestMyRoom = flag.findClosestMyRoomAvoidEnemy(4)
     const distance = flag.memory.distanceToClosestRoom || 10
+    if (flag.memory.distanceToClosestRoom > 12) {
+        flag.remove()
+    }
+
 
     if (!closestMyRoom) {
         flag.remove()

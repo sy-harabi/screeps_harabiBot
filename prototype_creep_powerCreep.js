@@ -79,7 +79,7 @@ PowerCreep.prototype.moveMy = function (target, range = 0) {
     }
 
     if (data.creeps[this.name].lastPos && data.creeps[this.name].lastPos.isEqualTo(this.pos)) {
-        this.say('🚧')
+        this.say('🚧', true)
         if (!data.creeps[this.name].stuck) {
             data.creeps[this.name].stuck = 0
         }
@@ -95,9 +95,9 @@ PowerCreep.prototype.moveMy = function (target, range = 0) {
         this.searchPath(targetPos, range, maxRooms, true)
         const annoyingCreep = data.creeps[this.name].path[0] ? data.creeps[this.name].path[0].lookFor(LOOK_CREEPS)[0] : false
         if (annoyingCreep) {
-            this.say('🙏')
+            this.say('🙏', true)
             this.move(this.pos.getDirectionTo(annoyingCreep))
-            annoyingCreep.say('👌')
+            annoyingCreep.say('👌', true)
             annoyingCreep.move(annoyingCreep.pos.getDirectionTo(this))
             return
         }
@@ -128,7 +128,7 @@ PowerCreep.prototype.getRenew = function () {
     if (!powerSpawn) {
         return
     }
-    this.say('🔄')
+    this.say('🔄', true)
     if (this.renew(powerSpawn) === -9) {
         this.moveMy(powerSpawn, 1)
         return
@@ -160,7 +160,7 @@ PowerCreep.prototype.useOperateExtension = function () {
     }
 
     this.usePower(PWR_OPERATE_EXTENSION, storage)
-    return this.say('💧')
+    return this.say('💧', true)
 }
 
 PowerCreep.prototype.enableMyRoom = function () {

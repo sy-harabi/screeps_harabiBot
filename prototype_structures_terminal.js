@@ -115,11 +115,11 @@ StructureTerminal.prototype.run = function () {
                 }
             }
             if (!received) {
-                return business.buy('XGH2O', 1000, this.room.name)
+                business.buy('XGH2O', 1000, this.room.name)
             }
         }
 
-        if (!this.room.storage.store.getUsedCapacity(RESOURCE_ENERGY) < 450000) {
+        if (this.room.storage && this.room.storage.store.getUsedCapacity(RESOURCE_ENERGY) >= 500000) {
             return
         }
         for (const room of Object.values(Game.rooms)) {
@@ -140,10 +140,7 @@ StructureTerminal.prototype.run = function () {
                 data.recordLog(`${room.name} sends ${amount} of energy to ${this.room.name}`)
             }
         }
-        return
-    }
-
-    if (this.room.storage && this.room.storage.store[RESOURCE_ENERGY] < 300000) {
+    } else if (this.room.storage && this.room.storage.store[RESOURCE_ENERGY] < 300000) {
         for (const room of Object.values(Game.rooms)) {
             if (room.name === this.room.name) {
                 continue

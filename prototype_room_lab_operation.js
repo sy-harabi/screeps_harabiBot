@@ -4,6 +4,7 @@ Room.prototype.operateLab = function (resource0, resource1) {
     const reactionLabs = this.labs.reactionLab.map(id => Game.getObjectById(id))
     const terminal = this.terminal
 
+    this.visual.text(`🧪${this.labObjective.resourceType}`, sourceLabs[0].pos.x, sourceLabs[0].pos.y - 1, { align: 'left' })
     if (this.labState === 'producing') {
         if (sourceLabs[0].store[resource0] && sourceLabs[1].store[resource1]) {
             for (const lab of reactionLabs) {
@@ -217,42 +218,50 @@ Room.prototype.prepareBoostLaborer = function () {
     if (reactionLab.mineralType && reactionLab.mineralType !== 'XGH2O') {
         if (!researcher) {
             this.heap.needResearcher = true
-            return false
+            return true
         }
         if (reactionLab.store.getUsedCapacity(reactionLab.mineralType)) {
             researcher.getDeliveryRequest(reactionLab, terminal, reactionLab.mineralType)
-            return false
+            return true
         }
     }
 
     if (reactionLab.store['XGH2O'] < 2000) {
         if (terminal.store['XGH2O'] < 1000) {
-            return
+            return false
         }
         if (!researcher) {
             this.heap.needResearcher = true
-            return false
+            return true
         }
         researcher.getDeliveryRequest(terminal, reactionLab, 'XGH2O')
-        return false
+        return true
     }
 
     if (reactionLab.store[RESOURCE_ENERGY] < 1000 && terminal.store[RESOURCE_ENERGY] > 1000) {
 
         if (!researcher) {
             this.heap.needResearcher = true
-            return false
+            return true
         }
         researcher.getDeliveryRequest(terminal, reactionLab, RESOURCE_ENERGY)
-        return false
+        return true
     }
 
 }
 
 Room.prototype.operateBoostLaborer = function () {
-    this.prepareBoostLaborer()
-
     const reactionLab = Game.getObjectById(this.labs.reactionLab[0])
+    const terminal = this.terminal
+    if (!reactionLab) {
+        return false
+    }
+
+    if (reactionLab.store['XGH2O'] + terminal.store['XGH2O'] < 1000) {
+        return ERR_NOT_ENOUGH_RESOURCES
+    }
+
+    this.prepareBoostLaborer()
 
     if (reactionLab.store['XGH2O'] < 500 || reactionLab.store[RESOURCE_ENERGY] < 500) {
         return false

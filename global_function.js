@@ -158,9 +158,14 @@ global.colonize = function (colonyName, baseName) {
     const base = baseName ? Game.rooms[baseName.toUpperCase()] : findClosestMyRoom(colonyName)
     baseName = base.name
     if (base.memory.colony && base.memory.colony[colonyName]) {
-        delete base.memory.colony[colonyName]
+        return
     }
 
+    if (Memory.rooms[colonyName]) {
+        if (Memory.rooms[colonyName].host && Memory.rooms[colonyName].host !== baseName) {
+            return
+        }
+    }
 
     if (!(base && base.isMy)) {
         console.log(`Base ${baseName} is not your room`)
@@ -266,4 +271,58 @@ global.findClosestMyRoom = function (fromRoomName, level = 0) {
         }).length
     })[0]
     return Game.rooms[closestRoomName]
+}
+
+global.visual = function () {
+    if (data.visualize) {
+        data.visualize = false
+        data.info = true
+        return "hide basePlan"
+    }
+    data.visualize = true
+    data.info = false
+    return "show basePlan"
+}
+
+global.mapInfo = function () {
+    const map = Memory.map || {}
+    for (const roomName of Object.keys(map)) {
+        try {
+            const info = map[roomName]
+            const center = new RoomPosition(25, 25, roomName)
+
+            if (info.lastScout && Game.time > info.lastScout + 20000) {
+                delete map[roomName]
+            }
+
+
+            if (info.isClaimCandidate) {
+                Game.map.visual.text(`🚩`, new RoomPosition(center.x + 25, center.y + 15, center.roomName), { color: '#4deeea', align: 'left' })
+            }
+            if (info.isRemoteCandidate) {
+                Game.map.visual.text(`⛏️`, new RoomPosition(center.x - 25, center.y + 15, center.roomName), { color: '#ffe700', align: 'left' })
+            }
+            if (info.inaccessible && info.inaccessible > Game.time) {
+                Game.map.visual.text(`🚫${info.inaccessible - Game.time}`, new RoomPosition(center.x - 25, center.y - 15, center.roomName), { color: '#f000ff', align: 'left' })
+            }
+
+            // host가 있는 info인지 체크. 즉 scouter가 확인한 방인지 체크
+            if (!info.host) {
+                continue
+            }
+
+            if (roomName === info.host) {
+                Game.map.visual.text(`${Game.rooms[roomName].controller.level}`, new RoomPosition(center.x, center.y - 20, center.roomName), { fontSize: 15, color: '#74ee15' })
+                continue
+            }
+
+            const hostPos = new RoomPosition(25, 25, info.host)
+            Game.map.visual.line(hostPos, center, { color: '#00ffe8', width: '1', opacity: 1 })
+            Game.map.visual.text(`🚶${info.distance}`, new RoomPosition(center.x + 15, center.y + 15, center.roomName))
+        }
+        catch (error) {
+            delete map[roomName]
+        }
+
+    }
 }

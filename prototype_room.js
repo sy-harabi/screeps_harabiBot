@@ -113,14 +113,29 @@ Object.defineProperties(Room.prototype, {
                         costs.set(cs.pos.x, cs.pos.y, 255)
                     }
                 }
-                for (const r of this.structures.rampart) {
-                    if (!r.my && !r.isPublic) {
-                        costs.set(r.pos.x, r.pos.y, 50)
+                for (const rampart of this.structures.rampart) {
+                    if (!rampart.my && !rampart.isPublic) {
+                        costs.set(rampart.pos.x, rampart.pos.y, 255)
                     }
                 }
                 this._basicCostmatrix = costs
             }
             return this._basicCostmatrix
+        }
+    },
+    basicCostMatrixWithCreeps: {
+        get() {
+            if (this._basicCostMatrixWithCreeps) {
+                return this._basicCostMatrixWithCreeps
+            }
+            const costs = this.basicCostmatrix.clone()
+            for (const creep of this.find(FIND_CREEPS)) {
+                costs.set(creep.pos.x, creep.pos.y, 255,)
+            }
+            for (const powerCreep of this.find(FIND_POWER_CREEPS)) {
+                costs.set(powerCreep.pos.x, powerCreep.pos.y, 255)
+            }
+            return this._basicCostMatrixWithCreeps = costs
         }
     },
     costmatrixForBattle: {
@@ -140,7 +155,7 @@ Object.defineProperties(Room.prototype, {
                 if (structure.my || structure.isPublic) {
                     continue
                 }
-                costs.set(structure.pos.x, structure.pos.y, Math.max(20, Math.min(254, Math.ceil(structure.hits / 100000))))
+                costs.set(structure.pos.x, structure.pos.y, Math.max(20, Math.min(254, Math.ceil(costs.get(structure.pos.x, structure.pos.y) + structure.hits / 100000))))
             }
             for (const creep of this.find(FIND_MY_CREEPS)) {
                 costs.set(creep.pos.x, creep.pos.y, 255)
@@ -150,10 +165,12 @@ Object.defineProperties(Room.prototype, {
     },
     isMy: {
         get() {
-            if (this.controller && this.controller.my) {
-                return true
-            }
-            return false
+            return this.controller && this.controller.my
+        }
+    },
+    isMyRemote: {
+        get() {
+            return this.controller && this.controller.reservation && this.controller.reservation.username === MY_NAME
         }
     },
     savingMode: {
@@ -341,6 +358,18 @@ Object.defineProperties(Room.prototype, {
             return this._terrain
         }
     },
+    weakestRampart: {
+        get() {
+            if (this._weakestRampart) {
+                return this._weakestRampart
+            }
+            const ramparts = this.structures.rampart
+            if (ramparts.length) {
+                this._weakestRampart = ramparts.sort((a, b) => a.hits - b.hits)[0]
+            }
+            return this._weakestRampart
+        }
+    }
 })
 Room.prototype.isWall = function (x, y) {
     return this.terrain.get(x, y) === 1

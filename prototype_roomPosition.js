@@ -34,14 +34,6 @@ Object.defineProperties(RoomPosition.prototype, {
                         this._workable = false
                         break
                     }
-                    if (lookObject.type === LOOK_CREEPS) {
-                        this._workable = false
-                        break
-                    }
-                    if (lookObject.type === LOOK_POWER_CREEPS) {
-                        this._workable = false
-                        break
-                    }
                     if (lookObject.type === LOOK_STRUCTURES && OBSTACLE_OBJECT_TYPES.includes(lookObject[LOOK_STRUCTURES].structureType)) {
                         this._workable = false
                         break

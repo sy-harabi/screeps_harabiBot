@@ -68,7 +68,7 @@ global.CREEP_ROELS = [
     'looter',
     'scouter',
     'filler',
-    'manager'
+    'manager',
 ]
 
 global.SELF_DIRECTED_CREEP_ROELS = [
@@ -146,9 +146,9 @@ global.BUFFER = {
 
 global.WORK_BY_CONTROLLER_LEVEL = [
     { min: 0, max: 0 },
-    { min: 4, max: 5 },
-    { min: 6, max: 16 },
-    { min: 8, max: 20 },
+    { min: 4, max: 4 },
+    { min: 4, max: 16 },
+    { min: 6, max: 20 },
     { min: 8, max: 24 },
     { min: 9, max: 27 },
     { min: 11, max: 33 },
@@ -156,13 +156,7 @@ global.WORK_BY_CONTROLLER_LEVEL = [
 ]
 
 global.ROOMNAMES_TO_AVOID = [
-    'W5N8',
-    'W13S1',
-    'W18S5',
-    'W19S5',
-    'W19S1',
-    'W16S9',
-    'W20N4'
+
 ]
 
 global.BASIC_MINERALS = {

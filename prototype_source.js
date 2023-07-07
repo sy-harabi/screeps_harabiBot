@@ -73,7 +73,8 @@ Object.defineProperties(Source.prototype, {
             for (const hauler of haulers) {
                 this._info.numCarry += (hauler.body.filter(part => part.type === CARRY).length)
             }
-            this._info.maxCarry = this.linked ? 0 : this.room.controller.linked ? Math.max(10, Math.ceil(0.8 * this.range.spawn)) : Math.max(10, Math.ceil(0.8 * Math.max(...Object.values(this.range))))
+            // linked면 0. controller linked면 spawn까지. construcing 이어도 spawn까지. 그 외는 controller까지.
+            this._info.maxCarry = this.linked ? 0 : (this.room.controller.linked || this.room.constructing) ? Math.max(10, Math.ceil(0.6 * this.range.spawn)) : Math.max(10, Math.ceil(0.6 * this.range.controller))
 
             this._info.maxNumHauler = Math.ceil(this._info.maxCarry / (Math.floor(this.room.energyCapacityAvailable / 150) * 2))
 

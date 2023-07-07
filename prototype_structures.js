@@ -1,7 +1,28 @@
 Object.defineProperties(StructureController.prototype, {
+    container: {
+        get() {
+            if (this._container !== undefined) {
+                return this._container
+            }
+            if (Game.getObjectById(this.room.heap.controllerContainerId)) {
+                return this._link = Game.getObjectById(this.room.heap.controllerContainerId)
+            }
+            try {
+                const containerPos = this.room.parsePos(this.room.memory.basePlan.linkPositions.controller)
+                const container = containerPos.lookFor(LOOK_STRUCTURES).filter(structure => structure.structureType === 'container')[0]
+                if (!container) {
+                    return null
+                }
+                this.room.heap.controllerContainerId = container.id
+                return this._container = container
+            } catch (error) {
+                return undefined
+            }
+        }
+    },
     link: {
         get() {
-            if (this._link) {
+            if (this._link !== undefined) {
                 return this._link
             }
             if (Game.getObjectById(this.room.heap.controllerLinkId)) {
@@ -11,12 +32,12 @@ Object.defineProperties(StructureController.prototype, {
                 const linkPos = this.room.parsePos(this.room.memory.basePlan.linkPositions.controller)
                 const link = linkPos.lookFor(LOOK_STRUCTURES).filter(structure => structure.structureType === 'link')[0]
                 if (!link) {
-                    return undefined
+                    return null
                 }
                 this.room.heap.controllerLinkId = link.id
                 return this._link = link
             } catch (error) {
-                return undefined
+                return this._link = null
             }
         }
     },

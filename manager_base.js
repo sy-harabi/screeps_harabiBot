@@ -1,5 +1,5 @@
 Room.prototype.manageConstruction = function () {
-    if (!this.memory.level || Game.time % 3000 === 0) {
+    if (!this.memory.level || Game.time % 16000 === 0) { // 16000 tick은 대략 하루
         this.memory.level = 0
     }
 
@@ -36,21 +36,43 @@ Room.prototype.constructByBasePlan = function (level) {
     }
     let numConstructionSites = Object.keys(Game.constructionSites).length
     let newConstructionSites = 0
+    let numConstructionSitesThisRoom = this.constructionSites.length
+
+    if (level === 1) { // rcl 5 이전에는 controller container
+        const linkPos = this.parsePos(this.memory.basePlan.linkPositions.controller)
+        linkPos.createConstructionSite('container')
+    } else if (level === 5) {
+        const controllerContainer = this.controller.container
+        if (controllerContainer) {
+            controllerContainer.destroy()
+        }
+    }
+
     for (let i = 1; i <= level; i++) {
         basePlan[`lv${i}`].sort((a, b) => BUILD_PRIORITY[a.structureType] - BUILD_PRIORITY[b.structureType])
         for (const structure of basePlan[`lv${i}`]) {
+            if (numConstructionSitesThisRoom >= 5) {
+                return false
+            }
             if (structure.structureType === 'spawn') {
-                structure.pos.createConstructionSite(structure.structureType, `Spawn${Object.keys(Game.spawns).length + 1}`)
+                if (structure.pos.createConstructionSite(structure.structureType, `${this.name} Spawn ${structure.pos.pack()}`) === OK) {
+                    numConstructionSites++
+                    newConstructionSites++
+                    numConstructionSitesThisRoom++
+                }
+                continue
             }
             if (structure.pos.createConstructionSite(structure.structureType) === OK) {
                 numConstructionSites++
                 newConstructionSites++
+                numConstructionSitesThisRoom++
             }
             this.visual.structure(structure.pos.x, structure.pos.y, structure.structureType)
         }
     }
 
-    if (newConstructionSites === 0 && this.constructionSites.length === 0) {
+
+    if (newConstructionSites === 0 && numConstructionSitesThisRoom === 0 && numConstructionSites < 90) {
         return true
     }
     return false
@@ -329,6 +351,9 @@ Room.prototype.getBasePlan = function (firstAnchor, costs) {
             }
         }
     }
+
+    // sort extensions by range to first spawn
+    structures.extension.sort((a, b) => a.getRangeTo(firstSpawnPos) - b.getRangeTo(firstSpawnPos))
 
     // roads to controller
     let pathCost = 0

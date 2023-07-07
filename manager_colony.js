@@ -1,9 +1,12 @@
 Room.prototype.ruleColony = function (colonyName) {
     const colony = Game.rooms[colonyName]
+    if (colony) {
+        colony.memory.host = this.name
+    }
     const status = this.memory.colony[colonyName]
     status.state = status.state || 'init'
 
-    const visualPos = colony ? colony.controller.pos : new RoomPosition(24, 25, colonyName)
+    const visualPos = new RoomPosition(25, 25, colonyName)
     new RoomVisual(colonyName).text(`📶${status.state.toUpperCase()}`, visualPos.x + 1, visualPos.y, { align: 'left' })
     if (!status.tick || (Game.time - status.tick > 10000)) {
         this.resetColonyEfficiency(colonyName)
@@ -15,6 +18,10 @@ Room.prototype.ruleColony = function (colonyName) {
     }
 
     if (colony && colony.controller.reservation && ![MY_NAME, 'Invader'].includes(colony.controller.reservation.username)) {
+        return this.abandonColony(colonyName)
+    }
+
+    if (Memory.map && Memory.map[colonyName] && Memory.map[colonyName].inaccessible > Game.time) {
         return this.abandonColony(colonyName)
     }
 
@@ -72,20 +79,25 @@ Room.prototype.ruleColony = function (colonyName) {
         if (!infraPlan) {
             return this.abandonColony(colonyName)
         }
+        let numConstructionSites = colony.constructionSites.length
         let numNewConstructionSites = 0
         for (const infraPos of infraPlan) {
+            if (numConstructionSites >= 5) {
+                return
+            }
             if (infraPos.pos.createConstructionSite(infraPos.structureType) === OK) {
                 numNewConstructionSites++
+                numConstructionSites++
             }
         }
-        if (!colony.constructionSites.length && numNewConstructionSites === 0 && Object.keys(Game.constructionSites).length < 90) {
+        if (numConstructionSites === 0 && numNewConstructionSites === 0 && Object.keys(Game.constructionSites).length < 90) {
             status.state = 'extraction'
             return
         }
 
         const sources = Object.keys(status.infraPlan).map(id => Game.getObjectById(id))
         for (const source of sources) {
-            const laborers = Object.values(Game.creeps).filter(creep => creep.memory.role === 'colonyLaborer' && creep.memory.sourceId === source.id)
+            const laborers = getCreepsByRole(colonyName, 'colonyLaborer').filter(creep => creep.memory.sourceId === source.id)
             let numWork = 0;
             for (const laborer of laborers) {
                 numWork += laborer.getNumParts('work')
@@ -138,6 +150,7 @@ Room.prototype.ruleColony = function (colonyName) {
             }
 
             if (colony) {
+
                 const visualOption = { font: 0.5, align: 'left' }
                 colony.visual.text(`⛏️${numWork} / 6`, source.pos.x + 0.5, source.pos.y - 0.25, visualOption)
                 colony.visual.text(`🚚${numCarry} / ${maxCarry}`, source.pos.x + 0.5, source.pos.y + 0.5, visualOption)
@@ -230,12 +243,10 @@ Room.prototype.checkColonyInvader = function (colonyName) {
     const hostileCreeps = colony.find(FIND_HOSTILE_CREEPS).filter(creep => creep.checkBodyParts(['work', 'attack', 'ranged_attack', 'claim']))
     const killerCreeps = hostileCreeps.filter(creep => creep.checkBodyParts(['attack', 'ranged_attack']))
     if (!status.isInvader && hostileCreeps.length) {
-        data.recordLog(`Invader have appeared in ${colonyName}`)
         status.isInvader = true
         colony.memory.isInvader = true
 
     } else if (status.isInvader && !hostileCreeps.length) {
-        data.recordLog(`Invader has been defeated in ${colonyName}`)
         status.isInvader = false
         colony.memory.isInvader = false
     }
@@ -306,6 +317,7 @@ Room.prototype.getColonyInfraPlan = function (colonyName, status) {
         return this.unpackInfraPlan(status.infraPlan)
     }
     const colony = Game.rooms[colonyName]
+    colony.memory.host = this.name
     console.log(`Get infraPlan for ${colonyName}`)
     status.infraPlan = {}
     const roadPositions = []
@@ -328,10 +340,8 @@ Room.prototype.getColonyInfraPlan = function (colonyName, status) {
                     if (structure.structureType === STRUCTURE_ROAD) {
                         costs.set(structure.pos.x, structure.pos.y, 1)
                     }
-                    if (roomName !== colonyName) {
-                        if (OBSTACLE_OBJECT_TYPES.includes(structure.structureType) || structure.structureType === STRUCTURE_CONTAINER) {
-                            costs.set(structure.pos.x, structure.pos.y, 255)
-                        }
+                    if (OBSTACLE_OBJECT_TYPES.includes(structure.structureType) || structure.structureType === STRUCTURE_CONTAINER) {
+                        costs.set(structure.pos.x, structure.pos.y, 255)
                     }
                 })
 

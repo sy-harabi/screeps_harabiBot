@@ -20,6 +20,7 @@ require('manager_base')
 require('prototype_room_information')
 const manager_attack = require('manager_attack')
 require('manager_room')
+require('manager_scout')
 require('manager_colony')
 require('manager_defense')
 require('prototype_flag')
@@ -74,36 +75,36 @@ module.exports.loop = () => {
     // flag 실행
 
     for (const flag of Object.values(Game.flags)) {
-        if (flag.color === COLOR_YELLOW) {
-            flag.manageColony()
-            continue
+        const name = flag.name.toLowerCase()
+        const roomName = flag.pos.roomName
+        if (name.includes('colony')) {
+            colonize(roomName)
+            flag.remove()
         }
-        if (flag.color === COLOR_BLUE) {
+        if (name.includes('claim')) {
             manager_claim.run(flag)
             continue
         }
-        if (flag.color === COLOR_RED) {
+        if (name.includes('attack')) {
             manager_attack.run(flag)
             continue
         }
-        if (flag.color === COLOR_PURPLE) {
+        if (name.includes('clear')) {
             flag.manageClearAll()
             continue
         }
-        if (flag.color === COLOR_ORANGE) {
+        if (name.includes('reconstruction')) {
             flag.manageReconstruction()
+            continue
         }
-        if (flag.color === COLOR_WHITE) {
+        if (name.includes('loot')) {
             flag.lootRoom()
+            continue
         }
-        try {
-
-        } catch (e) {
-            delete Memory.flags[flag.name]
-            data.recordLog(flag.name)
-            data.recordLog(e)
-            Game.notify(e)
-        }
+        // if (name.includes('dismantle')) {
+        //     flag.dismantleRoom()
+        //     continue
+        // }
     }
 
     // 방마다 roomManager 동작
@@ -188,6 +189,8 @@ module.exports.loop = () => {
         new RoomVisual().text("AvgCPU: " + Math.round(100 * (_.sum(CPU) / CPU.length)) / 100 + `(for ${CPU.length} ticks)`, 0, 48, { align: 'left' })
         new RoomVisual().text(`bucket: ${Game.cpu.bucket.toFixed(0)}(${data.enoughCPU ? 'market, ' : ''}${data.okCPU ? 'lab' : ''})`, 0, 49, { align: 'left' })
     }
+
+    mapInfo()
 
     CPU.push(Math.floor(Game.cpu.getUsed()))
     if (CPU.length > 200) {

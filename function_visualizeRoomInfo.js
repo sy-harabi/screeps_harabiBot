@@ -45,13 +45,14 @@ global.roomInfo = function () {
         new RoomVisual().text('|', startPos.x + 32, startPos.y + line + 2, { color: 'cyan' })
         new RoomVisual().text('|', startPos.x + 36, startPos.y + line + 2, { color: 'cyan' })
 
-        new RoomVisual().text(room.name, startPos.x + 2, startPos.y + line + 2, { color: 'cyan' })
+        const name = `${room.name}(${room.mineral.mineralType})`
+        new RoomVisual().text(name, startPos.x + 0.3, startPos.y + line + 2, { color: 'cyan', align: 'left' })
         new RoomVisual().text(room.controller.level, startPos.x + 5.5, startPos.y + line + 2, { color: room.controller.level > 7 ? 'lime' : room.controller.level > 3 ? 'yellow' : 'magenta' })
         new RoomVisual().text(room.controller.level === 8 ? '-' : `${(room.efficiency * 100).toFixed(0)}%(${room.progressTime.toFixed(0)}h)`, startPos.x + 9, startPos.y + line + 2, { color: room.efficiency > 0.7 ? 'lime' : room.efficiency > 0.4 ? 'yellow' : 'magenta' })
 
         const day = Math.floor(room.hoursToNextRCL / 24)
         const hour = (room.hoursToNextRCL % 24).toFixed(1)
-        const leftTime = day > 0 ? `${day}d ${hour}h` : `${hour}h`
+        const leftTime = day === Infinity ? "-" : day > 0 ? `${day}d ${hour}h` : `${hour}h`
         new RoomVisual().text(room.controller.level === 8 ? '-' : leftTime, startPos.x + 13, startPos.y + line + 2, { color: 'cyan' })
 
         new RoomVisual().text(room.storage ? room.storage.store[RESOURCE_ENERGY] : '-', startPos.x + 17.5, startPos.y + line + 2, { color: room.memory.savingMode ? 'magenta' : 'lime' })

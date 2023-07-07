@@ -57,7 +57,7 @@ Creep.prototype.attackSpawn = function (roomName) {
             return
         }
 
-        let path = PathFinder.search(this.pos, { pos: spawn.pos, range: 1 }, {
+        const path = PathFinder.search(this.pos, { pos: spawn.pos, range: 1 }, {
             plainCost: 2,
             swampCost: 10,
             maxRooms: 1,
@@ -65,21 +65,6 @@ Creep.prototype.attackSpawn = function (roomName) {
                 return Game.rooms[roomName].costmatrixForBattle
             }
         }).path
-
-        let isRampartWall = false
-        for (const pos of path) {
-            if (pos.lookFor(LOOK_STRUCTURES).filter(obj => obj.structureType === 'constructedWall' || obj.structureType === 'rampart').length) {
-                isRampartWall = true
-                break
-            }
-        }
-
-        // if (!isRampartWall && hostileCreep && this.pos.getRangeTo(hostileCreep) < this.pos.getRangeTo(spawn)) {
-        //     this.moveTo(hostileCreep, { range: 1 })
-        //     this.attack(hostileCreep)
-        //     this.attackNear()
-        //     return
-        // }
 
         this.room.visual.poly(path)
         if (path.length) {
@@ -113,10 +98,10 @@ Creep.prototype.attackSpawn = function (roomName) {
     } else {
         if (this.hitsMax === this.hits) {
             this.moveToRoom(roomName);
-            this.say('attack')
+            this.say('⚔️', true)
         } else {
             this.retreat()
-            this.say('retreat')
+            this.say('🏃‍♂️', true)
         }
     }
 }
@@ -140,7 +125,7 @@ Creep.prototype.attackRoom = function (roomName) {
 
     if (!(status > 0.8 && healerStauts > 0.8)) {
         this.retreat()
-        this.say('retreat')
+        this.say('🏃‍♂️', true)
         return
     }
     if (healer && !healer.spawning && this.room.name === healer.room.name && this.pos.getRangeTo(healer) > 1) {
@@ -148,17 +133,17 @@ Creep.prototype.attackRoom = function (roomName) {
         return
     }
     if (this.room.name = roomName) {
-        this.say('attack')
+        this.say('⚔️', true)
         this.attackSpawn(roomName)
         return
     } else {
         if (status === 1 && healerStauts === 1) {
-            this.say('attack')
+            this.say('⚔️', true)
             this.attackSpawn(roomName)
             return
         }
         this.retreat()
-        this.say('retreat')
+        this.say('🏃‍♂️', true)
         return
     }
 }
@@ -169,14 +154,22 @@ Creep.prototype.care = function (target) {
     }
     if (this.room.name === target.room.name && this.pos.getRangeTo(target) <= 1 && !isValidCoord(this.pos.x, this.pos.y)) {
         const nearTarget = target.pos.getAtRange(1).filter(pos => isValidCoord(pos.x, pos.y))
-        this.say('retreat')
+        this.say('🏃‍♂️', true)
         this.moveMy(this.pos.findClosestByRange(nearTarget))
     } else {
-        this.say('follow')
+        this.say('🏃‍♂️', true)
         this.moveMy(target)
     }
 
     const targetToheal = this.hits / this.hitsMax > target.hits / target.hitsMax ? target : this
     this.rangedHeal(targetToheal)
     this.heal(targetToheal)
+}
+
+Creep.prototype.fleeFrom = function (target) {
+    const path = PathFinder.search(this.pos, { pos: target.pos, range: 3 }, { maxRooms: 1, flee: true }).path
+    if (!path) {
+        return
+    }
+    this.moveByPath(path)
 }

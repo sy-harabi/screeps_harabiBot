@@ -31,8 +31,14 @@ Flag.prototype.findClosestMyRoomAvoidEnemy = function (level = 0) {
     const route = function (startRoomName, goalRoomName) {
         return Game.map.findRoute(startRoomName, goalRoomName, {
             routeCallback(roomName, fromRoomName) {
-                if (ROOMNAMES_TO_AVOID.includes(roomName)) {
-                    return Infinity;
+                // inaccessible로 기록된 방은 쓰지말자
+                if (Memory.map[roomName] && Memory.map[roomName].inaccessible > Game.time) {
+                    return Infinity
+                }
+
+                // 막혀있거나, novice zone이거나, respawn zone 이면 쓰지말자
+                if (Game.map.getRoomStatus(roomName).status !== 'normal') {
+                    return Infinity
                 }
                 const roomCoord = roomName.match(/[a-zA-Z]+|[0-9]+/g)
                 roomCoord[1] = Number(roomCoord[1])
@@ -42,7 +48,7 @@ Flag.prototype.findClosestMyRoomAvoidEnemy = function (level = 0) {
                 if (x % 10 === 0 || y % 10 === 0) {
                     return 1
                 }
-                const isMy = Game.rooms[roomName] && Game.rooms[roomName].isMy
+                const isMy = Game.rooms[roomName] && (Game.rooms[roomName].isMy || Game.rooms[roomName].isMyRemote)
                 if (isMy) {
                     return 1
                 }
