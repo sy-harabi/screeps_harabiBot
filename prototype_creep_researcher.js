@@ -1,17 +1,17 @@
 Creep.prototype.giveCompoundTo = function (target, resourceType) {
-    const result = this.transfer(target, resourceType)
-    if (result === -9) {
+    if (this.pos.getRangeTo(target) > 1) {
         this.moveMy(target, { range: 1 })
+        return ERR_NOT_IN_RANGE
     }
-    return result
+    return this.transfer(target, resourceType)
 }
 
 Creep.prototype.getCompoundFrom = function (target, resourceType) {
-    const result = this.withdraw(target, resourceType)
-    if (result === -9) {
+    if (this.pos.getRangeTo(target) > 1) {
         this.moveMy(target, { range: 1 })
+        return ERR_NOT_IN_RANGE
     }
-    return result
+    return this.withdraw(target, resourceType)
 }
 
 global.DeliveryRequest = function (from, to, resourceType) {
@@ -34,16 +34,13 @@ Creep.prototype.getDeliveryRequest = function (from, to, resourceType) {
         return
     }
     const deliveryRequest = new DeliveryRequest(from, to, resourceType)
-    if (!data.creeps[this.name]) {
-        data.creeps[this.name] = {}
-    }
 
-    if (data.creeps[this.name].deliveryRequest || this.spawning) {
+    if (this.heap.deliveryRequest !== undefined || this.spawning) {
         return
     }
 
     this.memory.delivering = false
-    data.creeps[this.name].deliveryRequest = deliveryRequest
+    this.heap.deliveryRequest = deliveryRequest
 }
 
 Object.defineProperties(Creep.prototype, {
@@ -52,12 +49,10 @@ Object.defineProperties(Creep.prototype, {
             if (this._isFree !== undefined) {
                 return this._isFree
             }
-            if (data.creeps[this.name] && data.creeps[this.name].deliveryRequest) {
-                this._isFree = false
-                return this._isFree
+            if (this.heap.deliveryRequest) {
+                return this._isFree = false
             }
-            this._isFree = true
-            return this._isFree
+            return this._isFree = true
         }
     }
 })
@@ -88,16 +83,13 @@ Creep.prototype.delivery = function () {
 
     if (this.ticksToLive < 30) {
         if (this.store.getUsedCapacity()) {
+            this.say('1')
             this.returnAll()
             return
         }
 
         this.getRecycled()
         return
-    }
-
-    if (!data.creeps[this.name]) {
-        data.creeps[this.name] = {}
     }
 
     if (this.isFree) {
@@ -120,7 +112,7 @@ Creep.prototype.delivery = function () {
         return this.moveMy(centerLab, { range: 1 })
     }
 
-    const deliveryRequest = data.creeps[this.name].deliveryRequest
+    const deliveryRequest = this.heap.deliveryRequest
     const target = Game.getObjectById(deliveryRequest.to)
 
     let deposits = []
@@ -134,7 +126,7 @@ Creep.prototype.delivery = function () {
 
     if (Game.time > deliveryRequest.deadline) {
         data.recordLog(`${this.name} couldn't finished request for ${deliveryRequest.to} until deadline`)
-        delete data.creeps[this.name].deliveryRequest
+        delete this.heap.deliveryRequest
         this.say('deadline', true)
         return
     }
@@ -142,14 +134,16 @@ Creep.prototype.delivery = function () {
     for (const resourceType of Object.keys(this.store)) {
         if (resourceType === deliveryRequest.resourceType) {
             continue
+        } else {
+            this.say('2')
+            this.returnAll()
+            return
         }
-        this.returnAll()
-        return
     }
 
     if (this.memory.delivering === true) {
         if (this.giveCompoundTo(target, deliveryRequest.resourceType) === OK) {
-            delete data.creeps[this.name].deliveryRequest
+            delete this.heap.deliveryRequest
         }
         return
     }
@@ -171,7 +165,7 @@ Creep.prototype.delivery = function () {
         return
     } else {
         if (!Object.keys(deposit.store).includes(deliveryRequest.resourceType)) {
-            delete data.creeps[this.name].deliveryRequest
+            delete this.heap.deliveryRequest
             return
         }
 

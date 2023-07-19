@@ -1,4 +1,5 @@
-global.MY_NAME = Object.values(Game.structures)[0].owner.username
+const mySpawn = Object.values(Game.spawns)[0]
+global.MY_NAME = mySpawn ? mySpawn.owner.username : undefined
 
 global.MILLION = 1000000
 
@@ -60,6 +61,7 @@ global.CREEP_ROELS = [
     'colonyMiner',
     'colonyHauler',
     'colonyDefender',
+    'colonyCoreDefender',
     'wallMaker',
     'attacker',
     'healer',
@@ -69,6 +71,8 @@ global.CREEP_ROELS = [
     'scouter',
     'filler',
     'manager',
+    'dismantler',
+    'roomDefender',
 ]
 
 global.SELF_DIRECTED_CREEP_ROELS = [
@@ -81,6 +85,7 @@ global.SELF_DIRECTED_CREEP_ROELS = [
     'colonyMiner',
     'colonyHauler',
     'colonyDefender',
+    'colonyCoreDefender',
     'wallMaker',
     'researcher'
 ]
@@ -169,17 +174,6 @@ global.BASIC_MINERALS = {
     X: { ratio: 4 }
 }
 
-global.BASE_COMPOUNDS = {
-    ZO: { ratio: 2, resourceType0: 'Z', resourceType1: 'O' },
-    KO: { ratio: 2, resourceType0: 'K', resourceType1: 'O' },
-    UH: { ratio: 2, resourceType0: 'U', resourceType1: 'H' },
-    UO: { ratio: 2, resourceType0: 'U', resourceType1: 'O' },
-    LO: { ratio: 2, resourceType0: 'L', resourceType1: 'O' },
-    OH: { ratio: 10, resourceType0: 'O', resourceType1: 'H' },
-    ZK: { ratio: 2, resourceType0: 'Z', resourceType1: 'K' },
-    UL: { ratio: 2, resourceType0: 'U', resourceType1: 'L' },
-}
-
 global.ATTACK_BOOST_COMPOUNDS_TIER2 = {
     UH2O: { ratio: 2, resourceType0: 'UH', resourceType1: 'OH' },
     KHO2: { ratio: 2, resourceType0: 'KO', resourceType1: 'OH' },
@@ -196,22 +190,98 @@ global.ATTACK_BOOST_COMPOUNDS_TIER3 = {
     XGHO2: { ratio: 2, resourceType0: 'GHO2', resourceType1: 'X' },
 }
 
+global.BASE_COMPOUNDS = {
+    OH: { ratio: 10, resourceType0: 'O', resourceType1: 'H' },
+    ZK: { ratio: 2, resourceType0: 'Z', resourceType1: 'K' },
+    UL: { ratio: 2, resourceType0: 'U', resourceType1: 'L' },
+    G: { ratio: 2, resourceType0: 'ZK', resourceType1: 'UL' },
+}
+
+global.TIER1_COMPOUNDS = {
+    UH: { ratio: 2, resourceType0: 'U', resourceType1: 'H' },
+    UO: { ratio: 2, resourceType0: 'U', resourceType1: 'O' },
+    KH: { ratio: 2, resourceType0: 'K', resourceType1: 'H' },
+    KO: { ratio: 2, resourceType0: 'K', resourceType1: 'O' },
+    LH: { ratio: 2, resourceType0: 'L', resourceType1: 'H' },
+    LO: { ratio: 2, resourceType0: 'L', resourceType1: 'O' },
+    ZH: { ratio: 2, resourceType0: 'Z', resourceType1: 'H' },
+    ZO: { ratio: 2, resourceType0: 'Z', resourceType1: 'O' },
+    GH: { ratio: 2, resourceType0: 'G', resourceType1: 'H' },
+    GO: { ratio: 2, resourceType0: 'G', resourceType1: 'O' },
+}
+
 global.TIER2_COMPOUNDS = {
-    GH2O: { ratio: 2, resourceType0: 'GH', resourceType1: 'OH' },
     UH2O: { ratio: 2, resourceType0: 'UH', resourceType1: 'OH' },
     UHO2: { ratio: 2, resourceType0: 'UO', resourceType1: 'OH' },
+    KH2O: { ratio: 2, resourceType0: 'KH', resourceType1: 'OH' },
     KHO2: { ratio: 2, resourceType0: 'KO', resourceType1: 'OH' },
+    LH2O: { ratio: 2, resourceType0: 'LH', resourceType1: 'OH' },
     LHO2: { ratio: 2, resourceType0: 'LO', resourceType1: 'OH' },
+    ZH2O: { ratio: 2, resourceType0: 'ZH', resourceType1: 'OH' },
     ZHO2: { ratio: 2, resourceType0: 'ZO', resourceType1: 'OH' },
+    GH2O: { ratio: 2, resourceType0: 'GH', resourceType1: 'OH' },
     GHO2: { ratio: 2, resourceType0: 'GO', resourceType1: 'OH' },
 }
 
 global.TIER3_COMPOUNDS = {
-    XGH2O: { ratio: 2, resourceType0: 'GH2O', resourceType1: 'X' },
+    XUH2O: { ratio: 2, resourceType0: 'UH2O', resourceType1: 'X' },
     XUHO2: { ratio: 2, resourceType0: 'UHO2', resourceType1: 'X' },
+    XKH2O: { ratio: 2, resourceType0: 'KH2O', resourceType1: 'X' },
+    XKHO2: { ratio: 2, resourceType0: 'KHO2', resourceType1: 'X' },
+    XLH2O: { ratio: 2, resourceType0: 'LH2O', resourceType1: 'X' },
+    XLHO2: { ratio: 2, resourceType0: 'LHO2', resourceType1: 'X' },
+    XZH2O: { ratio: 2, resourceType0: 'ZH2O', resourceType1: 'X' },
+    XZHO2: { ratio: 2, resourceType0: 'ZHO2', resourceType1: 'X' },
+    XGH2O: { ratio: 2, resourceType0: 'GH2O', resourceType1: 'X' },
+    XGHO2: { ratio: 2, resourceType0: 'GHO2', resourceType1: 'X' },
+}
+
+global.COMPOUNDS_FORMULA = {
+    OH: { ratio: 10, resourceType0: 'O', resourceType1: 'H' },
+    ZK: { ratio: 2, resourceType0: 'Z', resourceType1: 'K' },
+    UL: { ratio: 2, resourceType0: 'U', resourceType1: 'L' },
+    G: { ratio: 2, resourceType0: 'ZK', resourceType1: 'UL' },
+
+    UH: { ratio: 2, resourceType0: 'U', resourceType1: 'H' },
+    UO: { ratio: 2, resourceType0: 'U', resourceType1: 'O' },
+    KH: { ratio: 2, resourceType0: 'K', resourceType1: 'H' },
+    KO: { ratio: 2, resourceType0: 'K', resourceType1: 'O' },
+    LH: { ratio: 2, resourceType0: 'L', resourceType1: 'H' },
+    LO: { ratio: 2, resourceType0: 'L', resourceType1: 'O' },
+    ZH: { ratio: 2, resourceType0: 'Z', resourceType1: 'H' },
+    ZO: { ratio: 2, resourceType0: 'Z', resourceType1: 'O' },
+    GH: { ratio: 2, resourceType0: 'G', resourceType1: 'H' },
+    GO: { ratio: 2, resourceType0: 'G', resourceType1: 'O' },
+
+    UH2O: { ratio: 2, resourceType0: 'UH', resourceType1: 'OH' },
+    UHO2: { ratio: 2, resourceType0: 'UO', resourceType1: 'OH' },
+    KH2O: { ratio: 2, resourceType0: 'KH', resourceType1: 'OH' },
+    KHO2: { ratio: 2, resourceType0: 'KO', resourceType1: 'OH' },
+    LH2O: { ratio: 2, resourceType0: 'LH', resourceType1: 'OH' },
+    LHO2: { ratio: 2, resourceType0: 'LO', resourceType1: 'OH' },
+    ZH2O: { ratio: 2, resourceType0: 'ZH', resourceType1: 'OH' },
+    ZHO2: { ratio: 2, resourceType0: 'ZO', resourceType1: 'OH' },
+    GH2O: { ratio: 2, resourceType0: 'GH', resourceType1: 'OH' },
+    GHO2: { ratio: 2, resourceType0: 'GO', resourceType1: 'OH' },
+
+    XUH2O: { ratio: 2, resourceType0: 'UH2O', resourceType1: 'X' },
+    XUHO2: { ratio: 2, resourceType0: 'UHO2', resourceType1: 'X' },
+    XKH2O: { ratio: 2, resourceType0: 'KH2O', resourceType1: 'X' },
+    XKHO2: { ratio: 2, resourceType0: 'KHO2', resourceType1: 'X' },
+    XLH2O: { ratio: 2, resourceType0: 'LH2O', resourceType1: 'X' },
+    XLHO2: { ratio: 2, resourceType0: 'LHO2', resourceType1: 'X' },
+    XZH2O: { ratio: 2, resourceType0: 'ZH2O', resourceType1: 'X' },
+    XZHO2: { ratio: 2, resourceType0: 'ZHO2', resourceType1: 'X' },
+    XGH2O: { ratio: 2, resourceType0: 'GH2O', resourceType1: 'X' },
+    XGHO2: { ratio: 2, resourceType0: 'GHO2', resourceType1: 'X' },
+}
+
+global.USEFULL_COMPOUNDS = {
+    XGH2O: { ratio: 2, resourceType0: 'GH2O', resourceType1: 'X' },
     XUH2O: { ratio: 2, resourceType0: 'UH2O', resourceType1: 'X' },
     XKHO2: { ratio: 2, resourceType0: 'KHO2', resourceType1: 'X' },
     XLHO2: { ratio: 2, resourceType0: 'LHO2', resourceType1: 'X' },
+    XZH2O: { ratio: 2, resourceType0: 'ZH2O', resourceType1: 'X' },
     XZHO2: { ratio: 2, resourceType0: 'ZHO2', resourceType1: 'X' },
     XGHO2: { ratio: 2, resourceType0: 'GHO2', resourceType1: 'X' },
 }
@@ -256,10 +326,7 @@ global.CONTROLLER_PROGRESS_TO_LEVELS = {
 }
 
 global.RAW_RESOURCES = [
-    RESOURCE_METAL,
-    RESOURCE_BIOMASS,
-    RESOURCE_SILICON,
-    RESOURCE_MIST
+    'metal', 'biomass', 'silicon', 'mist'
 ]
 
 global.BASIC_REGIONAL_COMMODITIES = {
@@ -298,8 +365,6 @@ global.COMMODITIES_TO_SELL = [
     'alloy', 'tube', 'fixtures', 'frame', 'hydraulics', 'machine',
     'wire', 'switch', 'transistor', 'microchip', 'circuit', 'device',
 ]
-
-global.RAW_COMMODITIES_AMOUNT_TO_KEEP = 10000
 
 global.COMMODITIES_AMOUNT_TO_KEEP = [5000, 300, 30, 10, 5, 5]
 

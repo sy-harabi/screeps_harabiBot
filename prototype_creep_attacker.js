@@ -167,7 +167,7 @@ Creep.prototype.care = function (target) {
 }
 
 Creep.prototype.fleeFrom = function (target) {
-    const path = PathFinder.search(this.pos, { pos: target.pos, range: 3 }, { maxRooms: 1, flee: true }).path
+    const path = PathFinder.search(this.pos, { pos: target.pos, range: 10 }, { maxRooms: 1, flee: true }).path
     if (!path) {
         return
     }

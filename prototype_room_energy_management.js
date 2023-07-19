@@ -233,13 +233,15 @@ Room.prototype.manageEnergyFetch = function (arrayOfCreeps) {
     for (const request of requests) {
         request.applicants = new Array(...applicants).sort((a, b) => a.pos.getRangeTo(request.pos) - b.pos.getRangeTo(request.pos))
     }
-    for (const source of this.sources) {
-        const sourceRequests = this.getSourceEnergyDepots(source)
-        const sourceApplicants = applicants.filter(applicant => applicant.creep.memory.sourceId === source.id)
-        for (const request of sourceRequests) {
-            request.applicants = new Array(...sourceApplicants).sort((a, b) => a.pos.getRangeTo(request.pos) - b.pos.getRangeTo(request.pos))
+    if (!this.memory.militaryThreat) {
+        for (const source of this.sources) {
+            const sourceRequests = this.getSourceEnergyDepots(source)
+            const sourceApplicants = applicants.filter(applicant => applicant.creep.memory.sourceId === source.id)
+            for (const request of sourceRequests) {
+                request.applicants = new Array(...sourceApplicants).sort((a, b) => a.pos.getRangeTo(request.pos) - b.pos.getRangeTo(request.pos))
+            }
+            requests.push(...sourceRequests)
         }
-        requests.push(...sourceRequests)
     }
 
     while (true) {

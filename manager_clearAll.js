@@ -26,12 +26,11 @@ Flag.prototype.manageClearAll = function () {
         }
         targetRoom.controller.unclaim()
         delete Memory.rooms[targetRoomName]
-        delete OVERLORD._structures
         this.remove()
         return
     }
 
-    if ((!targetRoom || !targetRoom.controller.reservation || targetRoom.controller.reservation.ticksToEnd < 200 ||targetRoom.controller.reservation.username===MY_NAME) && !getNumCreepsByRole(targetRoomName, 'claimer')) {
+    if ((!targetRoom || !targetRoom.controller.reservation || targetRoom.controller.reservation.ticksToEnd < 200 || targetRoom.controller.reservation.username === MY_NAME) && !getNumCreepsByRole(targetRoomName, 'claimer')) {
         closestMyRoom.requestClaimer(targetRoomName)
         return
     }

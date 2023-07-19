@@ -4,7 +4,7 @@ Room.prototype.operateLab = function (resource0, resource1) {
     const reactionLabs = this.labs.reactionLab.map(id => Game.getObjectById(id))
     const terminal = this.terminal
 
-    this.visual.text(`🧪${this.labObjective.resourceType}`, sourceLabs[0].pos.x, sourceLabs[0].pos.y - 1, { align: 'left' })
+    this.visual.text(`🧪${this.memory.labTargetCompound} ${this.labState}`, sourceLabs[0].pos.x, sourceLabs[0].pos.y - 1, { align: 'left' })
     if (this.labState === 'producing') {
         if (sourceLabs[0].store[resource0] && sourceLabs[1].store[resource1]) {
             for (const lab of reactionLabs) {
@@ -33,13 +33,13 @@ Room.prototype.operateLab = function (resource0, resource1) {
             return
         }
         if (sourceLabs[0].store[resource0] < 1000) {
-            if (researcher.isFree && terminal.store[resource0] >= researcher.store.getCapacity()) {
+            if (researcher.isFree && terminal.store[resource0] >= 1000 - sourceLabs[0].store[resource0]) {
                 researcher.getDeliveryRequest(terminal, sourceLabs[0], resource0)
             }
             return
         }
         if (sourceLabs[1].store[resource1] < 1000) {
-            if (researcher.isFree && terminal.store[resource1] >= researcher.store.getCapacity()) {
+            if (researcher.isFree && terminal.store[resource1] >= 1000 - sourceLabs[1].store[resource1]) {
                 researcher.getDeliveryRequest(terminal, sourceLabs[1], resource1)
             }
             return
@@ -72,7 +72,7 @@ Room.prototype.operateLab = function (resource0, resource1) {
             researcher.returnAll()
             return
         }
-        delete this.memory.labObjective
+        delete this.memory.labTargetCompound
         delete this.memory.labState
         return
     }
@@ -347,50 +347,75 @@ Object.defineProperties(Room.prototype, {
             return this.memory.labState
         }
     },
-    labObjective: {
-        get() {
-            if (!this.memory.labObjective) {
-                let labObjective = {}
-                const terminal = this.terminal
-                if (terminal.hasNotEnoughBaseCompounds) {
-                    labObjective.resourceType = this.terminal.lowestBaseCompound.resourceType
-                    labObjective['resourceType0'] = BASE_COMPOUNDS[labObjective.resourceType]['resourceType0']
-                    labObjective['resourceType1'] = BASE_COMPOUNDS[labObjective.resourceType]['resourceType1']
-                } else if (terminal.store['G'] < 2000) {
-                    labObjective.resourceType = 'G'
-                    labObjective['resourceType0'] = 'ZK'
-                    labObjective['resourceType1'] = 'UL'
-                } else if (terminal.store['GO'] < 2000) {
-                    labObjective.resourceType = 'GO'
-                    labObjective['resourceType0'] = 'G'
-                    labObjective['resourceType1'] = 'O'
-                } else if (terminal.store['GH'] < 2000) {
-                    labObjective.resourceType = 'GH'
-                    labObjective['resourceType0'] = 'G'
-                    labObjective['resourceType1'] = 'H'
-                } else if (terminal.hasNotEnoughTier2Compounds) {
-                    labObjective.resourceType = this.terminal.lowestTier2Compound.resourceType
-                    labObjective['resourceType0'] = TIER2_COMPOUNDS[labObjective.resourceType]['resourceType0']
-                    labObjective['resourceType1'] = TIER2_COMPOUNDS[labObjective.resourceType]['resourceType1']
-                } else if (terminal.hasNotEnoughTier3Compounds) {
-                    labObjective.resourceType = this.terminal.lowestTier3Compound.resourceType
-                    labObjective['resourceType0'] = TIER3_COMPOUNDS[labObjective.resourceType]['resourceType0']
-                    labObjective['resourceType1'] = TIER3_COMPOUNDS[labObjective.resourceType]['resourceType1']
-                }
-                if (!Object.keys(labObjective).length) {
-                    delete this.memory.labObjective
-                    return false
-                }
-                if (this.terminal.store[labObjective['resourceType0']] < 1000 || this.terminal.store[labObjective['resourceType1']] < 1000) {
-                    delete this.memory.labObjective
-                    return false
-                }
-                this.memory.labObjective = labObjective
-            }
-            return this.memory.labObjective
-        }
-    },
 })
+
+Room.prototype.getLabTargetCompound = function () {
+    if (this.memory.labTargetCompound !== undefined) {
+        return this.memory.labTargetCompound
+    }
+
+    const queue = [...Object.keys(USEFULL_COMPOUNDS), ...business.profitableCompounds]
+    const checked = {}
+    for (const compound of queue) {
+        if (this.isReadyToProduce(compound)) {
+            return this.memory.labTargetCompound = compound
+        }
+        checked[compound] = true
+    }
+
+    while (queue.length > 0) {
+        const node = queue.shift()
+        const formula = COMPOUNDS_FORMULA[node]
+        if (!formula) {
+            continue
+        }
+        if (!checked[formula.resourceType0]) {
+            if (this.isReadyToProduce(formula.resourceType0)) {
+                return this.memory.labTargetCompound = formula.resourceType0
+            }
+            queue.push(formula.resourceType0)
+            checked[formula.resourceType0] = true
+        }
+        if (!checked[formula.resourceType1]) {
+            if (this.isReadyToProduce(formula.resourceType1)) {
+                return this.memory.labTargetCompound = formula.resourceType1
+            }
+            queue.push(formula.resourceType1)
+            checked[formula.resourceType1] = true
+        }
+    }
+
+    return null
+}
+
+Room.prototype.isReadyToProduce = function (compound) {
+    if (!this.isMy) {
+        return false
+    }
+    if (this.controller.level < 6) {
+        return false
+    }
+
+    const terminal = this.terminal
+    if (!terminal) {
+        return false
+    }
+    if (this.structures.lab.length < 3) {
+        return false
+    }
+
+    const formula = COMPOUNDS_FORMULA[compound]
+    if (!formula) {
+        return false
+    }
+    if (terminal.store[compound] >= formula.ratio * 1000) {
+        return false
+    }
+    if (terminal.store[formula.resourceType0] < 1000 || terminal.store[formula.resourceType1] < 1000) {
+        return false
+    }
+    return true
+}
 
 Room.prototype.getLabState = function () {
     const terminal = this.terminal

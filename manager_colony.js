@@ -12,16 +12,9 @@ Room.prototype.ruleColony = function (colonyName) {
         this.resetColonyEfficiency(colonyName)
     }
     new RoomVisual(colonyName).text(`🏭${Math.floor(100 * (status.profit - status.cost) / (Game.time - status.tick)) / 100}e/tick`, visualPos.x + 1, visualPos.y + 2, { align: 'left' })
-    Game.map.visual.text(`🏭${Math.floor(100 * (status.profit - status.cost) / (Game.time - status.tick)) / 100}e/tick`, visualPos)
+    Game.map.visual.text(`🏭${Math.floor(100 * (status.profit - status.cost) / (Game.time - status.tick)) / 100}e/tick`, visualPos, { fontSize: 7 })
+
     if (colony && colony.controller.owner && !['Invader'].includes(colony.controller.owner.username)) {
-        return this.abandonColony(colonyName)
-    }
-
-    if (colony && colony.controller.reservation && ![MY_NAME, 'Invader'].includes(colony.controller.reservation.username)) {
-        return this.abandonColony(colonyName)
-    }
-
-    if (Memory.map && Memory.map[colonyName] && Memory.map[colonyName].inaccessible > Game.time) {
         return this.abandonColony(colonyName)
     }
 
@@ -34,7 +27,7 @@ Room.prototype.ruleColony = function (colonyName) {
 
     if (this.checkColonyInvaderCore(colonyName)) {
         new RoomVisual(colonyName).text(`👿InvaderCore`, visualPos.x + 1, visualPos.y - 1, { align: 'left' })
-        if (!getNumCreepsByRole(colonyName, 'colonyDefender')) {
+        if (!getNumCreepsByRole(colonyName, 'colonyCoreDefender')) {
             return this.requestColonyCoreDefender(colonyName)
         }
     }
@@ -83,7 +76,7 @@ Room.prototype.ruleColony = function (colonyName) {
         let numNewConstructionSites = 0
         for (const infraPos of infraPlan) {
             if (numConstructionSites >= 5) {
-                return
+                break
             }
             if (infraPos.pos.createConstructionSite(infraPos.structureType) === OK) {
                 numNewConstructionSites++
@@ -127,9 +120,12 @@ Room.prototype.ruleColony = function (colonyName) {
             }
         }
 
-        const sources = Object.keys(status.infraPlan).map(id => Game.getObjectById(id))
+        const sources = colony.sources
         for (const source of sources) {
-
+            if (!source) {
+                delete status.infraPlan
+                status.state = 'init'
+            }
             if (!source.container) {
                 status.state = 'build'
                 return
@@ -231,7 +227,9 @@ Creep.prototype.checkBodyParts = function (type) {
 }
 
 Room.prototype.abandonColony = function (colonyName) {
-    return delete this.memory.colony[colonyName]
+    if (this.memory.colony && this.memory.colony) {
+        return delete this.memory.colony[colonyName]
+    }
 }
 
 Room.prototype.checkColonyInvader = function (colonyName) {
@@ -240,8 +238,18 @@ Room.prototype.checkColonyInvader = function (colonyName) {
     if (!colony) {
         return status.isInvader
     }
-    const hostileCreeps = colony.find(FIND_HOSTILE_CREEPS).filter(creep => creep.checkBodyParts(['work', 'attack', 'ranged_attack', 'claim']))
-    const killerCreeps = hostileCreeps.filter(creep => creep.checkBodyParts(['attack', 'ranged_attack']))
+    const hostileCreeps = colony.find(FIND_HOSTILE_CREEPS).filter(creep => creep.checkBodyParts(['work', 'attack', 'ranged_attack', 'heal', 'claim']))
+    const killerCreeps = hostileCreeps.filter(creep => creep.checkBodyParts(['attack', 'ranged_attack', 'heal']))
+
+    let attackPower = 0
+    let healPower = 0
+    for (const killerCreep of killerCreeps) {
+        attackPower += killerCreep.calcAttackPower()
+        healPower += killerCreep.calcHealPower()
+    }
+    if (healPower > 100) {
+        this.abandonColony(colonyName)
+    }
     if (!status.isInvader && hostileCreeps.length) {
         status.isInvader = true
         colony.memory.isInvader = true
@@ -313,7 +321,7 @@ Room.prototype.resetColonyEfficiency = function (colonyName) {
 }
 
 Room.prototype.getColonyInfraPlan = function (colonyName, status) {
-    if (status.infraPlan) {
+    if (status.infraPlan && Object.keys(status.infraPlan).length) {
         return this.unpackInfraPlan(status.infraPlan)
     }
     const colony = Game.rooms[colonyName]

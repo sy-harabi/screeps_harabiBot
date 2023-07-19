@@ -22,23 +22,8 @@ Room.prototype.manageWork = function () {
 }
 
 Room.prototype.manageReinforce = function () {
-    let laborers = getCreepsByRole(this.name, 'laborer')
     const rampartLowest = this.structures.rampart.sort((a, b) => { return a.hits - b.hits })[0]
-    this.laborersNeedDelivery = true
-    for (const laborer of laborers) {
-        // energy 없으면 energy 받아라
-        if (!laborer.working) {
-            //storage가 가까우면 storage에서 energy 받자
-            if (this.storage && laborer.pos.getRangeTo(this.storage) <= 5) {
-                laborer.getEnergyFrom(this.storage.id)
-                continue
-            }
-            // 그게 아니면 hauler들이 갖다주길 기다리자
-            this.laborersNeedDelivery = true
-        }
-        // energy 있으면 일해라
-        laborer.repairMy(rampartLowest)
-    }
+    this.repairStructure(rampartLowest)
 }
 
 Room.prototype.manageBuild = function () {
@@ -58,16 +43,20 @@ Room.prototype.manageBuild = function () {
         }
         const priorityTasks = tasksByPriority.find(tasks => tasks.length > 0)
         for (const laborer of laborers) {
+            if (laborer.room.name !== this.name) {
+                continue
+            }
             laborer.memory.task = laborer.pos.findClosestByRange(priorityTasks).id
         }
     }
 
     for (const laborer of laborers) {
         // energy 없으면 energy 받아라
+        this.laborersNeedDelivery = this.storage ? false : true
         if (!laborer.working) {
             //storage가 가까우면 storage에서 energy 받자
             const workPlace = Game.getObjectById(laborer.memory.task)
-            if (this.storage && this.storage.pos.getRangeTo(workPlace) <= 5) {
+            if (this.storage && (this.storage.pos.getRangeTo(workPlace) <= 5 || this.buildersGetEnergyFromStorage)) {
                 laborer.getEnergyFrom(this.storage.id)
                 continue
             }
@@ -105,8 +94,10 @@ Room.prototype.manageUpgrade = function () {
                 laborer.getEnergyFrom(droppedEnergy.id)
                 continue
             }
-            if (container && container.store[RESOURCE_ENERGY]) {
-                laborer.getEnergyFrom(container.id)
+            if (container) {
+                if (container.store['energy'] > 0) {
+                    laborer.getEnergyFrom(container.id)
+                }
                 continue
             }
             if (this.controller.linked) {
@@ -116,6 +107,26 @@ Room.prototype.manageUpgrade = function () {
             this.laborersNeedDelivery = true
         }
         laborer.upgradeRCL()
+    }
+}
+
+Room.prototype.repairStructure = function (rampart) {
+    let laborers = getCreepsByRole(this.name, 'laborer')
+    const rampartLowest = rampart
+    this.laborersNeedDelivery = true
+    for (const laborer of laborers) {
+        // energy 없으면 energy 받아라
+        if (!laborer.working) {
+            //storage가 가까우면 storage에서 energy 받자
+            if (this.storage) {
+                laborer.getEnergyFrom(this.storage.id)
+                continue
+            }
+            // 그게 아니면 hauler들이 갖다주길 기다리자
+            this.laborersNeedDelivery = true
+        }
+        // energy 있으면 일해라
+        laborer.repairMy(rampartLowest)
     }
 }
 
@@ -156,9 +167,9 @@ Object.defineProperties(RoomPosition.prototype, {
             if (this._creep) {
                 return this._creep
             }
-            const creep = this.lookFor(LOOK_CREEPS)
-            const powerCreep = this.lookFor(LOOK_POWER_CREEPS)
-            return this._creep = creep || powerCreep
+            const creeps = this.lookFor(LOOK_CREEPS)
+            const powerCreeps = this.lookFor(LOOK_POWER_CREEPS)
+            return this._creep = creeps[0] || powerCreeps[0]
         }
     }
 })
@@ -220,7 +231,7 @@ Creep.prototype.upgradeRCL = function () {
     }
 
     if (!this.isWorkable(this.pos)) {
-        const workingSpot = this.pos.findClosestByRange(this.getWorkingSpots(controller.pos))
+        const workingSpot = this.pos.findClosestByPath(this.getWorkingSpots(controller.pos))
         if (workingSpot) {
             this.heap.workingSpot = { id: controller.id, pos: workingSpot }
             this.moveMy(workingSpot)
@@ -248,7 +259,7 @@ Creep.prototype.buildTask = function () {
     }
 
     if (this.pos.getRangeTo(constructionSite) > 3) {
-        const workingSpot = this.pos.findClosestByRange(this.getWorkingSpots(constructionSite.pos))
+        const workingSpot = this.pos.findClosestByPath(this.getWorkingSpots(constructionSite.pos))
         if (workingSpot) {
             this.heap.workingSpot = { id: this.memory.task, pos: workingSpot }
             return this.moveMy(workingSpot)

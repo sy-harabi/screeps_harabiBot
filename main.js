@@ -17,14 +17,17 @@ require('prototype_room_energy_management')
 require('function_visualizeRoomInfo')
 require('global_function')
 require('manager_base')
+require('manager_claim')
 require('prototype_room_information')
 const manager_attack = require('manager_attack')
 require('manager_room')
 require('manager_scout')
 require('manager_colony')
 require('manager_defense')
+require('manager_defenseNuke')
+require('manager_dismantleRoom')
+require('manager_harass')
 require('prototype_flag')
-const manager_claim = require('manager_claim')
 require('global_business')
 require('manager_clearAll')
 require('manager_highway_mining')
@@ -66,11 +69,12 @@ module.exports.loop = () => {
         data.isEnoughCredit = true
     }
 
+    // Overlord 생성
+    global.OVERLORD = new Overlord()
+
     // creeps 방별로, 역할별로 분류
 
     classifyCreeps()
-
-    global.MY_ROOMS = Object.values(Game.rooms).filter(r => r.isMy).sort((a, b) => b.controller.totalProgress - a.controller.totalProgress)
 
     // flag 실행
 
@@ -80,9 +84,11 @@ module.exports.loop = () => {
         if (name.includes('colony')) {
             colonize(roomName)
             flag.remove()
+            continue
         }
         if (name.includes('claim')) {
-            manager_claim.run(flag)
+            claim(roomName)
+            flag.remove()
             continue
         }
         if (name.includes('attack')) {
@@ -97,14 +103,18 @@ module.exports.loop = () => {
             flag.manageReconstruction()
             continue
         }
+        if (name.includes('harass')) {
+            flag.harass()
+            continue
+        }
         if (name.includes('loot')) {
             flag.lootRoom()
             continue
         }
-        // if (name.includes('dismantle')) {
-        //     flag.dismantleRoom()
-        //     continue
-        // }
+        if (name.includes('dismantle')) {
+            flag.dismantleRoom()
+            continue
+        }
     }
 
     // 방마다 roomManager 동작
@@ -156,8 +166,6 @@ module.exports.loop = () => {
                 })
         }
 
-        delete OVERLORD._structures
-
         const finishedOrders = Object.values(Game.market.orders).filter(order => order.active === false)
         for (const order of finishedOrders) {
             Game.market.cancelOrder(order.id)
@@ -197,4 +205,50 @@ module.exports.loop = () => {
         CPU.shift()
     }
 
+}
+
+function Overlord() {
+    this.map = Memory.map = Memory.map || {}
+    this.myRooms = Object.values(Game.rooms).filter(room => room.isMy).sort((a, b) => b.controller.totalProgress - a.controller.totalProgress)
+
+    Object.defineProperties(this, {
+        structures: {
+            get() {
+                if (this._structures) {
+                    return this._structures
+                }
+                this._structures = {}
+                const overlordStructureTypes = ['terminal', 'observer']
+                for (const structureType of overlordStructureTypes) {
+                    this._structures[structureType] = []
+                }
+                for (const room of this.myRooms) {
+                    for (const structureType of overlordStructureTypes) {
+                        if (room.structures[structureType].length) {
+                            this._structures[structureType].push(room.structures[structureType][0])
+                        }
+                    }
+
+                }
+                return this._structures
+            }
+        },
+        colonies: {
+            get() {
+                if (this._colonies) {
+                    return this._colonies
+                }
+                this._colonies = []
+                for (const myRoom of this.myRooms) {
+                    if (!myRoom.memory.colony) {
+                        continue
+                    }
+                    for (const colonyName of Object.keys(myRoom.memory.colony)) {
+                        this._colonies.push(colonyName)
+                    }
+                }
+                return this._colonies
+            }
+        }
+    })
 }

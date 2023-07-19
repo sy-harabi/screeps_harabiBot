@@ -1,24 +1,3 @@
-global.OVERLORD = {
-    get rooms() {
-        return Object.values(Game.rooms).filter(room => room.isMy)
-    },
-    get structures() {
-        this._structures = {}
-        const overlordStructureTypes = ['terminal', 'observer']
-        for (const structureType of overlordStructureTypes) {
-            this._structures[structureType] = []
-        }
-        for (const room of this.rooms) {
-            for (const structureType of overlordStructureTypes) {
-                if (room.structures[structureType].length) {
-                    this._structures[structureType].push(room.structures[structureType][0])
-                }
-            }
-        }
-        return this._structures
-    },
-}
-
 global.info = function () {
     if (data.info) {
         data.info = false
@@ -47,7 +26,7 @@ global.isValidCoord = function (x, y) {
 
 global.cleanRoomMemory = function () {
     const colonyList = []
-    for (const myRoom of MY_ROOMS) {
+    for (const myRoom of OVERLORD.myRooms) {
         if (!myRoom.memory.colony) {
             continue
         }
@@ -68,6 +47,7 @@ global.cleanRoomMemory = function () {
     )
     return 'cleaned room memory'
 }
+
 
 global.basePlan = function (roomName, numIteration = 10) {
 
@@ -156,6 +136,10 @@ global.checkCPU = function (name) {
 global.colonize = function (colonyName, baseName) {
     colonyName = colonyName.toUpperCase()
     const base = baseName ? Game.rooms[baseName.toUpperCase()] : findClosestMyRoom(colonyName)
+    if (!base || !base.isMy) {
+        console.log('invalid base')
+        return
+    }
     baseName = base.name
     if (base.memory.colony && base.memory.colony[colonyName]) {
         return
@@ -181,6 +165,15 @@ global.colonize = function (colonyName, baseName) {
 
     base.memory.colony = base.memory.colony || {}
     base.memory.colony[colonyName] = {}
+    return
+}
+
+global.claim = function (targetRoomName, baseName) {
+    targetRoomName = targetRoomName.toUpperCase()
+    const base = baseName ? Game.rooms[baseName.toUpperCase()] : findClosestMyRoom(targetRoomName, 4)
+    baseName = base.name
+    base.memory.claimRoom = base.memory.claimRoom || {}
+    base.memory.claimRoom[targetRoomName] = base.memory.claimRoom[targetRoomName] || {}
     return
 }
 
@@ -285,7 +278,7 @@ global.visual = function () {
 }
 
 global.mapInfo = function () {
-    const map = Memory.map || {}
+    const map = OVERLORD.map
     for (const roomName of Object.keys(map)) {
         try {
             const info = map[roomName]
@@ -295,15 +288,18 @@ global.mapInfo = function () {
                 delete map[roomName]
             }
 
+            if (info.lastScout) {
+                Game.map.visual.text(`⏳${info.lastScout + 20000 - Game.time}`, new RoomPosition(center.x - 20, center.y + 15, center.roomName), { fontSize: 7, align: 'left' })
+            }
 
             if (info.isClaimCandidate) {
-                Game.map.visual.text(`🚩`, new RoomPosition(center.x + 25, center.y + 15, center.roomName), { color: '#4deeea', align: 'left' })
+                Game.map.visual.text(`🚩`, new RoomPosition(center.x - 15, center.y, center.roomName))
             }
             if (info.isRemoteCandidate) {
-                Game.map.visual.text(`⛏️`, new RoomPosition(center.x - 25, center.y + 15, center.roomName), { color: '#ffe700', align: 'left' })
+                Game.map.visual.text(`⛏️`, new RoomPosition(center.x + 15, center.y, center.roomName), { align: 'left' })
             }
             if (info.inaccessible && info.inaccessible > Game.time) {
-                Game.map.visual.text(`🚫${info.inaccessible - Game.time}`, new RoomPosition(center.x - 25, center.y - 15, center.roomName), { color: '#f000ff', align: 'left' })
+                Game.map.visual.text(`🚫${info.inaccessible - Game.time}`, new RoomPosition(center.x, center.y - 15, center.roomName), { fontSize: 7, color: '#f000ff' })
             }
 
             // host가 있는 info인지 체크. 즉 scouter가 확인한 방인지 체크
@@ -318,11 +314,26 @@ global.mapInfo = function () {
 
             const hostPos = new RoomPosition(25, 25, info.host)
             Game.map.visual.line(hostPos, center, { color: '#00ffe8', width: '1', opacity: 1 })
-            Game.map.visual.text(`🚶${info.distance}`, new RoomPosition(center.x + 15, center.y + 15, center.roomName))
+            Game.map.visual.text(`🚶${info.distance}`, new RoomPosition(center.x + 15, center.y + 15, center.roomName), { fontSize: 7 })
         }
         catch (error) {
+            console.log(error)
+            data.recordLog(`${roomName} has error ${error}`)
             delete map[roomName]
         }
 
     }
+}
+
+global.resetMap = function () {
+    Memory.map = {}
+    for (const room of Object.values(Game.rooms)) {
+        delete room.memory.scout
+        const scouters = getCreepsByRole(room.name, 'scouter')
+        for (const scouter of scouters) {
+            scouter.suicide()
+        }
+    }
+
+    return 'reset map'
 }

@@ -21,7 +21,10 @@ Room.prototype.runRoomManager = function () {
     this.manageConstruction()
 
     this.manageDefense()
-    this.manageWork()
+    this.defenseNuke()
+    if (!this.memory.defenseNuke || this.memory.defenseNuke.state !== 'repair' || this.memory.militaryThreat) {
+        this.manageWork()
+    }
 
     this.manageEnergy()
 
@@ -39,22 +42,24 @@ Room.prototype.runRoomManager = function () {
         this.managePowerSpawn()
         this.manageScout()
         this.manageSource()
+        this.manageClaim()
     }
-
 
     this.manageSpawn()
     this.manageVisual()
+    // this.getDefenseCostMatrix(255, { checkResult: false })
 }
 
 Room.prototype.checkTombstone = function () {
     // 내 creep의 tombstone 찾자. 자연적으로 죽은 건 제외
-    const myTombstone = this.find(FIND_TOMBSTONES).find(tombstone => tombstone.creep.my && tombstone.creep.ticksToLive > 1)
+    const myTombstones = this.find(FIND_TOMBSTONES).filter(tombstone => tombstone.creep.my && tombstone.creep.ticksToLive > 1)
+    const myDefenderTombstones = myTombstones.filter(tombstone => tombstone.creep.name.split(' ')[1] === 'colonyDefender')
     // 없으면 return
-    if (!myTombstone) {
+    if (myTombstones.length === 0) {
         return
     }
-
-    const map = Memory.map = Memory.map || {}
+    console.log(`num of defender Tombstone: ${myDefenderTombstones.length}`)
+    const map = OVERLORD.map
 
     map[this.name] = map[this.name] || {}
 
@@ -63,22 +68,53 @@ Room.prototype.checkTombstone = function () {
         return
     }
 
-    console.log(this.name + ' has tombstone')
     // 있으면 여러가지 확인
     const hostileStructures = this.structures.tower
-
-
     // tower 있다는건 다른 사람 방이거나 InvaderCore 있다는 뜻.
     if (hostileStructures.length) {
         map[this.name].inaccessible = Game.time + 20000
         map[this.name].lastScout = this.time
         return
     }
-    const hostileCreeps = this.find(FIND_HOSTILE_CREEPS).filter(creep => creep.checkBodyParts(['attack', 'ranged_attack']) && creep.owner.username !== 'Invader')
-    if (hostileCreeps.length) {
+
+    const deadCreepsId = myTombstones.map(tombstone => tombstone.creep.id)
+    const deadDefendersId = myDefenderTombstones.map(tombstone => tombstone.creep.id)
+    const attackEvents = this.getEventLog().filter(eventLog => eventLog.event === EVENT_ATTACK)
+    isMurdered = false
+    isDefenderMurdered = false
+    for (const attackEvent of attackEvents) {
+        const targetId = attackEvent.data.targetId
+        if (deadDefendersId.includes(targetId)) {
+            const deadCreep = myTombstones.find(tombstone => tombstone.creep.id === targetId).creep
+            data.recordLog(`${deadCreep.name} is murdered at ${this.name}`)
+            isDefenderMurdered = true
+            isMurdered = true
+            continue
+        }
+        if (deadCreepsId.includes(targetId)) {
+            const deadCreep = myTombstones.find(tombstone => tombstone.creep.id === targetId).creep
+            data.recordLog(`${deadCreep.name} is murdered at ${this.name}`)
+            isMurdered = true
+        }
+
+    }
+
+    if (isMurdered) {
         map[this.name].inaccessible = Game.time + 1500
         map[this.name].lastScout = this.time
-        return
+    }
+
+    if (isDefenderMurdered) {
+        map[this.name].inaccessible = Game.time + 1500
+        map[this.name].lastScout = this.time
+        map[this.name].threat = true
+        if (OVERLORD.colonies[this.name] && this.memory.host) {
+            const hostRoom = Game.rooms[this.memory.host]
+            if (!hostRoom) {
+                return
+            }
+            hostRoom.abandonColony(this.name)
+        }
     }
 }
 
@@ -91,16 +127,7 @@ Room.prototype.manageSource = function () {
         this.visual.text(`🚚${source.info.numCarry}/${source.info.maxCarry}`, source.pos.x + 0.5, source.pos.y + 0.5, { font: 0.5, align: 'left' })
 
         // source 근처 energy 저장량 (container + dropped energy)
-        const droppedEnergies = source.droppedEnergies
-        let energyAmount = 0
-        for (const droppedEnergy of droppedEnergies) {
-            energyAmount += droppedEnergy.amount
-        }
-        const container = source.container
-        if (container) {
-            energyAmount += (container.store[RESOURCE_ENERGY] || 0)
-        }
-        this.visual.text(` 🔋${energyAmount}/2000`, source.pos.x + 0.5, source.pos.y + 1.25, { font: 0.5, align: 'left' })
+        this.visual.text(` 🔋${source.energyAmountNear}/2000`, source.pos.x + 0.5, source.pos.y + 1.25, { font: 0.5, align: 'left' })
 
         // miner 비율 : 5 넘으면 1로 고정
         const minerRatio = Math.min(1, source.info.numWork / 5)
@@ -118,9 +145,9 @@ Room.prototype.manageSource = function () {
                 continue
             }
 
-            // source container에 에너지가 넘치는 경우
-            if (energyAmount > 2000 && source.info.numCarry === 0) {
-                this.requestHauler(10, { isUrgent: true, isManager: false, office: source })
+            // hauler는 miner에 비레해서 생산
+            if (source.info.numCarry < Math.ceil(minerRatio * source.info.maxCarry) && source.info.numHauler < source.info.maxNumHauler) {
+                this.requestHauler(source.info.maxCarry - source.info.numCarry, { isUrgent: false, isManager: false, office: source })
                 continue
             }
         } else {
@@ -239,13 +266,13 @@ Room.prototype.manageLink = function () {
         if (!sourceLink) {
             continue
         }
-
-        if (controllerLink && sourceLink.store.getUsedCapacity(RESOURCE_ENERGY) > 700 && controllerLink.store.getFreeCapacity(RESOURCE_ENERGY) > 400) {
+        if (controllerLink && sourceLink.store.getUsedCapacity(RESOURCE_ENERGY) > 700 && controllerLink.store.getFreeCapacity(RESOURCE_ENERGY) >= 400) {
             sourceLink.transferEnergy(controllerLink)
             continue;
         }
 
-        if (storageLink && sourceLink.store.getUsedCapacity(RESOURCE_ENERGY) > 700 && storageLink.store.getFreeCapacity(RESOURCE_ENERGY) > 400) {
+        if (storageLink && sourceLink.store.getUsedCapacity(RESOURCE_ENERGY) > 700 && storageLink.store.getFreeCapacity(RESOURCE_ENERGY) >= 400) {
+
             sourceLink.transferEnergy(storageLink)
             continue;
         }
@@ -278,8 +305,6 @@ Room.prototype.manageLab = function () {
         return
     }
 
-
-
     if (!this.labs) {
         return
     }
@@ -288,8 +313,10 @@ Room.prototype.manageLab = function () {
         return this.operateBoost()
     }
 
-    if (this.labObjective) {
-        return this.operateLab(this.labObjective['resourceType0'], this.labObjective['resourceType1'])
+    const labTargetCompound = this.getLabTargetCompound()
+    if (labTargetCompound) {
+        const formula = COMPOUNDS_FORMULA[labTargetCompound]
+        return this.operateLab(formula.resourceType0, formula.resourceType1)
     }
 }
 
@@ -344,7 +371,7 @@ Room.prototype.manageHighWay = function () {
 
 Room.prototype.manageVisual = function () {
     if (data.info) {
-        const i = MY_ROOMS.indexOf(this)
+        const i = OVERLORD.myRooms.indexOf(this)
         this.visual.rect(0, 1.75 + i, 37, 1, { fill: 'transparent', opacity: 1, stroke: 'white' })
     }
 

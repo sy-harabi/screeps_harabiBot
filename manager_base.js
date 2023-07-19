@@ -38,10 +38,10 @@ Room.prototype.constructByBasePlan = function (level) {
     let newConstructionSites = 0
     let numConstructionSitesThisRoom = this.constructionSites.length
 
-    if (level === 1) { // rcl 5 이전에는 controller container
+    if (this.controller.level < 5) { // rcl 5 이전에는 controller container
         const linkPos = this.parsePos(this.memory.basePlan.linkPositions.controller)
         linkPos.createConstructionSite('container')
-    } else if (level === 5) {
+    } else {
         const controllerContainer = this.controller.container
         if (controllerContainer) {
             controllerContainer.destroy()
@@ -207,36 +207,36 @@ Room.prototype.getBasePlan = function (firstAnchor, costs) {
     const anchors = []
     anchors.push(firstAnchor)
 
-    for (const pos of anchors[0].area) {
-        mincutSources.push(pos)
-        costs.set(pos.x, pos.y, 255)
-    }
-    for (const pos of anchors[0].border) {
-        mincutSources.push(pos)
-        costs.set(pos.x, pos.y, 1)
-    }
-
     // fill First anchor
 
     const firstSpawnPos = new RoomPosition(firstAnchor.pos.x, firstAnchor.pos.y - 1, this.name)
     for (const stamp of CLUSTER_STAMP) {
         const pos = new RoomPosition(firstAnchor.pos.x + stamp.x, firstAnchor.pos.y + stamp.y, this.name)
         structures[stamp.structureType].push(pos)
+        if (stamp.structureType === 'road') {
+            basePlan[`lv3`].push(pos.packPos('road'))
+        }
+        costs.set(pos.x, pos.y, 255)
+        mincutSources.push(pos)
     }
     for (const pos of anchors[0].border) {
         structures.road.push(pos)
         basePlan[`lv3`].push(pos.packPos('road'))
+        mincutSources.push(pos)
+        costs.set(pos.x, pos.y, 1)
     }
 
     // get third anchor (lab)
+    const floodFillForLabs = this.floodFill(structures.road, { maxLevel: 3 }).positions
+    const labStampCandidats = [...floodFillForLabs[2], ...floodFillForLabs[3]]
 
-    const floodFillForLabs = this.floodFill(structures, 3)[3]
-
-    for (const pos of floodFillForLabs) {
+    let gotThirdAnchor = false
+    for (const pos of labStampCandidats) {
         const anchor = pos.getAnchor(2, costs)
         if (!anchor) {
             continue
         }
+        gotThirdAnchor = true
         for (const stamp of LABS_STAMP) {
             const areaPos = new RoomPosition(pos.x + stamp.x, pos.y + stamp.y, pos.roomName)
             costs.set(areaPos.x, areaPos.y, 255)
@@ -256,152 +256,82 @@ Room.prototype.getBasePlan = function (firstAnchor, costs) {
         break
     }
 
-    // flood fill spawn && extensions
-
-    let numIterate = 0
-    const MAX_ITERATE = 10
-    while (structures.extension.length < 60 || structures.spawn.length < 3 || structures.tower.length < 6 || structures.observer.length < 1) {
-        if (numIterate >= MAX_ITERATE) {
-            console.log('cannot fill extensions')
-            return { basePlan: basePlan, cost: Infinity }
-        }
-        numIterate++
-        const floodFill = this.floodFill(structures, 2)
-        const level2 = floodFill[2]
-        const level1 = floodFill[1]
-        for (let i = 0; i <= level1.length; i++) {
-            if (structures.extension.length > 55) {
-                break
-            }
-            const pos = level1[i]
-            if (!pos) {
-                break
-            }
-            const anchor = pos.getAnchor(1, costs)
-            if (!anchor) {
-                continue
-            }
-            i--
-            level1.splice(i, 1)
-            for (const pos of anchor.area) {
-                structures.extension.push(pos)
-                costs.set(pos.x, pos.y, 255)
-                mincutSources.push(pos)
-            }
-            for (const pos of anchor.border) {
-                structures.road.push(pos)
-                basePlan[`lv4`].push(pos.packPos('road'))
-                costs.set(pos.x, pos.y, 1)
-                mincutSources.push(pos)
-            }
-            if (structures.extension.length >= 60) {
-                break
-            }
-        }
-        for (const pos of level2) {
-            if (structures.extension.length > 55) {
-                break
-            }
-            const anchor = pos.getAnchor(1, costs)
-            if (!anchor) {
-                continue
-            }
-            for (const pos of anchor.area) {
-                structures.extension.push(pos)
-                costs.set(pos.x, pos.y, 255)
-                mincutSources.push(pos)
-            }
-            for (const pos of anchor.border) {
-                structures.road.push(pos)
-                basePlan[`lv5`].push(pos.packPos('road'))
-                costs.set(pos.x, pos.y, 1)
-                mincutSources.push(pos)
-            }
-            if (structures.extension.length >= 60) {
-                break
-            }
-        }
-        for (const pos of level1.concat(level1)) {
-            if (costs.get(pos.x, pos.y) > 0) {
-                continue
-            }
-            if (structures.spawn.length < 3) {
-                structures.spawn.push(pos)
-                costs.set(pos.x, pos.y, 255)
-                mincutSources.push(pos)
-                continue
-            }
-            if (structures.tower.length < 6) {
-                structures.tower.push(pos)
-                costs.set(pos.x, pos.y, 255)
-                mincutSources.push(pos)
-                continue
-            }
-            if (structures.observer.length < 1) {
-                structures.observer.push(pos)
-                costs.set(pos.x, pos.y, 255)
-                mincutSources.push(pos)
-                continue
-            }
-            structures.extension.push(pos)
-            costs.set(pos.x, pos.y, 255)
-            mincutSources.push(pos)
-            if (structures.extension.length >= 60) {
-                break
-            }
-        }
-    }
-
-    // sort extensions by range to first spawn
-    structures.extension.sort((a, b) => a.getRangeTo(firstSpawnPos) - b.getRangeTo(firstSpawnPos))
-
-    // roads to controller
-    let pathCost = 0
-    let costsForRoad = costs.clone()
-
-    for (const pos of structures.road) {
-        costsForRoad.set(pos.x, pos.y, 1)
-    }
-
-    const controllerPathSearch = PathFinder.search(firstSpawnPos, { pos: this.controller.pos, range: 2 }, {
-        plainCost: 2,
-        swampCost: 2,
-        roomCallback: function (roomName) {
-            return costsForRoad
-        },
-        maxOps: 10000,
-        maxRooms: 1
-    })
-
-    if (controllerPathSearch.incomplete) {
-        console.log('cannot find roads')
+    if (!gotThirdAnchor) {
+        console.log('cannot find lab position')
         return { basePlan: basePlan, cost: Infinity }
     }
 
-    const path = controllerPathSearch.path
-    pathCost += path.length
-
-    const controllerLinkPos = path.pop()
-    structures.link.push(controllerLinkPos)
-    costs.set(controllerLinkPos.x, controllerLinkPos.y, 255)
-    costsForRoad.set(controllerLinkPos.x, controllerLinkPos.y, 255)
-
-    structures.road.push(...path)
-    for (const pos of path) {
-        basePlan[`lv3`].push(pos.packPos('road'))
-    }
-    for (const pos of path) {
-        if (this.controller.pos.getRangeTo(pos) < 3) {
-            continue
+    // flood fill spawn && extensions
+    outer:
+    for (let numCrosses = 1; numCrosses <= 12; numCrosses++) {
+        let numFirstIterate = 0
+        const MAX_ITERATE = 5
+        while (structures.extension.length < numCrosses * 5) {
+            if (numFirstIterate >= MAX_ITERATE) {
+                break
+            }
+            numFirstIterate++
+            const floodFill = this.floodFill(structures.road, { maxLevel: 2 }).positions
+            const level2 = floodFill[2]
+            const level1 = floodFill[1]
+            for (const pos of level1) {
+                if (structures.extension.length > 55) {
+                    break
+                }
+                const anchor = pos.getAnchor(1, costs)
+                if (!anchor) {
+                    continue
+                }
+                level1.splice(i, 1)
+                for (const pos of anchor.area) {
+                    structures.extension.push(pos)
+                    costs.set(pos.x, pos.y, 255)
+                    mincutSources.push(pos)
+                }
+                for (const pos of anchor.border) {
+                    structures.road.push(pos)
+                    basePlan[`lv4`].push(pos.packPos('road'))
+                    costs.set(pos.x, pos.y, 1)
+                    mincutSources.push(pos)
+                }
+                if (structures.extension.length >= 60) {
+                    break
+                }
+            }
+            for (const pos of level2) {
+                if (structures.extension.length > 55) {
+                    break
+                }
+                const anchor = pos.getAnchor(1, costs)
+                if (!anchor) {
+                    continue
+                }
+                for (const pos of anchor.area) {
+                    structures.extension.push(pos)
+                    costs.set(pos.x, pos.y, 255)
+                    mincutSources.push(pos)
+                }
+                for (const pos of anchor.border) {
+                    structures.road.push(pos)
+                    basePlan[`lv5`].push(pos.packPos('road'))
+                    costs.set(pos.x, pos.y, 1)
+                    mincutSources.push(pos)
+                }
+                if (structures.extension.length >= 60) {
+                    break
+                }
+            }
         }
-        costs.set(pos.x, pos.y, 5)
-        costsForRoad.set(pos.x, pos.y, 1)
-    }
 
-    // roads to sources
-    const sources = this.sources.sort((a, b) => b.info.maxCarry - a.info.maxCarry)
-    for (const source of sources) {
-        const sourcePathSearch = PathFinder.search(firstSpawnPos, { pos: source.pos, range: 1 }, {
+        // roads to controller
+        let pathCost = 0
+        let costsForRoad = costs.clone()
+
+        for (const pos of structures.road) {
+            costsForRoad.set(pos.x, pos.y, 1)
+        }
+
+        const controllerPathSearch = PathFinder.search(firstSpawnPos, { pos: this.controller.pos, range: 2 }, {
             plainCost: 2,
             swampCost: 2,
             roomCallback: function (roomName) {
@@ -411,153 +341,282 @@ Room.prototype.getBasePlan = function (firstAnchor, costs) {
             maxRooms: 1
         })
 
-        if (sourcePathSearch.incomplete) {
+        if (controllerPathSearch.incomplete) {
             console.log('cannot find roads')
             return { basePlan: basePlan, cost: Infinity }
         }
 
-        const path = sourcePathSearch.path
+        const path = controllerPathSearch.path
         pathCost += path.length
 
-        const containerPos = path.pop()
-        structures.container.push(containerPos)
+        const controllerLinkPos = path.pop()
+        structures.link.push(controllerLinkPos)
+        costs.set(controllerLinkPos.x, controllerLinkPos.y, 255)
+        costsForRoad.set(controllerLinkPos.x, controllerLinkPos.y, 255)
 
-        costs.set(containerPos.x, containerPos.y, 255)
-        costsForRoad.set(containerPos.x, containerPos.y, 255)
-
-        structures.road.push(...path)
         for (const pos of path) {
+            structures.road.push(pos)
             basePlan[`lv3`].push(pos.packPos('road'))
-        }
-        for (const pos of path) {
+            if (this.controller.pos.getRangeTo(pos) < 3) {
+                continue
+            }
             costs.set(pos.x, pos.y, 5)
             costsForRoad.set(pos.x, pos.y, 1)
         }
-        const linkPos = structures.link[0].findClosestByRange(containerPos.getAtRange(1).filter(pos => ![1, 5, 255].includes(costs.get(pos.x, pos.y))))
-        if (!linkPos) {
-            continue
-        }
-        structures.link.push(linkPos)
-        costs.set(linkPos.x, linkPos.y, 255)
-        costsForRoad.set(linkPos.x, linkPos.y, 255)
-    }
 
-    // roads to mineral + extractor
-    structures.extractor.push(this.mineral.pos)
-    const mineralPathSearch = PathFinder.search(firstSpawnPos, { pos: this.mineral.pos, range: 1 }, {
-        plainCost: 2,
-        swampCost: 2,
-        roomCallback: function (roomName) {
-            return costsForRoad
-        },
-        maxOps: 10000,
-        maxRooms: 1
-    })
-    if (mineralPathSearch.incomplete) {
-        console.log('cannot find roads')
-        return { basePlan: basePlan, cost: Infinity }
-    }
+        // roads to sources
+        const sources = this.sources.sort((a, b) => b.info.maxCarry - a.info.maxCarry)
+        for (const source of sources) {
+            const sourcePathSearch = PathFinder.search(firstSpawnPos, { pos: source.pos, range: 1 }, {
+                plainCost: 2,
+                swampCost: 2,
+                roomCallback: function (roomName) {
+                    return costsForRoad
+                },
+                maxOps: 10000,
+                maxRooms: 1
+            })
 
-    const mineralPath = mineralPathSearch.path
-    pathCost += mineralPath.length
+            if (sourcePathSearch.incomplete) {
+                console.log('cannot find roads')
+                return { basePlan: basePlan, cost: Infinity }
+            }
 
-    const mineralContainerPos = mineralPath.pop()
-    structures.container.push(mineralContainerPos)
-    costs.set(mineralContainerPos.x, mineralContainerPos.y, 255)
-    costsForRoad.set(mineralContainerPos.x, mineralContainerPos.y, 255)
-    structures.road.push(...mineralPath)
-    for (const pos of mineralPath) {
-        basePlan[`lv6`].push(pos.packPos('road'))
-    }
-    for (const pos of mineralPath) {
-        costs.set(pos.x, pos.y, 5)
-    }
+            const path = sourcePathSearch.path
+            pathCost += path.length
 
-    // min-cut
-    const nearPoses = new Set()
-    for (const pos of mincutSources) {
-        for (const posNear of pos.getAtRange(3)) {
-            nearPoses.add(posNear)
-        }
-    }
-    const mincutCostMap = new PathFinder.CostMatrix
-    const terrain = this.getTerrain()
-    for (let x = 0; x < 50; x++) {
-        for (let y = 0; y < 50; y++) {
-            if (terrain.get(x, y) === 1) {
-                mincutCostMap.set(x, y, 255)
+            const containerPos = path.pop()
+            structures.container.push(containerPos)
+
+            costs.set(containerPos.x, containerPos.y, 255)
+            costsForRoad.set(containerPos.x, containerPos.y, 255)
+
+            structures.road.push(...path)
+            for (const pos of path) {
+                basePlan[`lv3`].push(pos.packPos('road'))
+                costs.set(pos.x, pos.y, 5)
+                costsForRoad.set(pos.x, pos.y, 1)
+            }
+            const linkPos = structures.link[0].findClosestByRange(containerPos.getAtRange(1).filter(pos => ![1, 5, 255].includes(costs.get(pos.x, pos.y))))
+            if (!linkPos) {
                 continue
             }
-            const cost = 1 + (new RoomPosition(x, y, this.name).getRangeTo(firstSpawnPos) >> 2)
-            mincutCostMap.set(x, y, Math.min(cost, 254))
-        }
-    }
-
-    const cuts = this.mincutToExit(nearPoses, mincutCostMap)
-
-    let cost = 0
-    for (const cut of cuts) {
-        const coord = parseVerticeToPos(cut)
-        const pos = new RoomPosition(coord.x, coord.y, this.name)
-        cost += mincutCostMap.get(pos.x, pos.y)
-        new RoomVisual(this.name).circle(pos, { fill: 'yellow', radius: 0.5 })
-        structures.rampart.push(pos)
-    }
-
-    // packPos
-    // link : storage -> controller -> 먼 source -> 가까운 source
-    const linkPositions = {
-        storage: structures.link[0].pack(),
-        controller: structures.link[1].pack()
-    }
-    linkPositions[sources[0].id] = structures.link[2].pack()
-    if (sources[1] && structures.link[3]) {
-        linkPositions[sources[1].id] = structures.link[3].pack()
-    }
-
-    basePlan.linkPositions = linkPositions
-
-    for (const structureType of Object.keys(CONTROLLER_STRUCTURES)) {
-        const structurePositions = structures[structureType]
-
-        if (structureType === 'road') {
-            continue
+            structures.link.push(linkPos)
+            costs.set(linkPos.x, linkPos.y, 255)
+            costsForRoad.set(linkPos.x, linkPos.y, 255)
         }
 
-        if (structureType === 'rampart') {
-            for (const pos of structurePositions) {
-                basePlan[`lv5`].push(pos.packPos('rampart'))
+        // roads to mineral + extractor
+        structures.extractor.push(this.mineral.pos)
+        const mineralPathSearch = PathFinder.search(firstSpawnPos, { pos: this.mineral.pos, range: 1 }, {
+            plainCost: 2,
+            swampCost: 2,
+            roomCallback: function (roomName) {
+                return costsForRoad
+            },
+            maxOps: 10000,
+            maxRooms: 1
+        })
+        if (mineralPathSearch.incomplete) {
+            console.log('cannot find roads')
+            return { basePlan: basePlan, cost: Infinity }
+        }
+
+        const mineralPath = mineralPathSearch.path
+        pathCost += mineralPath.length
+
+        const mineralContainerPos = mineralPath.pop()
+        structures.container.push(mineralContainerPos)
+        costs.set(mineralContainerPos.x, mineralContainerPos.y, 255)
+        costsForRoad.set(mineralContainerPos.x, mineralContainerPos.y, 255)
+        structures.road.push(...mineralPath)
+        for (const pos of mineralPath) {
+            basePlan[`lv6`].push(pos.packPos('road'))
+            costs.set(pos.x, pos.y, 5)
+            costsForRoad.set(pos.x, pos.y, 1)
+        }
+
+        // min-cut
+        const nearPoses = new Set()
+        for (const pos of mincutSources) {
+            for (const posNear of pos.getAtRange(3)) {
+                nearPoses.add(posNear)
             }
-            continue
+        }
+        const mincutCostMap = new PathFinder.CostMatrix
+        const terrain = this.getTerrain()
+        for (let x = 0; x < 50; x++) {
+            for (let y = 0; y < 50; y++) {
+                if (terrain.get(x, y) === 1) {
+                    mincutCostMap.set(x, y, 255)
+                    continue
+                }
+                const cost = 1 + (new RoomPosition(x, y, this.name).getRangeTo(firstSpawnPos) >> 2)
+                mincutCostMap.set(x, y, Math.min(cost, 254))
+            }
         }
 
-        if (structureType === 'container') {
-            basePlan[`lv3`].push(structurePositions[0].packPos('container'))
-            basePlan[`lv3`].push(structurePositions[1].packPos('container'))
-            basePlan[`lv6`].push(structurePositions[2].packPos('container'))
-            continue
+        const cuts = this.mincutToExit(nearPoses, mincutCostMap)
+
+        let cost = 0
+        const storagePos = structures.storage[0]
+        for (const cut of cuts) {
+            const coord = parseVerticeToPos(cut)
+            const pos = new RoomPosition(coord.x, coord.y, this.name)
+            cost += mincutCostMap.get(pos.x, pos.y)
+            structures.road.push(pos)
+            basePlan[`lv6`].push(pos.packPos('road'))
+            costsForRoad.set(pos.x, pos.y, 1)
         }
 
-        const numStructureTypeByLevel = CONTROLLER_STRUCTURES[structureType]
-        for (i = 1; i <= 8; i++) {
-            const numStructure = numStructureTypeByLevel[i] - numStructureTypeByLevel[i - 1]
-            if (numStructure > 0) {
-                for (j = 0; j < numStructure; j++) {
-                    const pos = structurePositions.shift()
-                    if (!pos) {
-                        continue
-                    }
-                    basePlan[`lv${i}`].push(pos.packPos(structureType))
+        for (const cut of cuts) {
+            const coord = parseVerticeToPos(cut)
+            const pos = new RoomPosition(coord.x, coord.y, this.name)
+            const rampartPath = PathFinder.search(storagePos, { pos: pos, range: 0 }, {
+                plainCost: 5,
+                swampCost: 5,
+                roomCallback: function (roomName) {
+                    return costsForRoad
+                },
+                maxOps: 10000,
+                maxRooms: 1
+            }).path
+            for (const pathPos of rampartPath) {
+                structures.road.push(pathPos)
+                basePlan[`lv6`].push(pathPos.packPos('road'))
+                costsForRoad.set(pathPos.x, pathPos.y, 1)
+                if (rampartPath.length - rampartPath.indexOf(pathPos) <= 3) {
+                    structures.rampart.push(pathPos)
+                    new RoomVisual(this.name).circle(pos, { fill: 'yellow', radius: 0.5 })
                 }
             }
         }
+
+        // find extra extensions, towers, nuker, factory, observer
+
+        // first check outside
+        const costMatrixForFloodFill = new PathFinder.CostMatrix()
+        for (const rampartPos of structures.rampart) {
+            for (const pos of rampartPos.getInRange(2)) {
+                costMatrixForFloodFill.set(pos.x, pos.y, 255)
+            }
+        }
+        const costMatrixForExtensions = this.floodFill(structures.spawn, { costMatrix: costMatrixForFloodFill }).costMatrix
+
+        let numSecondIterate = 0
+        while (structures.extension.length < 60 || structures.observer.length < 1) {
+            if (numSecondIterate >= MAX_ITERATE) {
+                console.log(`next`)
+                continue outer
+            }
+            numSecondIterate++
+            const floodFill = this.floodFill(structures.road, { maxLevel: 1 }).positions[1].sort((a, b) => a.getRangeTo(storagePos) - b.getRangeTo(storagePos))
+            for (const pos of floodFill) {
+                if (costMatrixForExtensions.get(pos.x, pos.y) >= 200) {
+                    continue
+                }
+                if (costs.get(pos.x, pos.y) > 0) {
+                    continue
+                }
+                if (structures.nuker.length < 1) {
+                    structures.nuker.push(pos)
+                    costs.set(pos.x, pos.y, 255)
+                    mincutSources.push(pos)
+                    continue
+                }
+                if (structures.factory.length < 1) {
+                    structures.factory.push(pos)
+                    costs.set(pos.x, pos.y, 255)
+                    mincutSources.push(pos)
+                    continue
+                }
+                if (structures.tower.length < 6) {
+                    structures.tower.push(pos)
+                    costs.set(pos.x, pos.y, 255)
+                    mincutSources.push(pos)
+                    continue
+                }
+                if (structures.observer.length < 1) {
+                    structures.observer.push(pos)
+                    costs.set(pos.x, pos.y, 255)
+                    mincutSources.push(pos)
+                    continue
+                }
+                structures.extension.push(pos)
+                costs.set(pos.x, pos.y, 255)
+                mincutSources.push(pos)
+                if (structures.extension.length >= 60) {
+                    break
+                }
+            }
+        }
+
+        // sort extensions by range to first spawn
+        structures.extension.sort((a, b) => a.getRangeTo(firstSpawnPos) - b.getRangeTo(firstSpawnPos))
+
+
+        // packPos
+        // link : storage -> controller -> 먼 source -> 가까운 source
+        const linkPositions = {
+            storage: structures.link[0].pack(),
+            controller: structures.link[1].pack()
+        }
+        linkPositions[sources[0].id] = structures.link[2].pack()
+        if (sources[1] && structures.link[3]) {
+            linkPositions[sources[1].id] = structures.link[3].pack()
+        }
+
+        basePlan.linkPositions = linkPositions
+
+        for (const structureType of Object.keys(CONTROLLER_STRUCTURES)) {
+            const structurePositions = structures[structureType]
+
+            if (structureType === 'road') {
+                continue
+            }
+
+            if (structureType === 'rampart') {
+                for (const pos of structurePositions) {
+                    basePlan[`lv5`].push(pos.packPos('rampart'))
+                }
+                continue
+            }
+
+            if (structureType === 'container') {
+                basePlan[`lv3`].push(structurePositions[0].packPos('container'))
+                basePlan[`lv3`].push(structurePositions[1].packPos('container'))
+                basePlan[`lv6`].push(structurePositions[2].packPos('container'))
+                continue
+            }
+
+            const numStructureTypeByLevel = CONTROLLER_STRUCTURES[structureType]
+            for (i = 1; i <= 8; i++) {
+                const numStructure = numStructureTypeByLevel[i] - numStructureTypeByLevel[i - 1]
+                if (numStructure > 0) {
+                    for (j = 0; j < numStructure; j++) {
+                        const pos = structurePositions.shift()
+                        if (!pos) {
+                            continue
+                        }
+                        basePlan[`lv${i}`].push(pos.packPos(structureType))
+                    }
+                }
+            }
+        }
+
+        cost = cost ? cost + pathCost : Infinity
+        for (let i = 1; i <= 8; i++) {
+            basePlan[`lv${i}`] = [...new Set(basePlan[`lv${i}`])]
+            for (let j = 1; j < i; j++) {
+                basePlan[`lv${i}`] = basePlan[`lv${i}`].filter(packed => !basePlan[`lv${j}`].includes(packed))
+            }
+        }
+        console.log('CPU used: ' + Game.cpu.getUsed())
+        console.log(`numCrosses:${numCrosses}`)
+        return { basePlan: basePlan, cost: cost }
     }
-
-    cost = cost ? cost + pathCost : Infinity
-
-    console.log('CPU used: ' + Game.cpu.getUsed())
-
-    return { basePlan: basePlan, cost: cost }
+    console.log('cannot fill extensions')
+    return { basePlan: basePlan, cost: Infinity }
 }
 
 Room.prototype.getBasePlanBySpawn = function () {
@@ -597,7 +656,7 @@ Room.prototype.getBasePlanBySpawn = function () {
         }
     }
 
-    const firstAnchor = pos.getClusterAnchor(costs)
+    const firstAnchor = pos.getAnchor(2, costs)
 
     const result = this.getBasePlan(firstAnchor, costs)
 
@@ -617,8 +676,8 @@ const CLUSTER_STAMP = [
     { x: 0, y: -1, structureType: 'spawn' },
     { x: 1, y: -1, structureType: 'powerSpawn' },
     { x: -1, y: 0, structureType: 'terminal' },
-    { x: 1, y: 0, structureType: 'nuker' },
-    { x: -1, y: 1, structureType: 'factory' },
+    { x: 1, y: 0, structureType: 'spawn' },
+    { x: -1, y: 1, structureType: 'spawn' },
     { x: +1, y: 1, structureType: 'link' },
     { x: 0, y: 0, structureType: 'road' },
     { x: 0, y: 1, structureType: 'road' },
@@ -665,7 +724,7 @@ Room.prototype.getFirstAnchorsByDT = function (costs, numFirstAnchor) {
 
     for (i = 25; i > 2; i--) {
         for (const pos of DT[i]) {
-            const anchor = pos.getClusterAnchor(costs)
+            const anchor = pos.getAnchor(2, costs)
             if (!anchor) {
                 continue
             }
@@ -811,18 +870,19 @@ Object.defineProperties(Room.prototype, {
     },
 })
 
-Room.prototype.floodFill = function (structures, maxLevel) {
-    const sources = []
-    for (const pos of structures.road) {
-        sources.push(pos)
+Room.prototype.floodFill = function (sources, option = {}) { //sources being array of roomPositions. option = {maxLevel, costMatrix}
+    let { maxLevel, costMatrix } = option
+    if (maxLevel === undefined) {
+        maxLevel = 25
     }
-
-    const costMatrix = new PathFinder.CostMatrix();
+    if (costMatrix === undefined) {
+        costMatrix = new PathFinder.CostMatrix();
+    }
     const queue = [];
     const terrain = new Room.Terrain(this.name);
     const exits = this.find(FIND_EXIT);
 
-    const positionsByLevel = new Array(9)
+    const positionsByLevel = new Array(maxLevel + 1)
     for (let i = 0; i < positionsByLevel.length; i++) {
         positionsByLevel[i] = []
     }
@@ -838,7 +898,9 @@ Room.prototype.floodFill = function (structures, maxLevel) {
                 costMatrix.set(x, y, 255);
                 continue;
             }
-            costMatrix.set(x, y, 200);
+            if (costMatrix.get(x, y) < 200) {
+                costMatrix.set(x, y, 200);
+            }
         }
     }
 
@@ -866,7 +928,6 @@ Room.prototype.floodFill = function (structures, maxLevel) {
         { x: 1, y: -1 },
         { x: -1, y: 1 },
         { x: -1, y: -1 },
-
     ]
 
     // Start the flood-fill algorithm
@@ -894,5 +955,5 @@ Room.prototype.floodFill = function (structures, maxLevel) {
         }
     }
 
-    return positionsByLevel
+    return { positions: positionsByLevel, costMatrix: costMatrix }
 }

@@ -1,12 +1,5 @@
-Memory.map = Memory.map || {}
-
-function getAdjacents(roomName) {
-  const describedExits = Game.map.describeExits(roomName)
-  return Object.values(describedExits)
-}
-
 Room.prototype.manageScout = function () {
-  const MAX_DISTANCE = 10 // 최대 거리
+  const MAX_DISTANCE = 12 // 최대 거리
 
   if (this.controller.level < 4) {
     return
@@ -14,19 +7,7 @@ Room.prototype.manageScout = function () {
 
   this.memory.scout = this.memory.scout || {}
   const status = this.memory.scout
-  Memory.map = Memory.map || {}
-  const map = Memory.map
-
-  // 초기화 코드
-
-  // Memory.map = {}
-  // delete this.memory.scout
-  // const scouters = getCreepsByRole(this.name, 'scouter')
-  // for (const scouter of scouters) {
-  //   scouter.suicide()
-  // }
-  // return
-
+  const map = OVERLORD.map
 
   if (!status.state) {
     status.state = 'init'
@@ -72,14 +53,14 @@ Room.prototype.manageScout = function () {
       }
     }
 
-    if (status.queue.length) {
+    while (status.queue.length) {
       const node = status.queue.shift()
       if (map[node].distance >= MAX_DISTANCE) {
         status.state = 'wait'
         return
       }
       if (map[node] && map[node].inaccessible > Game.time) {
-        return
+        continue
       }
       status.node = node
       status.adjacents = getAdjacents(node).filter(function (roomName) {
@@ -115,7 +96,7 @@ Room.prototype.manageScout = function () {
       let next = undefined
       while (status.adjacents.length) {
         const adjacentName = status.adjacents.shift()
-        if (map[adjacentName] && ((map[adjacentName].lastScout + 5000) > Game.time)) {
+        if (map[adjacentName] && ((map[adjacentName].lastScout + 5000) > Game.time || map[adjacentName].distance < map[node].distance + 1)) {
           continue
         }
         next = adjacentName
@@ -124,8 +105,8 @@ Room.prototype.manageScout = function () {
       if (next) {
         status.state = 'scout'
         status.next = next
+        return
       }
-      return
     }
     status.state = 'wait'
     return
@@ -154,9 +135,29 @@ Room.prototype.manageScout = function () {
   }
 }
 
+function getAdjacents(roomName) {
+  const describedExits = Game.map.describeExits(roomName)
+  return Object.values(describedExits)
+}
+
+Room.prototype.resetScout = function () {
+  const map = OVERLORD.map
+  for (const roomName of Object.keys(map)) {
+    if (map[roomName].host && map[roomName].host === this.name) {
+      delete map[roomName]
+    }
+  }
+
+  delete this.memory.scout
+  const scouters = getCreepsByRole(this.name, 'scouter')
+  for (const scouter of scouters) {
+    scouter.suicide()
+  }
+}
+
+
 Room.prototype.scoutRoom = function (roomName, distance) {
-  Memory.map = Memory.map || {}
-  const map = Memory.map
+  const map = OVERLORD.map
 
   const scouters = getCreepsByRole(this.name, 'scouter')
   const scouter = scouters[0]
@@ -168,6 +169,8 @@ Room.prototype.scoutRoom = function (roomName, distance) {
     return ERR_NOT_FOUND
   }
 
+  scouter.notifyWhenAttacked(false)
+
   if (scouter.room.name !== roomName) {
     const result = scouter.moveToRoom(roomName)
     if (result.incomplete || result === ERR_NO_PATH) {
@@ -177,26 +180,32 @@ Room.prototype.scoutRoom = function (roomName, distance) {
   }
 
   const room = Game.rooms[roomName]
+  const host = this.name
+
   const lastScout = Game.time
+  const linearDistance = Game.map.getRoomLinearDistance(this.name, roomName)
+
   const numSource = room.find(FIND_SOURCES).length
   const isController = room.controller ? true : false
+
   const isClaimed = isController && room.controller.owner && (room.controller.owner.username !== MY_NAME)
   const isReserved = isController && room.controller.reservation && !['Invader'].includes(room.controller.reservation.username)
+
   const numTower = room.structures.tower.filter(tower => tower.isActive()).length
   const defense = numTower > 0 ? { numTower: numTower } : undefined
-  const host = this.name
-  const linearDistance = Game.map.getRoomLinearDistance(this.name, roomName)
+
   const isAccessibleToContorller = isController && (scouter.moveMy(room.controller.pos, { range: 1 }) === OK)
-  const isRemoteCandidate = isAccessibleToContorller && !isClaimed && !isReserved && (distance <= 1) && (numSource > 0)
-  const isClaimCandidate = isAccessibleToContorller && !isClaimed && !isReserved && (distance > 1) && (numSource > 1)
   const inaccessible = ((defense && (!room.isMy)) || (isController && !isAccessibleToContorller)) ? (Game.time + 20000) : false
+
+  const isRemoteCandidate = isAccessibleToContorller && !inaccessible && !isClaimed && !isReserved && (distance <= 1) && (numSource > 0) && !OVERLORD.colonies.includes(roomName)
+  const isClaimCandidate = isAccessibleToContorller && !inaccessible && !isClaimed && !isReserved && (distance > 1) && (numSource > 1) && !OVERLORD.colonies.includes(roomName)
 
   if (isRemoteCandidate) {
     colonize(roomName, this.name)
   }
 
-  if (map[roomName] && ((map[roomName].lastScout + 5000) > Game.time) && (map[roomName].distance < distance)) {
-    return OK
+  if (Memory.autoClaim && isClaimCandidate && OVERLORD.myRooms.length < Game.gcl.level) {
+    claim(roomName, this.name)
   }
 
   map[roomName] = {

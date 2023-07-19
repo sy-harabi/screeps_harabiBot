@@ -67,7 +67,7 @@ business.getBuyPrice = function (resourceType) {
 }
 
 business.getSellPrice = function (resourceType) {
-    if (Game.market.getHistory(resourceType).length < 10) {
+    if (Game.market.getHistory(resourceType).length || 0 < 10) {
         return business.getMaxBuyPrice(resourceType)
     }
 
@@ -156,14 +156,18 @@ business.buy = function (resourceType, amount, roomName = undefined) {
                 return 'received'
             }
         }
-        sellOrders = sellOrders.filter(order => Game.market.calcTransactionCost(100, roomName, order.roomName) * energyPrice < 5 * buyPrice) //주변 방에서 못받으면 판매 주문중에 가까운것만 고려하기
+        function priceWithCost(order) {
+            const transactionCost = Game.market.calcTransactionCost(100, roomName, order.roomName) * energyPrice / 100
+            return transactionCost + order.price
+        }
+        sellOrders = sellOrders.sort((a, b) => priceWithCost(a) - priceWithCost(b))
     }
 
-    const cheapestSellOrder = getMinimumPoint(sellOrders, order => order.price)
-    const minSellPrice = cheapestSellOrder ? cheapestSellOrder.price : Infinity
+    const cheapestSellOrder = sellOrders[0]
+    const minSellPrice = cheapestSellOrder ? priceWithCost(cheapestSellOrder) : Infinity
 
     //판매주문중에 제일 싼 가격이 충분히 싸면 사자
-    if (minSellPrice <= 1.1 * buyPrice) {
+    if (minSellPrice <= 1.1 * buyPrice || minSellPrice <= 1) {
         const result = isIntershard ? Game.market.deal(cheapestSellOrder.id, amount) : Game.market.deal(cheapestSellOrder.id, amount, roomName)
         if (result === OK) {
             data.recordLog(`${roomName ? roomName + ' ' : ''}buy ${resourceType} from market`)

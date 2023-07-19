@@ -4,8 +4,16 @@ Object.defineProperties(Room.prototype, {
             if (this._sources) {
                 return this._sources
             }
+            const thisRoom = this
             if (this.memory.sources) {
-                this._sources = this.memory.sources.map(id => Game.getObjectById(id))
+                this._sources = this.memory.sources.map(id => {
+                    const source = Game.getObjectById(id)
+                    if (!source) {
+                        delete thisRoom.memory.sources
+                        return undefined
+                    }
+                    return source
+                })
                 return this._sources
             }
             this._sources = this.find(FIND_SOURCES).sort((a, b) => a.info.maxCarry - b.info.maxCarry)

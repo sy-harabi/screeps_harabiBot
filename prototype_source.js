@@ -17,6 +17,23 @@ Object.defineProperties(Source.prototype, {
             return this._container
         }
     },
+    energyAmountNear: {
+        get() {
+            if (this._energyAmountNear) {
+                return this._energyAmountNear
+            }
+            this._energyAmountNear = 0
+            const droppedEnergies = this.droppedEnergies
+            for (const droppedEnergy of droppedEnergies) {
+                this._energyAmountNear += droppedEnergy.amount
+            }
+            const container = this.container
+            if (container) {
+                this._energyAmountNear += (container.store[RESOURCE_ENERGY] || 0)
+            }
+            return this._energyAmountNear
+        }
+    },
     link: {
         get() {
             if (this._link) {
@@ -73,8 +90,10 @@ Object.defineProperties(Source.prototype, {
             for (const hauler of haulers) {
                 this._info.numCarry += (hauler.body.filter(part => part.type === CARRY).length)
             }
-            // linked면 0. controller linked면 spawn까지. construcing 이어도 spawn까지. 그 외는 controller까지.
             this._info.maxCarry = this.linked ? 0 : (this.room.controller.linked || this.room.constructing) ? Math.max(10, Math.ceil(0.6 * this.range.spawn)) : Math.max(10, Math.ceil(0.6 * this.range.controller))
+            if (this.energyAmountNear > 1500) {
+                this._info.maxCarry += 10
+            }
 
             this._info.maxNumHauler = Math.ceil(this._info.maxCarry / (Math.floor(this.room.energyCapacityAvailable / 150) * 2))
 
@@ -83,18 +102,18 @@ Object.defineProperties(Source.prototype, {
     },
     range: {
         get() {
-            if (!this.room.memory.sourceRange) {
-                this.room.memory.sourceRange = {}
+            if (!this.room.heap.sourceRange) {
+                this.room.heap.sourceRange = {}
             }
-            if (!this.room.memory.sourceRange[this.id] || !this.room.memory.sourceRange[this.id].spawn) {
+            if (!this.room.heap.sourceRange[this.id] || !this.room.heap.sourceRange[this.id].spawn) {
                 const spawn = this.room.structures.spawn[0]
                 const controller = this.room.controller
                 const option = { ignoreCreeps: true, range: 1 }
                 const pathLengthToSpawn = spawn ? this.pos.findPathTo(spawn, option).length : 0
                 const pathLengthToController = controller ? this.pos.findPathTo(controller, option).length : 0
-                this.room.memory.sourceRange[this.id] = { spawn: pathLengthToSpawn, controller: pathLengthToController }
+                this.room.heap.sourceRange[this.id] = { spawn: pathLengthToSpawn, controller: pathLengthToController }
             }
-            return this.room.memory.sourceRange[this.id]
+            return this.room.heap.sourceRange[this.id]
         }
     },
     droppedEnergies: {

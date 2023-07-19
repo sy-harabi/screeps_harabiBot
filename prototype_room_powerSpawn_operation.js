@@ -9,6 +9,9 @@ Room.prototype.operatePowerSpawn = function () {
     const researcher = this.creeps.researcher[0]
 
     if (powerSpawn.store[RESOURCE_POWER] < 10) {
+        if (terminal.store[RESOURCE_POWER] < 100) {
+            return
+        }
         if (!researcher) {
             this.heap.needResearcher = true
             return

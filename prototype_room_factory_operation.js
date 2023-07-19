@@ -66,6 +66,21 @@ Room.prototype.factoryDistribution = function () {
     const finalCommodity = this.factoryFinalObjective
     const rawCommodity = this.specialtyCommodities[6]
     const researcher = this.creeps.researcher[0]
+
+    const RAW_COMMODITIES_AMOUNT_TO_KEEP = 10000
+
+    for (const resourceType of Object.keys(factory.store)) {
+        if (RAW_RESOURCES.includes(resourceType) && factory.store[resourceType] > RAW_COMMODITIES_AMOUNT_TO_KEEP * 1.1 && terminal.store.getFreeCapacity() > 10000) {
+            if (!researcher) {
+                this.heap.needResearcher = true
+                return
+            }
+            return researcher.getDeliveryRequest(factory, terminal, resourceType)
+        }
+    }
+
+    return
+
     if (factory.store[finalCommodity] >= 1000) {
         if (!researcher) {
             this.heap.needResearcher = true
@@ -83,7 +98,7 @@ Room.prototype.factoryDistribution = function () {
     }
 
 
-    if (factory.store[rawCommodity] > 11000) {
+    if (factory.store[rawCommodity] > RAW_COMMODITIES_AMOUNT_TO_KEEP * 1.1) {
         if (!researcher) {
             this.heap.needResearcher = true
             return

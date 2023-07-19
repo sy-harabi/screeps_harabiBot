@@ -21,6 +21,14 @@ Object.defineProperties(RoomPosition.prototype, {
             return this.terrain === 1
         }
     },
+    isRampart: {
+        get() {
+            if (this._isRampart !== undefined) {
+                return this._isRampart
+            }
+            return this._isRampart = this.lookFor(LOOK_STRUCTURES).filter(structure => structure.structureType === 'rampart').length > 0
+        }
+    },
     workable: {
         get() {
             if (!this._workable) {
@@ -42,10 +50,6 @@ Object.defineProperties(RoomPosition.prototype, {
                         this._workable = false
                         break
                     }
-                    if (lookObject.type === LOOK_STRUCTURES && lookObject[LOOK_STRUCTURES].structureType === STRUCTURE_CONTAINER) {
-                        this._workable = false
-                        break
-                    }
                     if (lookObject.type === LOOK_CONSTRUCTION_SITES) {
                         this._workable = false
                         break
@@ -63,10 +67,6 @@ Object.defineProperties(RoomPosition.prototype, {
             this._walkable = true
             for (const lookObject of this.look()) {
                 if (lookObject.type === LOOK_TERRAIN && lookObject[LOOK_TERRAIN] === 'wall') {
-                    this._walkable = false
-                    break
-                }
-                if (lookObject.type === LOOK_CREEPS) {
                     this._walkable = false
                     break
                 }

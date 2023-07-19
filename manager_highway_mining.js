@@ -14,6 +14,9 @@ StructureObserver.prototype.depositCheck = function (roomName) {
         if (this.room.memory.depositRequests[deposit.id]) {
             continue
         }
+        if (this.room.terminal && this.room.terminal.store[deposit.depositType] > 10000) {
+            continue
+        }
         const depositRequest = new DepositRequest(this.room, deposit)
         const workSize = 15
         const returnRatio = 2.5
