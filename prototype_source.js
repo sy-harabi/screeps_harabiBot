@@ -1,4 +1,13 @@
 Object.defineProperties(Source.prototype, {
+    waitingArea: {
+        get() {
+            if (this.heap.watingArea) {
+                return this.heap.watingArea
+            }
+            const floodFill = this.room.floodFill([this.pos], { maxLevel: 3 }).positions
+            return this.heap.watingArea = [...floodFill[1], ...floodFill[2], ...floodFill[3]]
+        }
+    },
     available: {
         get() {
             if (this._available) {

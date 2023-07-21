@@ -734,7 +734,7 @@ Room.prototype.getFirstAnchorsByDT = function (costs, numFirstAnchor) {
         }
     }
 
-    this.heap.possibleAnchors = _.shuffle(result)
+    this.heap.possibleAnchors = _.shuffle(result).slice(0, numFirstAnchor)
     return this.heap.possibleAnchors
 }
 
@@ -873,7 +873,7 @@ Object.defineProperties(Room.prototype, {
 Room.prototype.floodFill = function (sources, option = {}) { //sources being array of roomPositions. option = {maxLevel, costMatrix}
     let { maxLevel, costMatrix } = option
     if (maxLevel === undefined) {
-        maxLevel = 25
+        maxLevel = Infinity
     }
     if (costMatrix === undefined) {
         costMatrix = new PathFinder.CostMatrix();
@@ -882,22 +882,24 @@ Room.prototype.floodFill = function (sources, option = {}) { //sources being arr
     const terrain = new Room.Terrain(this.name);
     const exits = this.find(FIND_EXIT);
 
-    const positionsByLevel = new Array(maxLevel + 1)
-    for (let i = 0; i < positionsByLevel.length; i++) {
-        positionsByLevel[i] = []
-    }
+    const positionsByLevel = {}
 
     // Set the initial costMatrix values for each position in the room
     for (let x = 0; x <= 49; x++) {
         for (let y = 0; y <= 49; y++) {
+            // set 255 to wall
             if (terrain.get(x, y) === TERRAIN_MASK_WALL) {
                 costMatrix.set(x, y, 255);
                 continue;
             }
+
+            // set 255 to room edges
             if (x === 0 || x === 49 || y === 0 || y === 49) {
                 costMatrix.set(x, y, 255);
                 continue;
             }
+
+            // set 200 to everything else
             if (costMatrix.get(x, y) < 200) {
                 costMatrix.set(x, y, 200);
             }
@@ -916,8 +918,6 @@ Room.prototype.floodFill = function (sources, option = {}) { //sources being arr
         costMatrix.set(source.x, source.y, 0);
         queue.push(source);
     }
-
-    // Make arrays for level 1 and level 2
 
     const ADJACENT_VECTORS = [
         { x: 0, y: 1 },
@@ -938,7 +938,12 @@ Room.prototype.floodFill = function (sources, option = {}) { //sources being arr
         const neighbors = []
 
         for (const vector of ADJACENT_VECTORS) {
-            neighbors.push(new RoomPosition(currentPos.x + vector.x, currentPos.y + vector.y, this.name))
+            const x = currentPos.x + vector.x
+            const y = currentPos.y + vector.y
+            if (!isValidCoord(x, y)) {
+                continue
+            }
+            neighbors.push(new RoomPosition(x, y, this.name))
         }
 
         for (const neighbor of neighbors) {
@@ -948,6 +953,7 @@ Room.prototype.floodFill = function (sources, option = {}) { //sources being arr
             if (costMatrix.get(x, y) === 200 && costMatrix.get(currentPos.x, currentPos.y) < maxLevel) {
                 // Set the cost to the current position's cost plus 1
                 const level = costMatrix.get(currentPos.x, currentPos.y) + 1
+                positionsByLevel[level] = positionsByLevel[level] || []
                 costMatrix.set(x, y, level);
                 queue.push(neighbor);
                 positionsByLevel[level].push(neighbor)

@@ -7,6 +7,18 @@ Object.defineProperties(Creep.prototype, {
     }
 })
 
+// pos is roomPosition
+Creep.prototype.checkEmpty = function (pos) {
+    const creep = pos.lookFor(LOOK_CREEPS)[0]
+    if (!creep) {
+        return true
+    }
+    if (this.id === creep.id) {
+        return true
+    }
+    return false
+}
+
 Creep.prototype.getMobility = function () {
     let burden = 0
     let move = 0
@@ -30,13 +42,9 @@ Creep.prototype.getMobility = function () {
     return burden / move
 }
 
-Creep.prototype.moveToRoom = function (goalRoomName, ignoreMap = false) {
+Creep.prototype.moveToRoom = function (goalRoomName, ignoreMap = 0) {
     const target = new RoomPosition(25, 25, goalRoomName)
     return this.moveMy(target, { range: 23, ignoreMap })
-}
-
-Creep.prototype.travelTo = function (goalRoomName) {
-
 }
 
 Creep.prototype.getEnergyFrom = function (id) {
@@ -48,7 +56,7 @@ Creep.prototype.getEnergyFrom = function (id) {
     }
 }
 
-Creep.prototype.searchPath = function (target, range = 0, maxRooms = 1, option = {}) { //option = {ignoreCreeps: true, avoidEnemy: false, avoidRampart: false, ignoreMap:false}
+Creep.prototype.searchPath = function (target, range = 0, maxRooms = 1, option = {}) { //option = {ignoreCreeps: true, avoidEnemy: false, avoidRampart: false, ignoreMap:0}
     let { ignoreCreeps, avoidEnemy, avoidRampart, ignoreMap } = option
     if (ignoreCreeps === undefined) {
         ignoreCreeps = true
@@ -59,8 +67,10 @@ Creep.prototype.searchPath = function (target, range = 0, maxRooms = 1, option =
     if (avoidRampart === undefined) {
         avoidRampart = false
     }
+
+    // ignoreMap 0이면 map 무조건 반영 / 1이면 목적지만 무시 / 2면 모두 무시
     if (ignoreMap === undefined) {
-        ignoreMap = false
+        ignoreMap = 0
     }
 
     const thisCreep = this
@@ -73,8 +83,13 @@ Creep.prototype.searchPath = function (target, range = 0, maxRooms = 1, option =
     if (maxRooms > 1) {
         route = Game.map.findRoute(this.room, targetPos.roomName, {
             routeCallback(roomName, fromRoomName) {
-                // inaccessible로 기록된 방은 쓰지말자
-                if (!ignoreMap && Memory.map[roomName] && Memory.map[roomName].inaccessible > Game.time) {
+                // ignoreMap이 1 이상이면 목적지는 무조건 간다
+                if (ignoreMap >= 1 && roomName === targetPos.roomName) {
+                    return 1
+                }
+
+                // ignoreMap이 2 미만이면 inaccessible로 기록된 방은 쓰지말자
+                if (ignoreMap < 2 && Memory.map[roomName] && Memory.map[roomName].inaccessible > Game.time) {
                     return Infinity
                 }
 
@@ -248,9 +263,8 @@ Creep.prototype.moveMy = function (target, option = {}) { //option = {range, avo
         avoidRampart = this.room.memory.militaryThreat && this.isWalledUp
     }
     if (ignoreMap === undefined) {
-        ignoreMap = false
+        ignoreMap = 0
     }
-
     if (avoidRampart) {
         const defenseCostMatrix = this.room.getDefenseCostMatrix()
         const spawn = this.room.structures.spawn[0]
@@ -263,7 +277,7 @@ Creep.prototype.moveMy = function (target, option = {}) { //option = {range, avo
     // stay 중이면 return
     if (this.heap.stay > 0) {
         this.heap.stay--
-        this.say(`🛌${this.heap.stay}`)
+        this.say(`🛌${this.heap.stay}`, true)
         return ERR_BUSY
     }
 
@@ -393,4 +407,11 @@ Creep.prototype.getRecycled = function () {
 
 Creep.prototype.getNumParts = function (partsName) {
     return this.body.filter(part => part.type === partsName).length
+}
+
+Creep.prototype.checkBodyParts = function (type) {
+    if (!Array.isArray(type)) {
+        type = [type]
+    }
+    return this.body.find(part => type.includes(part.type)) ? true : false
 }

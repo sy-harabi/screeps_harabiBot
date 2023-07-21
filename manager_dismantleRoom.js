@@ -38,12 +38,12 @@ Flag.prototype.dismantleRoom = function () {
                     dismantler.dismantle(lastStructure)
                     continue
                 }
-                dismantler.moveMy(lastStructurePos, { range: 1, ignoreMap: true })
+                dismantler.moveMy(lastStructurePos, { range: 1, ignoreMap: 1 })
             }
             return
         }
         for (const dismantler of dismantlers) {
-            dismantler.moveMy(lastStructurePos, { range: 1, ignoreMap: true })
+            dismantler.moveMy(lastStructurePos, { range: 1, ignoreMap: 1 })
         }
         return
     }

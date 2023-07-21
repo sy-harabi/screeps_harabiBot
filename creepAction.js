@@ -396,7 +396,7 @@ function colonyHauler(creep) {
 function colonyDefender(creep) {
     creep.heal(creep)
     if (creep.room.name !== creep.memory.colony) {
-        creep.moveToRoom(creep.memory.colony, true)
+        creep.moveToRoom(creep.memory.colony, 1)
         return
     }
 
@@ -496,6 +496,9 @@ function claimer(creep) { //스폰을 대입하는 함수 (이름 아님)
     }
     if (creep.room.name === creep.memory.targetRoom) {
         const controller = creep.room.controller
+        if (!controller) {
+            return
+        }
         if (controller.reservation && controller.reservation.username !== MY_NAME) {
             if (creep.attackController(controller) === -9) {
                 creep.moveMy(controller, { range: 1 });
@@ -570,10 +573,15 @@ function pioneer(creep) {
                 }
                 return creep.pickup(closestDroppedEnergy)
             }
-            if (creep.pos.getRangeTo(creep.room.sources[(creep.memory.number || 0) % 2]) > 1) {
-                return creep.moveMy(creep.room.sources[(creep.memory.number || 0) % 2], { range: 1 })
+            const sources = creep.room.sources
+            if (sources.length === 0) {
+                return
             }
-            return creep.harvest(creep.room.sources[(creep.memory.number || 0) % 2])
+            const source = sources[(creep.memory.number || 0) % 2]
+            if (creep.pos.getRangeTo(source) > 1) {
+                return creep.moveMy(source, { range: 1 })
+            }
+            return creep.harvest(source)
         }
     } else {
         if (creep.room.name !== creep.memory.targetRoom && creep.room.find(FIND_FLAGS).length) {

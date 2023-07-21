@@ -1,5 +1,4 @@
-const mySpawn = Object.values(Game.spawns)[0]
-global.MY_NAME = mySpawn ? mySpawn.owner.username : undefined
+global.MY_NAME = 'Harabi'
 
 global.MILLION = 1000000
 
@@ -155,7 +154,7 @@ global.WORK_BY_CONTROLLER_LEVEL = [
     { min: 4, max: 16 },
     { min: 6, max: 20 },
     { min: 8, max: 24 },
-    { min: 9, max: 27 },
+    { min: 9, max: 24 },
     { min: 11, max: 33 },
     { min: 10, max: 30 },
 ]

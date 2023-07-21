@@ -10,15 +10,18 @@ require('prototype_creep_attacker')
 require('prototype_creep_hauler')
 require('prototype_creep_researcher')
 require('prototype_creep')
+require('prototype_flag_intersharding')
+require('prototype_flag')
+require('prototype_room_energy_management')
+require('prototype_room_factory_operation')
+require('prototype_room_information')
 require('prototype_room_lab_operation')
 require('prototype_room_spawn_management')
 require('prototype_room_work_management')
-require('prototype_room_energy_management')
 require('function_visualizeRoomInfo')
 require('global_function')
 require('manager_base')
 require('manager_claim')
-require('prototype_room_information')
 const manager_attack = require('manager_attack')
 require('manager_room')
 require('manager_scout')
@@ -27,12 +30,10 @@ require('manager_defense')
 require('manager_defenseNuke')
 require('manager_dismantleRoom')
 require('manager_harass')
-require('prototype_flag')
 require('global_business')
 require('manager_clearAll')
 require('manager_highway_mining')
 require('manager_lootRoom')
-require('prototype_room_factory_operation')
 require('prototype_room_powerSpawn_operation')
 require('prototype_creep_powerCreep')
 require('global_min-cut')
@@ -114,6 +115,13 @@ module.exports.loop = () => {
         if (name.includes('dismantle')) {
             flag.dismantleRoom()
             continue
+        }
+        if (name.includes('send')) {
+            flag.sendIntershardingCreeps()
+            continue
+        }
+        if (name.includes('intershard')) {
+            flag.claimIntershard()
         }
     }
 

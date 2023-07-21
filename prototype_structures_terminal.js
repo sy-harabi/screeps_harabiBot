@@ -105,7 +105,7 @@ StructureTerminal.prototype.run = function () {
                 if (!room.terminal || room.terminal.cooldown) {
                     continue
                 }
-                if (room.terminal.hasNotEnoughTier3Compounds) {
+                if (room.terminal.store['XGH2O'] < 1000) {
                     continue
                 }
                 if (room.terminal.send('XGH2O', 1000, this.room.name) === OK) {

@@ -219,13 +219,6 @@ Room.prototype.manageColony = function () {
     return
 }
 
-Creep.prototype.checkBodyParts = function (type) {
-    if (!Array.isArray(type)) {
-        type = [type]
-    }
-    return this.body.find(part => type.includes(part.type)) ? true : false
-}
-
 Room.prototype.abandonColony = function (colonyName) {
     if (this.memory.colony && this.memory.colony) {
         return delete this.memory.colony[colonyName]

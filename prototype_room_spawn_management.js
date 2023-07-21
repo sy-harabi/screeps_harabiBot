@@ -16,7 +16,7 @@ Room.prototype.manageSpawn = function () {
             manageCarryTotal += creep.getNumParts('carry')
         }
 
-        const maxNumManager = Math.ceil(1800 / this.energyAvailable)
+        const maxNumManager = Math.ceil(75 * maxCarry / this.energyAvailable)
 
         if (manageCarryTotal < maxCarry && managers.length < maxNumManager) {
             this.requestHauler(maxCarry - manageCarryTotal, { isUrgent: (manageCarryTotal <= 0), isManager: true, office: this.storage.link })
@@ -25,8 +25,19 @@ Room.prototype.manageSpawn = function () {
     }
 
     // laborer 생산
-    const maxWork = (this.storage && this.storage.store['energy'] > 20000 && (this.memory.militaryThreat || this.memory.defenseNuke)) ? 40 : ((this.heap.sourceUtilizationRate || 0) * this.maxWork)
-    const maxLaborer = Math.ceil(maxWork / this.laborer.numWorkEach) // source 가동률만큼만 생산 
+    const level = this.controller.level
+    const storageEnergy = this.energy
+    const buffer = BUFFER[level]
+
+    let maxWork = (this.storage && this.storage.store['energy'] > 20000 && (this.memory.militaryThreat || this.memory.defenseNuke)) ? 40 : ((this.heap.sourceUtilizationRate || 0) * this.maxWork)
+    if (level < 8 && !this.militaryThreat && !this.savingMode) {
+        const additional = Math.ceil(10 * (storageEnergy - ECONOMY_STANDARD[level] / (2 * buffer)))
+        if (additional > 0) {
+            maxWork += additional
+        }
+    }
+
+    const maxLaborer = Math.min(this.controller.available, Math.ceil(maxWork / this.laborer.numWorkEach)) // source 가동률만큼만 생산 
     if (this.laborer.numWork < maxWork && this.creeps.laborer.filter(creep => (creep.ticksToLive || 1500) > 3 * creep.body.length).length < maxLaborer) {
         this.requestLaborer(Math.min((maxWork - this.laborer.numWork), this.laborer.numWorkEach))
     }
@@ -41,8 +52,7 @@ Room.prototype.manageSpawn = function () {
         }
 
         // wallMaker 생산
-        const level = this.controller.level
-        if (level >= 5 && !this.savingMode) {
+        if (level === 8 && !this.savingMode) {
             const storageEnergy = this.energy
             const buffer = BUFFER[level]
             // RCL 8 미만이면 standard보다 buffer만큼 높아야 wallmaker 생산 시작. 2buffer만큼 storageEnergy 많아질때마다 wallMaker 하나씩 추가. 최대 3마리
@@ -168,7 +178,7 @@ Room.prototype.requestHauler = function (numCarry, option = { isUrgent: false, i
 
     const memory = isManager ? { role: 'manager' } : { role: 'hauler', sourceId: office.id }
 
-    const priority = isUrgent ? 1 : 3
+    const priority = isUrgent ? 2 : 4
 
     const request = new RequestSpawn(body, name, memory, { priority: priority })
 
@@ -177,7 +187,7 @@ Room.prototype.requestHauler = function (numCarry, option = { isUrgent: false, i
 
 global.SPAWN_PRIORITY = {
     'roomDefender': 1,
-    'colonyDefender': 2,
+    'colonyDefender': 1,
     'laborer': 5,
     'researcher': 6,
     'extractor': 7,
@@ -341,6 +351,9 @@ Room.prototype.requestColonyDefender = function (colonyName) {
         body.push(HEAL)
         cost += 250
     }
+    if (bodyLength === 0) {
+        body = [TOUGH, TOUGH, TOUGH, TOUGH, TOUGH, MOVE, RANGED_ATTACK]
+    }
 
     const name = `${colonyName} colonyDefender ${Game.time}_${this.spawnQueue.length}`
     const memory = {
@@ -403,7 +416,6 @@ Room.prototype.requestClaimer = function (targetRoomName) {
 
     const memory = {
         role: 'claimer',
-        base: this.name,
         targetRoom: targetRoomName
     }
 
@@ -427,7 +439,7 @@ Room.prototype.requestDepositWorker = function (depositRequest) {
     this.spawnQueue.push(request)
 }
 
-Room.prototype.requestPioneer = function (targetRoomName, number) {
+Room.prototype.requestPioneer = function (targetRoomName, number = 0) {
     let body = []
     for (j = 0; j < Math.min(10, Math.floor(this.energyAvailable / 200)); j++) {
         body.push(WORK, MOVE, CARRY)

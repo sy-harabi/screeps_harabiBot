@@ -36,15 +36,22 @@ Room.prototype.claimRoom = function (roomName) {
         const structures = targetRoom.find(FIND_STRUCTURES)
         let numLeft = 0
         for (const structure of structures) {
+            // 내 건물은 넘어가
             if (structure.my) {
                 continue
             }
-            if (structure.store && structure.store[RESOURCE_ENERGY] > 100 && targetRoom.controller.level < 4) {
+            // road, container 등은 한 번만 부수고 그담부턴 넘어가
+            if (!structure.owner && status.isClearedOnce) {
+                continue
+            }
+            // 남아있던 건물들은 에너지 있는 동안은 냅둬
+            if (structure.owner && structure.store && structure.store[RESOURCE_ENERGY] > 100 && targetRoom.controller.level < 4) {
                 numLeft++
                 continue
             }
             structure.destroy()
         }
+        status.isClearedOnce = true
         if (numLeft === 0) {
             status.isCleared = true
         }

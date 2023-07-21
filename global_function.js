@@ -279,17 +279,18 @@ global.visual = function () {
 
 global.mapInfo = function () {
     const map = OVERLORD.map
+    const EXPIRATION_PERIOD = 40000
     for (const roomName of Object.keys(map)) {
         try {
             const info = map[roomName]
             const center = new RoomPosition(25, 25, roomName)
 
-            if (info.lastScout && Game.time > info.lastScout + 20000) {
+            if (info.lastScout && Game.time > info.lastScout + EXPIRATION_PERIOD) {
                 delete map[roomName]
             }
 
             if (info.lastScout) {
-                Game.map.visual.text(`⏳${info.lastScout + 20000 - Game.time}`, new RoomPosition(center.x - 20, center.y + 15, center.roomName), { fontSize: 7, align: 'left' })
+                Game.map.visual.text(`⏳${info.lastScout + EXPIRATION_PERIOD - Game.time}`, new RoomPosition(center.x - 20, center.y + 15, center.roomName), { fontSize: 7, align: 'left' })
             }
 
             if (info.isClaimCandidate) {
@@ -308,12 +309,16 @@ global.mapInfo = function () {
             }
 
             if (roomName === info.host) {
-                Game.map.visual.text(`${Game.rooms[roomName].controller.level}`, new RoomPosition(center.x, center.y - 20, center.roomName), { fontSize: 15, color: '#74ee15' })
+                const room = Game.rooms[roomName]
+                Game.map.visual.text(`${room.controller.level}`, new RoomPosition(center.x - 18, center.y - 20, center.roomName), { fontSize: 13, color: '#74ee15' })
+                if (room.memory.scout) {
+                    Game.map.visual.text(`${room.memory.scout.state}`, new RoomPosition(center.x + 5, center.y - 20, center.roomName), { fontSize: 13, color: '#74ee15' })
+                }
                 continue
             }
 
             const hostPos = new RoomPosition(25, 25, info.host)
-            Game.map.visual.line(hostPos, center, { color: '#00ffe8', width: '1', opacity: 1 })
+            Game.map.visual.line(hostPos, center, { color: '#00ffe8', width: '1', opacity: 0.2 })
             Game.map.visual.text(`🚶${info.distance}`, new RoomPosition(center.x + 15, center.y + 15, center.roomName), { fontSize: 7 })
         }
         catch (error) {

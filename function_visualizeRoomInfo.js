@@ -47,7 +47,7 @@ global.roomInfo = function () {
 
         const name = `${room.name}(${room.mineral.mineralType})`
         new RoomVisual().text(name, startPos.x + 0.3, startPos.y + line + 2, { color: 'cyan', align: 'left' })
-        new RoomVisual().text(room.controller.level, startPos.x + 5.5, startPos.y + line + 2, { color: room.controller.level > 7 ? 'lime' : room.controller.level > 3 ? 'yellow' : 'magenta' })
+        new RoomVisual().text(room.controller.level === 8 ? '8' : `${room.controller.level}(${Math.round(100 * room.controller.progress / room.controller.progressTotal)}%)`, startPos.x + 5.5, startPos.y + line + 2, { color: room.controller.level > 7 ? 'lime' : room.controller.level > 3 ? 'yellow' : 'magenta' })
         new RoomVisual().text(room.controller.level === 8 ? '-' : `${(room.efficiency * 100).toFixed(0)}%(${room.progressTime.toFixed(0)}h)`, startPos.x + 9, startPos.y + line + 2, { color: room.efficiency > 0.7 ? 'lime' : room.efficiency > 0.4 ? 'yellow' : 'magenta' })
 
         const day = Math.floor(room.hoursToNextRCL / 24)

@@ -47,7 +47,7 @@ Room.prototype.runRoomManager = function () {
 
     this.manageSpawn()
     this.manageVisual()
-    // this.getDefenseCostMatrix(255, { checkResult: false })
+    // this.getDefenseCostMatrix(254, { checkResult: true })
 }
 
 Room.prototype.checkTombstone = function () {
@@ -58,15 +58,9 @@ Room.prototype.checkTombstone = function () {
     if (myTombstones.length === 0) {
         return
     }
-    console.log(`num of defender Tombstone: ${myDefenderTombstones.length}`)
     const map = OVERLORD.map
 
     map[this.name] = map[this.name] || {}
-
-    // 이미 확인한거면 넘어가자
-    if (map[this.name].inaccessible && map[this.name].inaccessible > Game.time) {
-        return
-    }
 
     // 있으면 여러가지 확인
     const hostileStructures = this.structures.tower
@@ -84,16 +78,23 @@ Room.prototype.checkTombstone = function () {
     isDefenderMurdered = false
     for (const attackEvent of attackEvents) {
         const targetId = attackEvent.data.targetId
+        const deadCreep = myTombstones.find(tombstone => tombstone.creep.id === targetId).creep
+        const attacker = Game.getObjectById(attackEvent.objectId)
+        const owner = attacker ? attacker.owner : undefined
+        const username = owner ? owner.username : undefined
+
+        data.recordLog(`${deadCreep.name} is murdered at ${this.name} by ${username}`)
+
+        if (username && username === 'Invader') {
+            return
+        }
+
         if (deadDefendersId.includes(targetId)) {
-            const deadCreep = myTombstones.find(tombstone => tombstone.creep.id === targetId).creep
-            data.recordLog(`${deadCreep.name} is murdered at ${this.name}`)
             isDefenderMurdered = true
             isMurdered = true
             continue
         }
         if (deadCreepsId.includes(targetId)) {
-            const deadCreep = myTombstones.find(tombstone => tombstone.creep.id === targetId).creep
-            data.recordLog(`${deadCreep.name} is murdered at ${this.name}`)
             isMurdered = true
         }
 
@@ -108,7 +109,7 @@ Room.prototype.checkTombstone = function () {
         map[this.name].inaccessible = Game.time + 1500
         map[this.name].lastScout = this.time
         map[this.name].threat = true
-        if (OVERLORD.colonies[this.name] && this.memory.host) {
+        if (OVERLORD.colonies.includes(this.name) && this.memory.host) {
             const hostRoom = Game.rooms[this.memory.host]
             if (!hostRoom) {
                 return
@@ -119,8 +120,8 @@ Room.prototype.checkTombstone = function () {
 }
 
 Room.prototype.manageSource = function () {
-
     this.heap.sourceUtilizationRate = 0
+
     for (const source of this.sources) {
         // RoomVisual
         this.visual.text(`⛏️${source.info.numWork}/6`, source.pos.x + 0.5, source.pos.y - 0.25, { font: 0.5, align: 'left' })
@@ -136,12 +137,12 @@ Room.prototype.manageSource = function () {
         if (source.linked) {
             // miner가 부족한 경우
             if (source.info.numMiner === 0) {
-                this.requestMiner(source, 0)
+                this.requestMiner(source, 2)
                 continue
             }
 
             if (source.info.numMiner < source.available && source.info.numWork < 5) {
-                this.requestMiner(source, 2)
+                this.requestMiner(source, 3)
                 continue
             }
 
@@ -152,7 +153,7 @@ Room.prototype.manageSource = function () {
             }
         } else {
             if (source.info.numWork === 0) {
-                this.requestMiner(source, 0)
+                this.requestMiner(source, 2)
                 continue
             }
             if (source.info.numCarry === 0) {
@@ -160,7 +161,7 @@ Room.prototype.manageSource = function () {
                 continue
             }
             if (source.info.numMiner < source.available && source.info.numWork < 5) {
-                this.requestMiner(source, 2)
+                this.requestMiner(source, 3)
                 continue
             }
 

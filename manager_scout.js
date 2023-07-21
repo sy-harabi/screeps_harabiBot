@@ -1,5 +1,6 @@
 Room.prototype.manageScout = function () {
   const MAX_DISTANCE = 12 // 최대 거리
+  const SCOUT_INTERVAL = 20000 // scout 완료 후 얼마나 기다렸다가 다시 시작할 것인지
 
   if (this.controller.level < 4) {
     return
@@ -31,35 +32,34 @@ Room.prototype.manageScout = function () {
       isClaimCandidate: false,
     }
     status.state = 'BFS'
-    status.nextScoutTime = Game.time + 16000
     return
   }
 
   if (status.state === 'BFS') {
     if (status.adjacents && status.adjacents.length) {
-      let next = undefined
-      while (status.adjacents.length) {
+      while (status.adjacents.length > 0) {
         const adjacentName = status.adjacents.shift()
-        if (map[adjacentName] && map[adjacentName].next > Game.time) {
+        if (map[adjacentName] && ((map[adjacentName].lastScout + SCOUT_INTERVAL) > Game.time || map[adjacentName].distance < map[status.node].distance + 1)) {
           continue
         }
-        next = adjacentName
-        break
-      }
-      if (next) {
         status.state = 'scout'
-        status.next = next
+        status.next = adjacentName
         return
       }
     }
 
-    while (status.queue.length) {
+    while (status.queue.length > 0) {
       const node = status.queue.shift()
+      if (!map[node]) {
+        continue
+      }
       if (map[node].distance >= MAX_DISTANCE) {
+        data.recordLog(`${this.name} ends scouting. we searched everything`)
+        status.nextScoutTime = Game.time + SCOUT_INTERVAL
         status.state = 'wait'
         return
       }
-      if (map[node] && map[node].inaccessible > Game.time) {
+      if (map[node].inaccessible && map[node].inaccessible > Game.time) {
         continue
       }
       status.node = node
@@ -93,21 +93,18 @@ Room.prototype.manageScout = function () {
         // 내 방 아니면 정찰 대상
         return true
       })
-      let next = undefined
-      while (status.adjacents.length) {
+      while (status.adjacents.length > 0) {
         const adjacentName = status.adjacents.shift()
-        if (map[adjacentName] && ((map[adjacentName].lastScout + 5000) > Game.time || map[adjacentName].distance < map[node].distance + 1)) {
+        if (map[adjacentName] && ((Game.time < map[adjacentName].lastScout + SCOUT_INTERVAL) || map[adjacentName].distance < map[node].distance + 1)) {
           continue
         }
-        next = adjacentName
-        break
-      }
-      if (next) {
         status.state = 'scout'
-        status.next = next
+        status.next = adjacentName
         return
       }
     }
+    data.recordLog(`${this.name} ends scouting. queue is empty`)
+    status.nextScoutTime = Game.time + SCOUT_INTERVAL
     status.state = 'wait'
     return
   }
@@ -120,6 +117,7 @@ Room.prototype.manageScout = function () {
       delete status.next
       status.state = 'BFS'
     } else if (result === ERR_NO_PATH) {
+      data.recordLog(`${this.name} scouter cannot find path to ${status.next}`)
       delete status.next
       status.state = 'BFS'
     }
@@ -180,7 +178,7 @@ Room.prototype.scoutRoom = function (roomName, distance) {
   }
 
   const room = Game.rooms[roomName]
-  const host = this.name
+  let host = this.name
 
   const lastScout = Game.time
   const linearDistance = Game.map.getRoomLinearDistance(this.name, roomName)
@@ -195,10 +193,10 @@ Room.prototype.scoutRoom = function (roomName, distance) {
   const defense = numTower > 0 ? { numTower: numTower } : undefined
 
   const isAccessibleToContorller = isController && (scouter.moveMy(room.controller.pos, { range: 1 }) === OK)
-  const inaccessible = ((defense && (!room.isMy)) || (isController && !isAccessibleToContorller)) ? (Game.time + 20000) : false
+  const inaccessible = ((defense && (!room.isMy)) || (isController && !isAccessibleToContorller)) ? (Game.time + SCOUT_INTERVAL) : false
 
   const isRemoteCandidate = isAccessibleToContorller && !inaccessible && !isClaimed && !isReserved && (distance <= 1) && (numSource > 0) && !OVERLORD.colonies.includes(roomName)
-  const isClaimCandidate = isAccessibleToContorller && !inaccessible && !isClaimed && !isReserved && (distance > 1) && (numSource > 1) && !OVERLORD.colonies.includes(roomName)
+  const isClaimCandidate = isAccessibleToContorller && !inaccessible && !isClaimed && !isReserved && (distance > 2) && (numSource > 1) && !OVERLORD.colonies.includes(roomName)
 
   if (isRemoteCandidate) {
     colonize(roomName, this.name)
@@ -222,6 +220,8 @@ Room.prototype.scoutRoom = function (roomName, distance) {
     isClaimCandidate,
     inaccessible
   }
+
+  scouter.say(`🚶${distance}`, true)
 
   return OK
 }

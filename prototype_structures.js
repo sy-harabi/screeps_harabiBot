@@ -1,4 +1,18 @@
 Object.defineProperties(StructureController.prototype, {
+    available: {
+        get() {
+            if (this._available) {
+                return this._available
+            }
+            if (this.link) {
+                return this._available = this.link.pos.available - 1
+            }
+            if (this.container) {
+                return this._available = this.container.pos.available
+            }
+            return this._available = 9
+        }
+    },
     container: {
         get() {
             if (this._container !== undefined) {

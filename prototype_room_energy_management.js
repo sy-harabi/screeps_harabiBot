@@ -137,7 +137,7 @@ Room.prototype.manageEnergySupply = function (arrayOfCreeps) {
             if (existingRequest.priority < request.priority) {
                 continue
             }
-            if (existingRequest.priority === request.priority && bestApplicant.pos.getRangeTo(existingRequest.pos) <= bestApplicant.pos.getRangeTo(request.pos)) {
+            if (existingRequest.priority === request.priority && bestApplicant.pos.getRangeTo(existingRequest.pos) <= bestApplicant.pos.getRangeTo(request.pos) + 1) {
                 continue
             }
             request.amount -= bestApplicant.amount
@@ -145,10 +145,18 @@ Room.prototype.manageEnergySupply = function (arrayOfCreeps) {
             bestApplicant.engaged = request
         }
     }
-
+    const isStorage = this.storage ? true : false
+    const spawn = this.structures.spawn[0]
     for (const applicant of applicants) {
+        const creep = applicant.creep
         if (applicant.engaged) {
-            applicant.creep.giveEnergyTo(applicant.engaged.client.id)
+            creep.giveEnergyTo(applicant.engaged.client.id)
+        }
+        if (isStorage) {
+            continue
+        }
+        if (spawn) {
+            creep.moveMy(spawn, { range: 3 })
         }
     }
 }
@@ -279,15 +287,21 @@ Room.prototype.manageEnergyFetch = function (arrayOfCreeps) {
             continue
         }
 
-        let office = null
         if (creep.memory.role === 'manager') {
-            office = Game.getObjectById(creep.memory.storageLinkId)
+            const storageLink = Game.getObjectById(creep.memory.storageLinkId)
+            if (storageLink) {
+                creep.moveMy(storageLink, { range: 1 })
+                continue
+            }
         } else {
             const source = Game.getObjectById(creep.memory.sourceId)
-            office = source.container || source
-        }
-        if (office) {
-            creep.moveMy(office, { range: 2 })
+            if (source) {
+                const waitingPos = source.waitingArea.find(pos => pos.isWalkable && creep.checkEmpty(pos))
+                if (waitingPos) {
+                    creep.moveMy(waitingPos)
+                    continue
+                }
+            }
         }
 
     }

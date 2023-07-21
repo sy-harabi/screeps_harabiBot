@@ -67,7 +67,7 @@ Room.prototype.factoryDistribution = function () {
     const rawCommodity = this.specialtyCommodities[6]
     const researcher = this.creeps.researcher[0]
 
-    const RAW_COMMODITIES_AMOUNT_TO_KEEP = 10000
+    const RAW_COMMODITIES_AMOUNT_TO_KEEP = 2000
 
     for (const resourceType of Object.keys(factory.store)) {
         if (RAW_RESOURCES.includes(resourceType) && factory.store[resourceType] > RAW_COMMODITIES_AMOUNT_TO_KEEP * 1.1 && terminal.store.getFreeCapacity() > 10000) {

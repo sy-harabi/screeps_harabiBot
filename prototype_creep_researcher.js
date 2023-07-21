@@ -83,7 +83,6 @@ Creep.prototype.delivery = function () {
 
     if (this.ticksToLive < 30) {
         if (this.store.getUsedCapacity()) {
-            this.say('1')
             this.returnAll()
             return
         }
@@ -135,7 +134,6 @@ Creep.prototype.delivery = function () {
         if (resourceType === deliveryRequest.resourceType) {
             continue
         } else {
-            this.say('2')
             this.returnAll()
             return
         }

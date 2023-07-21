@@ -3,8 +3,8 @@ Room.prototype.manageDefense = function () {
     const status = this.memory.defense
     status.state = status.state || 'normal'
     const targets = this.find(FIND_HOSTILE_CREEPS)
-
-    if (targets.length === 0 && status.state === 'normal') {
+    const aggressiveTargets = targets.filter(creep => creep.checkBodyParts(INVADER_BODY_PARTS))
+    if (aggressiveTargets.length === 0 && status.state === 'normal') {
         this.manageTower()
         return
     }
@@ -21,7 +21,7 @@ Room.prototype.manageDefense = function () {
         weak.push(target)
     }
 
-    if (strong.length > 0 && status.state === 'normal') {
+    if (strong.length > 0 && status.state === 'normal' && this.isWalledUp) {
         status.state = 'emergency'
         this.memory.militaryThreat = true
         for (const hauler of this.creeps.hauler) {
@@ -52,7 +52,6 @@ Room.prototype.manageDefense = function () {
 
             }
         }
-        return
     }
 
     if (weak.length > 0) {
@@ -80,7 +79,7 @@ Room.prototype.requestRoomDefender = function () {
 
 Creep.prototype.holdBunker = function (target) { //target is enemy creep
     const targetPos = target.pos || target
-    const ramparts = this.structures.rampart.sort((a, b) => targetPos.getRangeTo(a) - targetPos.getRangeTo(b))
+    const ramparts = this.room.structures.rampart.sort((a, b) => targetPos.getRangeTo(a) - targetPos.getRangeTo(b))
     for (const rampart of ramparts) {
         if (this.checkEmpty(rampart.pos) && this.pos.getRangeTo(rampart.pos) > 0) {
             this.moveMy(rampart.pos)
@@ -99,18 +98,6 @@ Creep.prototype.holdBunker = function (target) { //target is enemy creep
     if (this.attack(target) === OK) {
         this.room.towerAttack(target)
         return OK
-    }
-    return false
-}
-
-// pos is roomPosition
-Creep.prototype.checkEmpty = function (pos) {
-    const creep = pos.lookFor(LOOK_CREEPS)[0]
-    if (!creep) {
-        return true
-    }
-    if (this.id === creep.id) {
-        return true
     }
     return false
 }
