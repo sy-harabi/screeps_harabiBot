@@ -1,6 +1,6 @@
 global.roomInfo = function () {
     const startPos = { x: 0, y: 0.5 }
-    new RoomVisual().rect(startPos.x, startPos.y - 1, 37, OVERLORD.myRooms.length + 3, { fill: 'black', opacity: 0.5 }); // 틀 만들기
+    new RoomVisual().rect(startPos.x, startPos.y - 1, 39, OVERLORD.myRooms.length + 3, { fill: 'black', opacity: 0.5 }); // 틀 만들기
 
     new RoomVisual().text("Time " + Game.time, 0.5, startPos.y, { color: 'cyan', strokeWidth: 0.2, align: 'left' })
     new RoomVisual().text("CPU " + Game.cpu.getUsed().toFixed(2), 6.5, startPos.y, { color: 'cyan', strokeWidth: 0.2, align: 'left' })
@@ -9,7 +9,7 @@ global.roomInfo = function () {
     new RoomVisual().text("# ticks " + CPU.length, 20, startPos.y, { color: 'cyan', strokeWidth: 0.2, align: 'left' });
     new RoomVisual().text("Labs: " + data.okCPU, 24, startPos.y, { color: data.okCPU ? 'lime' : 'magenta', strokeWidth: 0.2, align: 'left' });
     new RoomVisual().text("Market: " + data.enoughCPU, 28, startPos.y, { color: data.enoughCPU ? 'lime' : 'magenta', strokeWidth: 0.2, align: 'left' });
-
+    new RoomVisual().text(`Room: ${OVERLORD.myRooms.length}`, 33, startPos.y, { color: 'lime', strokeWidth: 0.2, align: 'left' })
     new RoomVisual().text('|', startPos.x + 4, startPos.y + 1, { color: 'cyan' })
     new RoomVisual().text('|', startPos.x + 7, startPos.y + 1, { color: 'cyan' })
     new RoomVisual().text('|', startPos.x + 11, startPos.y + 1, { color: 'cyan' })
@@ -17,8 +17,8 @@ global.roomInfo = function () {
     new RoomVisual().text('|', startPos.x + 20, startPos.y + 1, { color: 'cyan' })
     new RoomVisual().text('|', startPos.x + 24, startPos.y + 1, { color: 'cyan' })
     new RoomVisual().text('|', startPos.x + 28, startPos.y + 1, { color: 'cyan' })
-    new RoomVisual().text('|', startPos.x + 32, startPos.y + 1, { color: 'cyan' })
-    new RoomVisual().text('|', startPos.x + 36, startPos.y + 1, { color: 'cyan' })
+    new RoomVisual().text('|', startPos.x + 34, startPos.y + 1, { color: 'cyan' })
+    new RoomVisual().text('|', startPos.x + 38, startPos.y + 1, { color: 'cyan' })
 
     new RoomVisual().text('Name', startPos.x + 2, startPos.y + 1, { color: 'cyan' })
     new RoomVisual().text('RCL', startPos.x + 5.5, startPos.y + 1, { color: 'cyan' })
@@ -27,8 +27,8 @@ global.roomInfo = function () {
     new RoomVisual().text('Energy stored', startPos.x + 17.5, startPos.y + 1, { color: 'cyan' })
     new RoomVisual().text('numWork', startPos.x + 22, startPos.y + 1, { color: 'cyan' })
     new RoomVisual().text('Lab', startPos.x + 26, startPos.y + 1, { color: 'cyan' })
-    new RoomVisual().text('Factory', startPos.x + 30, startPos.y + 1, { color: 'cyan' })
-    new RoomVisual().text('Protect', startPos.x + 34, startPos.y + 1, { color: 'cyan' })
+    new RoomVisual().text('Factory', startPos.x + 31, startPos.y + 1, { color: 'cyan' })
+    new RoomVisual().text('Protect', startPos.x + 36, startPos.y + 1, { color: 'cyan' })
 
     for (i = 0; i < OVERLORD.myRooms.length; i++) {
         visualizeRoomInfo(OVERLORD.myRooms[i], i)
@@ -42,8 +42,8 @@ global.roomInfo = function () {
         new RoomVisual().text('|', startPos.x + 20, startPos.y + line + 2, { color: 'cyan' })
         new RoomVisual().text('|', startPos.x + 24, startPos.y + line + 2, { color: 'cyan' })
         new RoomVisual().text('|', startPos.x + 28, startPos.y + line + 2, { color: 'cyan' })
-        new RoomVisual().text('|', startPos.x + 32, startPos.y + line + 2, { color: 'cyan' })
-        new RoomVisual().text('|', startPos.x + 36, startPos.y + line + 2, { color: 'cyan' })
+        new RoomVisual().text('|', startPos.x + 34, startPos.y + line + 2, { color: 'cyan' })
+        new RoomVisual().text('|', startPos.x + 38, startPos.y + line + 2, { color: 'cyan' })
 
         const name = `${room.name}(${room.mineral.mineralType})`
         new RoomVisual().text(name, startPos.x + 0.3, startPos.y + line + 2, { color: 'cyan', align: 'left' })
@@ -64,9 +64,9 @@ global.roomInfo = function () {
         } else {
             new RoomVisual().text(`${room.memory.labTargetCompound ? room.memory.labTargetCompound : '-'}`, startPos.x + 26, startPos.y + line + 2, { color: room.memory.labTargetCompound ? 'lime' : room.memory.labs ? 'yellow' : 'magenta' })
         }
-        new RoomVisual().text(`${room.memory.factoryObjective ? room.memory.factoryObjective : '-'}`, startPos.x + 30, startPos.y + line + 2, { color: room.memory.factoryObjective ? 'lime' : 'magenta' })
+        new RoomVisual().text(`${room.memory.factoryTarget ? room.memory.factoryTarget.commodity : '-'}`, startPos.x + 31, startPos.y + line + 2, { color: room.memory.factoryTarget ? 'lime' : 'magenta' })
 
-        new RoomVisual().text(`${Math.round(room.structures.minProtectionHits / 10000) / 100}M`, startPos.x + 34, startPos.y + line + 2, { color: room.structures.minProtectionHits > 20000000 ? 'lime' : 'magenta' })
+        new RoomVisual().text(`${Math.round(room.structures.minProtectionHits / 10000) / 100}M`, startPos.x + 36, startPos.y + line + 2, { color: room.structures.minProtectionHits > 20000000 ? 'lime' : 'magenta' })
 
     }
 }

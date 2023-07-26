@@ -56,10 +56,14 @@ global.basePlan = function (roomName, numIteration = 10) {
 }
 
 global.observeRoom = function (roomName, tick) {
+
+    new RoomVisual().text(`ticks left: ${tick}`, 25, 45)
     data.observe.tick--
 
     const room = Game.rooms[roomName]
-    if (tick < 0) {
+
+    if (tick <= 0) {
+        data.info = true
         if (room && !room.isMy) {
             delete room.memory
             delete room.heap
@@ -68,8 +72,7 @@ global.observeRoom = function (roomName, tick) {
         return
     }
 
-    new RoomVisual().text(`ticks left: ${tick}`, 25, 25)
-
+    data.info = false
     const observer = OVERLORD.structures.observer.find(observer => Game.map.getRoomLinearDistance(observer.room.name, roomName) <= 10)
     if (observer) {
         observer.observeRoom(roomName)
@@ -79,7 +82,7 @@ global.observeRoom = function (roomName, tick) {
         return
     }
 
-    if (tick < 5) {
+    if (tick <= 5) {
         Game.rooms[roomName].visualizeBasePlan()
         return
     }
@@ -174,7 +177,7 @@ global.claim = function (targetRoomName, baseName) {
     baseName = base.name
     base.memory.claimRoom = base.memory.claimRoom || {}
     base.memory.claimRoom[targetRoomName] = base.memory.claimRoom[targetRoomName] || {}
-    return
+    return `${baseName} starts claim protocol to ${targetRoomName}`
 }
 
 global.classifyCreeps = function () {
@@ -285,11 +288,11 @@ global.mapInfo = function () {
             const info = map[roomName]
             const center = new RoomPosition(25, 25, roomName)
 
-            if (info.lastScout && Game.time > info.lastScout + EXPIRATION_PERIOD) {
+            if (!info.lastScout || Game.time > info.lastScout + EXPIRATION_PERIOD) {
                 delete map[roomName]
             }
 
-            if (info.lastScout) {
+            if (info.lastScout !== undefined) {
                 Game.map.visual.text(`⏳${info.lastScout + EXPIRATION_PERIOD - Game.time}`, new RoomPosition(center.x - 20, center.y + 15, center.roomName), { fontSize: 7, align: 'left' })
             }
 
@@ -303,17 +306,22 @@ global.mapInfo = function () {
                 Game.map.visual.text(`🚫${info.inaccessible - Game.time}`, new RoomPosition(center.x, center.y - 15, center.roomName), { fontSize: 7, color: '#f000ff' })
             }
 
-            // host가 있는 info인지 체크. 즉 scouter가 확인한 방인지 체크
-            if (!info.host) {
-                continue
-            }
-
-            if (roomName === info.host) {
-                const room = Game.rooms[roomName]
+            // 내 방인지 체크
+            const room = Game.rooms[roomName]
+            if (room && room.isMy) {
                 Game.map.visual.text(`${room.controller.level}`, new RoomPosition(center.x - 18, center.y - 20, center.roomName), { fontSize: 13, color: '#74ee15' })
                 if (room.memory.scout) {
                     Game.map.visual.text(`${room.memory.scout.state}`, new RoomPosition(center.x + 5, center.y - 20, center.roomName), { fontSize: 13, color: '#74ee15' })
+                    if (room.memory.scout.next) {
+                        Game.map.visual.line(center, new RoomPosition(25, 25, room.memory.scout.next), { color: '#ffe700', width: '2', opacity: 1 })
+                        Game.map.visual.circle(new RoomPosition(25, 25, room.memory.scout.next), { fill: '#ffe700' })
+                    }
                 }
+                continue
+            }
+
+            // host가 있는 info인지 체크. 즉 scouter가 확인한 방인지 체크
+            if (!info.host) {
                 continue
             }
 
@@ -330,15 +338,36 @@ global.mapInfo = function () {
     }
 }
 
-global.resetMap = function () {
-    Memory.map = {}
-    for (const room of Object.values(Game.rooms)) {
+global.resetMap = function (roomName) {
+    if (roomName === undefined) {
+        Memory.map = {}
+        for (const myRoom of OVERLORD.myRooms) {
+            delete myRoom.memory.scout
+            const scouters = getCreepsByRole(myRoom.name, 'scouter')
+            for (const scouter of scouters) {
+                scouter.suicide()
+            }
+        }
+        return 'reset map'
+    } else {
+        roomName = roomName.toUpperCase()
+        const room = Game.rooms[roomName]
+        if (!room || !room.isMy) {
+            return 'invalid roomName'
+        }
+        Memory.map = Memory.map || {}
+        const map = Memory.map
+        for (const mapRoomName in Memory.map) {
+            const roomInfo = map[mapRoomName]
+            if (roomInfo && roomInfo.host === roomName) {
+                delete map[mapRoomName]
+            }
+        }
         delete room.memory.scout
-        const scouters = getCreepsByRole(room.name, 'scouter')
-        for (const scouter of scouters) {
+        const scouter = getCreepsByRole(roomName, 'scouter')[0]
+        if (scouter) {
             scouter.suicide()
         }
+        return `reset map of ${roomName}`
     }
-
-    return 'reset map'
 }

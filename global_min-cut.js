@@ -49,14 +49,12 @@ Room.prototype.mincutToExit = function (sources, costMap) { //soucres : array of
       if (costMap.get(pos.x, pos.y) === 255) {
         continue
       }
-      new RoomVisual(this.name).circle(pos, { fill: 'red' }) // visualize exits
       exit[packPosToVertice(pos.x, pos.y) | OUT_NODE] = 1
     }
   }
 
   const sourceVertices = new Set()
   for (const pos of sources) {
-    new RoomVisual(this.name).circle(pos, { fill: 'blue' }) // visualize source positions
     const vertice = packPosToVertice(pos.x, pos.y)
     if (exit[vertice]) {
       console.log(`Invalid source ${pos.x}, ${pos.y}`)
@@ -107,7 +105,10 @@ Room.prototype.mincutToExit = function (sources, costMap) { //soucres : array of
     const cuts = result.cuts
 
     if (cuts.length) {
-      return cuts
+
+      const insides = result.insides
+      const outsides = result.outsides
+      return { cuts, insides, outsides }
     }
     getBlockingFlow(sourceVertices, exit, capacityMap, levels)
     i++
@@ -153,6 +154,8 @@ global.getDFS = function (nodeNow, exit, capacityMap, levels, maxFlow, checkInde
 global.getLevels = function (sourceVertices, exit, capacityMap) {
   let connected = false
   const cuts = []
+  const outsides = []
+  const insides = []
   const queue = []
   const levels = new Int16Array(MAX_NODE)
   levels.fill(-1)
@@ -182,11 +185,17 @@ global.getLevels = function (sourceVertices, exit, capacityMap) {
         const node = packPosToVertice(x, y)
         if (levels[node] !== -1 && levels[node | OUT_NODE] === -1) {
           cuts.push(node & POS_MASK)
+          continue
         }
+        if (levels[node] === -1) {
+          outsides.push(node & POS_MASK)
+          continue
+        }
+        insides.push(node & POS_MASK)
       }
     }
   }
-  return { levels: levels, cuts: cuts }
+  return { levels, cuts, insides, outsides }
 }
 
 global.getEdgesFrom = function (node) {

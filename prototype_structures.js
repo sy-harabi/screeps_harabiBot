@@ -69,40 +69,6 @@ Object.defineProperties(StructureController.prototype, {
             return true
         }
     },
-    sweetSpots: {
-        get() {
-            const room = this.room
-            if (!this._sweetSpots) {
-                this._sweetSpots = []
-                for (let i = -5; i <= 5; i++) {
-                    if (Math.abs(i) === 5) {
-                        for (let j = -4; j <= 4; j++) {
-                            if (0 < Math.min(this.pos.x + i, this.pos.y + j) && Math.max(this.pos.x + i, this.pos.y + j) < 49) {
-                                const spot = new RoomPosition(this.pos.x + i, this.pos.y + j, room.name)
-                                if ((spot.x + spot.y) % 2 === 1 && spot.lookFor(LOOK_TERRAIN)[0] !== 'wall') {
-                                    this._sweetSpots.push(spot)
-                                    room.visual.circle(spot)
-                                }
-                            }
-                        }
-                    } else {
-                        for (const j of [-5, 5]) {
-                            if (0 < Math.min(this.pos.x + 1 + i, this.pos.y + j) && Math.max(this.pos.x + 1 + i, this.pos.y + j) < 49) {
-                                const spot = new RoomPosition(this.pos.x + i, this.pos.y + j, room.name)
-                                if ((spot.x + spot.y) % 2 === 1 && spot.lookFor(LOOK_TERRAIN)[0] !== 'wall') {
-                                    this._sweetSpots.push(spot)
-                                    room.visual.circle(spot)
-                                }
-                            }
-                        }
-                    }
-                }
-                this._sweetSpots = this._sweetSpots.filter(spot => !(spot.getCross().filter(pos => pos.lookFor(LOOK_TERRAIN)[0] === 'wall').length))
-                this._sweetSpots = this._sweetSpots.sort((a, b) => { return a.getRangeTo(room.sources[0]) + a.getRangeTo(room.sources[1]) - b.getRangeTo(room.sources[0]) - b.getRangeTo(room.sources[1]) })
-            }
-            return this._sweetSpots
-        }
-    },
     totalProgress: {
         get() {
             return CONTROLLER_PROGRESS_TO_LEVELS[this.level] + this.progress

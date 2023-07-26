@@ -1,8 +1,12 @@
-Flag.prototype.harass = function () {
+Flag.prototype.harass = function (number = 2) {
     const roomName = this.pos.roomName
     const closestMyRoom = this.findClosestMyRoom(7)
+    if (!closestMyRoom) {
+        this.remove()
+        return
+    }
     const defenders = getCreepsByRole(roomName, 'colonyDefender')
-    if (defenders.length < 2) {
+    if (defenders.length < number) {
         closestMyRoom.requestColonyDefender(roomName)
     }
 }

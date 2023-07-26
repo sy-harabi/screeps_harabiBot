@@ -15,10 +15,13 @@ Object.defineProperties(Creep.prototype, {
 Creep.prototype.giveEnergyTo = function (id) {
     const target = Game.getObjectById(id)
     if (!target) {
-        return
+        return ERR_INVALID_TARGET
     }
 
-    if (this.transfer(target, RESOURCE_ENERGY) === -9) {
+    if (this.pos.getRangeTo(target) > 1) {
         this.moveMy(target, { range: 1 })
+        return ERR_NOT_IN_RANGE
     }
+
+    return this.transfer(target, RESOURCE_ENERGY)
 }

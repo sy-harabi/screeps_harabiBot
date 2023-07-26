@@ -26,15 +26,13 @@ Room.prototype.manageSpawn = function () {
 
     // laborer 생산
     const level = this.controller.level
-    const storageEnergy = this.energy
-    const buffer = BUFFER[level]
+    const WORK_MAX = 30
 
-    let maxWork = (this.storage && this.storage.store['energy'] > 20000 && (this.memory.militaryThreat || this.memory.defenseNuke)) ? 40 : ((this.heap.sourceUtilizationRate || 0) * this.maxWork)
-    if (level < 8 && !this.militaryThreat && !this.savingMode) {
-        const additional = Math.ceil(10 * (storageEnergy - ECONOMY_STANDARD[level] / (2 * buffer)))
-        if (additional > 0) {
-            maxWork += additional
-        }
+    let maxWork = 0
+    if ((this.memory.militaryThreat || this.memory.defenseNuke) && this.storage && this.storage.store['energy'] > 20000) {
+        maxWork = WORK_MAX
+    } else {
+        maxWork = (this.heap.sourceUtilizationRate || 0) * this.maxWork
     }
 
     const maxLaborer = Math.min(this.controller.available, Math.ceil(maxWork / this.laborer.numWorkEach)) // source 가동률만큼만 생산 
@@ -52,7 +50,7 @@ Room.prototype.manageSpawn = function () {
         }
 
         // wallMaker 생산
-        if (level === 8 && !this.savingMode) {
+        if (!this.savingMode) {
             const storageEnergy = this.energy
             const buffer = BUFFER[level]
             // RCL 8 미만이면 standard보다 buffer만큼 높아야 wallmaker 생산 시작. 2buffer만큼 storageEnergy 많아질때마다 wallMaker 하나씩 추가. 최대 3마리
@@ -178,7 +176,11 @@ Room.prototype.requestHauler = function (numCarry, option = { isUrgent: false, i
 
     const memory = isManager ? { role: 'manager' } : { role: 'hauler', sourceId: office.id }
 
-    const priority = isUrgent ? 2 : 4
+    let priority = isUrgent ? 2 : 4
+
+    if (isManager) {
+        priority++
+    }
 
     const request = new RequestSpawn(body, name, memory, { priority: priority })
 
@@ -334,23 +336,23 @@ Room.prototype.requestColonyMiner = function (colonyName, sourceId) {
 Room.prototype.requestColonyDefender = function (colonyName) {
     let body = []
     let cost = 0
-    const bodyLength = Math.min(Math.floor((this.energyCapacityAvailable) / 500), 10)
-    for (let i = 0; i < bodyLength; i++) {
+    const bodyLength = Math.min(Math.floor((this.energyCapacityAvailable) / 1100), 5)
+    for (let i = 0; i < 5 * bodyLength - 1; i++) {
         body.push(MOVE)
         cost += 50
     }
-    for (let i = 0; i < bodyLength; i++) {
+    for (let i = 0; i < bodyLength * 4; i++) {
         body.push(RANGED_ATTACK)
         cost += 150
     }
-    for (let i = 0; i < bodyLength; i++) {
-        body.push(MOVE)
-        cost += 50
-    }
-    for (let i = 0; i < bodyLength; i++) {
+    for (let i = 0; i < bodyLength - 1; i++) {
         body.push(HEAL)
         cost += 250
     }
+
+    body.push(MOVE, HEAL)
+    cost += 300
+
     if (bodyLength === 0) {
         body = [TOUGH, TOUGH, TOUGH, TOUGH, TOUGH, MOVE, RANGED_ATTACK]
     }

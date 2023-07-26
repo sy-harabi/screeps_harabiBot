@@ -55,20 +55,20 @@ Room.prototype.operateLab = function (resource0, resource1) {
         }
 
         for (const lab of reactionLabs) {
-            if (lab.mineralType && lab.store.getUsedCapacity(lab.mineralType)) {
+            if (lab.mineralType && lab.store.getUsedCapacity(lab.mineralType) > 0) {
                 researcher.getDeliveryRequest(reactionLabs, terminal, lab.mineralType)
                 return
             }
         }
 
         for (const lab of sourceLabs) {
-            if (lab.mineralType && lab.store.getUsedCapacity(lab.mineralType)) {
+            if (lab.mineralType && lab.store.getUsedCapacity(lab.mineralType) > 0) {
                 researcher.getDeliveryRequest(sourceLabs, terminal, lab.mineralType)
                 return
             }
         }
 
-        if (researcher.store.getUsedCapacity()) {
+        if (researcher.store.getUsedCapacity() > 0) {
             researcher.returnAll()
             return
         }
@@ -226,18 +226,6 @@ Room.prototype.prepareBoostLaborer = function () {
         }
     }
 
-    if (reactionLab.store['XGH2O'] < 2000) {
-        if (terminal.store['XGH2O'] < 1000) {
-            return false
-        }
-        if (!researcher) {
-            this.heap.needResearcher = true
-            return true
-        }
-        researcher.getDeliveryRequest(terminal, reactionLab, 'XGH2O')
-        return true
-    }
-
     if (reactionLab.store[RESOURCE_ENERGY] < 1000 && terminal.store[RESOURCE_ENERGY] > 1000) {
 
         if (!researcher) {
@@ -248,6 +236,19 @@ Room.prototype.prepareBoostLaborer = function () {
         return true
     }
 
+    if (reactionLab.store['XGH2O'] < 1000) {
+        if (terminal.store['XGH2O'] < 1000 - reactionLab.store['XGH2O']) {
+            return false
+        }
+        if (!researcher) {
+            this.heap.needResearcher = true
+            return true
+        }
+        researcher.getDeliveryRequest(terminal, reactionLab, 'XGH2O')
+        return true
+    }
+
+
 }
 
 Room.prototype.operateBoostLaborer = function () {
@@ -257,7 +258,10 @@ Room.prototype.operateBoostLaborer = function () {
         return false
     }
 
-    if (reactionLab.store['XGH2O'] + terminal.store['XGH2O'] < 1000) {
+    const researcher = this.creeps.researcher[0]
+    const researcherCarry = researcher ? researcher.store['XGH2O'] : 0
+
+    if (reactionLab.store['XGH2O'] + terminal.store['XGH2O'] + researcherCarry < 1000) {
         return ERR_NOT_ENOUGH_RESOURCES
     }
 
@@ -299,14 +303,9 @@ Object.defineProperties(Room.prototype, {
             labs = {}
             labs['sourceLab'] = []
             labs['reactionLab'] = []
-            labs['centerLab'] = []
-            const maxSourceLab = this.controller.level > 7 ? 3 : 2
             for (const lab of structureLabs) {
-                if (lab.isSourceLab && labs['sourceLab'].length < maxSourceLab) {
+                if (lab.isSourceLab && labs['sourceLab'].length < 2) {
                     labs['sourceLab'].push(lab.id)
-                    if (lab.pos.getRangeTo(this.terminal) === 2) {
-                        labs['centerLab'].push(lab.id)
-                    }
                 } else {
                     labs['reactionLab'].push(lab.id)
                 }
@@ -315,8 +314,7 @@ Object.defineProperties(Room.prototype, {
                 delete this.memory.labs
                 return false
             }
-            this.memory.labs = labs
-            return this.memory.labs
+            return this.memory.labs = labs
         }
     },
     sourceLabAmount: {
@@ -324,7 +322,9 @@ Object.defineProperties(Room.prototype, {
             this._sourceLabAmount = 0
             for (const sourceLabId of this.labs.sourceLab) {
                 const lab = Game.getObjectById(sourceLabId)
-                this._sourceLabAmount += lab.store.getUsedCapacity(lab.mineralType)
+                if (lab.mineralType) {
+                    this._sourceLabAmount += lab.store.getUsedCapacity(lab.mineralType)
+                }
             }
             return this._sourceLabAmount
         }
@@ -334,7 +334,9 @@ Object.defineProperties(Room.prototype, {
             this._reactionLabAmount = 0
             for (const sourceLabId of this.labs.reactionLab) {
                 const lab = Game.getObjectById(sourceLabId)
-                this._reactionLabAmount += lab.mineralType ? lab.store.getUsedCapacity(lab.mineralType) : 0
+                if (lab.mineralType) {
+                    this._reactionLabAmount += lab.store.getUsedCapacity(lab.mineralType)
+                }
             }
             return this._reactionLabAmount
         }
@@ -350,71 +352,120 @@ Object.defineProperties(Room.prototype, {
 })
 
 Room.prototype.getLabTargetCompound = function () {
+    // 방이 내 방이 아니면 오류
+    if (!this.isMy) {
+        return undefined
+    }
+    // RCL이 6보다 낮으면 오류
+    if (this.controller.level < 6) {
+        return undefined
+    }
+
+    // terminal 없으면 오류
+    const terminal = this.terminal
+    if (!terminal) {
+        return undefined
+    }
+
+    // lab이 3개보다 적으면 오류
+    if (this.structures.lab.length < 3) {
+        return undefined
+    }
+
     if (this.memory.labTargetCompound !== undefined) {
         return this.memory.labTargetCompound
     }
 
-    const queue = [...Object.keys(USEFULL_COMPOUNDS), ...business.profitableCompounds]
-    const checked = {}
-    for (const compound of queue) {
-        if (this.isReadyToProduce(compound)) {
-            return this.memory.labTargetCompound = compound
-        }
-        checked[compound] = true
-    }
+    const targetCompounds = [...Object.keys(USEFULL_COMPOUNDS), ...business.profitableCompounds]
 
-    while (queue.length > 0) {
-        const node = queue.shift()
-        const formula = COMPOUNDS_FORMULA[node]
-        if (!formula) {
+    const checked = {}
+    for (const target of targetCompounds) {
+        // target 부터 확인하자
+        const result = this.checkCompound(target)
+
+        // 충분히 있으면 다음 target으로 넘어가자
+        if (result === ERR_FULL) {
             continue
         }
-        if (!checked[formula.resourceType0]) {
-            if (this.isReadyToProduce(formula.resourceType0)) {
-                return this.memory.labTargetCompound = formula.resourceType0
-            }
-            queue.push(formula.resourceType0)
-            checked[formula.resourceType0] = true
+
+        // 만들 수 있으면 만들자
+        if (result === OK) {
+            return this.memory.labTargetCompound = target
         }
-        if (!checked[formula.resourceType1]) {
-            if (this.isReadyToProduce(formula.resourceType1)) {
-                return this.memory.labTargetCompound = formula.resourceType1
+
+        // 둘 다 아니면 queue에 넣고 BFS 시작
+        const queue = [target]
+        checked[target] = true
+
+        // BFS
+        while (queue.length > 0) {
+            // queue에서 하나 빼옴
+            const node = queue.shift()
+
+            // formula 확인
+            const formula = COMPOUNDS_FORMULA[node]
+            if (!formula) {
+                continue
             }
-            queue.push(formula.resourceType1)
-            checked[formula.resourceType1] = true
+
+            // node를 만드는 재료들이 adjacents
+            const adjacents = [formula.resourceType0, formula.resourceType1]
+
+            // 각 adjacent마다 확인
+            for (const adjacent of adjacents) {
+
+                // 이미 확인한 녀석이면 넘어가자
+                if (checked[adjacent]) {
+                    continue
+                }
+
+                // 확인 진행하자
+                const result = this.checkCompound(adjacent)
+
+                // adjacent가 충분히 있으면 다음으로 넘어가자
+                if (result === ERR_FULL) {
+                    continue
+                }
+
+                // 만들 수 있으면 요놈을 만들자
+                if (result === OK) {
+                    return this.memory.labTargetCompound = adjacent
+                }
+
+                // 둘 다 아니면 queue에 넣고 다음으로 넘어가자
+                queue.push(adjacent)
+                checked[adjacent] = true
+            }
+
+            // 만들만한 게 아무것도 없었으면 다음 target으로 넘어가자
         }
     }
 
-    return null
+    return this.memory.labTargetCompound = undefined
 }
 
-Room.prototype.isReadyToProduce = function (compound) {
-    if (!this.isMy) {
-        return false
-    }
-    if (this.controller.level < 6) {
-        return false
+Room.prototype.checkCompound = function (compound) {
+
+    // formula 없으면 오류
+    const formula = COMPOUNDS_FORMULA[compound]
+    if (!formula) {
+        return ERR_NOT_FOUND
     }
 
     const terminal = this.terminal
-    if (!terminal) {
-        return false
-    }
-    if (this.structures.lab.length < 3) {
-        return false
+
+    // 이미 충분히 있으면 오류. 이쪽 가지는 멈추기 (queue에 삽입X)
+    if (terminal.store[compound] >= formula.ratio * 1000) {
+        return ERR_FULL
     }
 
-    const formula = COMPOUNDS_FORMULA[compound]
-    if (!formula) {
-        return false
-    }
-    if (terminal.store[compound] >= formula.ratio * 1000) {
-        return false
-    }
+    // 만들 resource가 없으면 오류. (queue에 삽입)
     if (terminal.store[formula.resourceType0] < 1000 || terminal.store[formula.resourceType1] < 1000) {
-        return false
+        return ERR_NOT_ENOUGH_RESOURCES
     }
-    return true
+
+    // 모두 통과했으면 만들자
+    return OK
 }
 
 Room.prototype.getLabState = function () {
@@ -429,10 +480,10 @@ Room.prototype.getLabState = function () {
         return false
     }
 
-    if (this.sourceLabAmount) {
+    if (this.sourceLabAmount > 0) {
         return 'producing'
     }
-    if (this.reactionLabAmount) {
+    if (this.reactionLabAmount > 0) {
         return 'transfering'
     }
     return 'preparing'

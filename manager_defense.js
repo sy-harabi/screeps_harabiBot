@@ -14,7 +14,7 @@ Room.prototype.manageDefense = function () {
     const weak = []
 
     for (const target of targets) {
-        if (this.calcEnemyHealPower(target) - this.getTowerDamageFor(target) > 0) {
+        if (!this.controller.safeMode && this.calcEnemyHealPower(target) - this.getTowerDamageFor(target) > 0) {
             strong.push(target)
             continue
         }
@@ -28,7 +28,6 @@ Room.prototype.manageDefense = function () {
             hauler.memory.role = 'manager'
         }
     } else if (status.state === 'emergency' && strong.length === 0) {
-        delete this.heap._defenseCostMatrix
         status.state = 'normal'
         this.memory.militaryThreat = false
     }
@@ -48,8 +47,9 @@ Room.prototype.manageDefense = function () {
         if (!towerAttackCall) {
             const weakestRampart = this.weakestRampart
             if (this.weakestRampart) {
-                this.repairStructure(weakestRampart)
-
+                for (const tower of this.structures.tower) {
+                    tower.repair(weakestRampart)
+                }
             }
         }
     }
@@ -143,7 +143,7 @@ Room.prototype.manageTower = function () {
     }
 
     // 제일 약한 rampart가 200k 안되면 수리
-    if (weakestRampart.hits < 200000) {
+    if (weakestRampart.hits < 200000 && this.storage && this.storage.store[RESOURCE_ENERGY] > 10000) {
         for (const tower of this.structures.tower) {
             tower.repair(weakestRampart)
         }
@@ -416,10 +416,13 @@ Room.prototype.getDefenseCostMatrix = function (resultCost = 254, option = {}) {
 Object.defineProperties(Room.prototype, {
     isWalledUp: {
         get() {
+            if (this.heap._isWalledUp && Game.time % 10 !== 0) {
+                return this.heap._isWalledUp
+            }
             const spawn = this.structures.spawn[0]
             // spawn 없으면 false
             if (!spawn) {
-                return false
+                return this.heap._isWalledUp = false
             }
             // spawn 주변 위치 확인
             const nearSpawnPositions = spawn.pos.getAtRange(1)
@@ -429,11 +432,11 @@ Object.defineProperties(Room.prototype, {
                     continue
                 } else {
                     // spawn 주변 위치에 하나라도 defenseCostMatrix cost 낮은 위치 있으면 막혀있는거
-                    return true
+                    return this.heap._isWalledUp = true
                 }
             }
             //여기까지 왔으면 spawn 주변 위치 모두 cost 높은 거니까 뚫린거
-            return false
+            return this.heap._isWalledUp = false
         }
     }
 })

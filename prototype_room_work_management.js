@@ -77,7 +77,7 @@ Room.prototype.manageUpgrade = function () {
     }
     const container = this.controller.container
 
-    const tombstones = this.controller.pos.findInRange(FIND_TOMBSTONES, 3).filter(tombstone => tombstone.store[RESOURCE_ENERGY])
+    const tombstones = this.controller.pos.findInRange(FIND_TOMBSTONES, 3).filter(tombstone => tombstone.store[RESOURCE_ENERGY] > 0)
     const droppedEnergies = this.controller.pos.findInRange(FIND_DROPPED_RESOURCES, 3).filter(droppedResource => droppedResource.resourceType === RESOURCE_ENERGY)
     const droppedEnergy = droppedEnergies[0]
 
@@ -95,13 +95,15 @@ Room.prototype.manageUpgrade = function () {
                 continue
             }
             if (container) {
-                if (container.store['energy'] > 0) {
+                if (container.store[RESOURCE_ENERGY] > 0) {
                     laborer.getEnergyFrom(container.id)
                 }
                 continue
             }
             if (this.controller.linked) {
-                laborer.getEnergyFrom(controllerLink.id)
+                if (controllerLink.store[RESOURCE_ENERGY] > 0) {
+                    laborer.getEnergyFrom(controllerLink.id)
+                }
                 continue
             }
             this.laborersNeedDelivery = true

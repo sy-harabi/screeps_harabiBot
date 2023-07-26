@@ -1,7 +1,7 @@
+const SCOUT_INTERVAL = 20000 // scout 완료 후 얼마나 기다렸다가 다시 시작할 것인지
+
 Room.prototype.manageScout = function () {
   const MAX_DISTANCE = 12 // 최대 거리
-  const SCOUT_INTERVAL = 20000 // scout 완료 후 얼마나 기다렸다가 다시 시작할 것인지
-
   if (this.controller.level < 4) {
     return
   }
@@ -36,14 +36,10 @@ Room.prototype.manageScout = function () {
   }
 
   if (status.state === 'BFS') {
-    if (status.adjacents && status.adjacents.length) {
+    if (status.adjacents && status.adjacents.length > 0) {
       while (status.adjacents.length > 0) {
-        const adjacentName = status.adjacents.shift()
-        if (map[adjacentName] && ((map[adjacentName].lastScout + SCOUT_INTERVAL) > Game.time || map[adjacentName].distance < map[status.node].distance + 1)) {
-          continue
-        }
+        status.next = status.adjacents.shift()
         status.state = 'scout'
-        status.next = adjacentName
         return
       }
     }
@@ -62,6 +58,7 @@ Room.prototype.manageScout = function () {
       if (map[node].inaccessible && map[node].inaccessible > Game.time) {
         continue
       }
+      const thisRoomName = this.name
       status.node = node
       status.adjacents = getAdjacents(node).filter(function (roomName) {
         const room = Game.rooms[roomName]
@@ -80,6 +77,20 @@ Room.prototype.manageScout = function () {
           return false
         }
 
+        // 이미 본거면 제외
+        if (map[roomName] &&
+          map[roomName].host === thisRoomName &&
+          Game.time < map[roomName].lastScout + SCOUT_INTERVAL) {
+          return false
+        }
+
+        // 다른 더 가까운 방에서 봤으면 제외
+        if (map[roomName] &&
+          map[roomName].distance &&
+          map[roomName].distance < map[status.node].distance + 1) {
+          return false
+        }
+
         // 방 안보이면 정찰 대상
         if (!room) {
           return true
@@ -94,12 +105,8 @@ Room.prototype.manageScout = function () {
         return true
       })
       while (status.adjacents.length > 0) {
-        const adjacentName = status.adjacents.shift()
-        if (map[adjacentName] && ((Game.time < map[adjacentName].lastScout + SCOUT_INTERVAL) || map[adjacentName].distance < map[node].distance + 1)) {
-          continue
-        }
+        status.next = status.adjacents.shift()
         status.state = 'scout'
-        status.next = adjacentName
         return
       }
     }
@@ -110,6 +117,11 @@ Room.prototype.manageScout = function () {
   }
 
   if (status.state === 'scout') {
+    if (!map[status.node] || map[status.node].distance === undefined || !map[status.node].host || map[status.node].host !== this.name) {
+      delete status.next
+      status.state = 'BFS'
+      return
+    }
     const nodeDistance = map[status.node].distance
     const result = this.scoutRoom(status.next, nodeDistance + 1)
     if (result === OK) {
@@ -157,6 +169,46 @@ Room.prototype.resetScout = function () {
 Room.prototype.scoutRoom = function (roomName, distance) {
   const map = OVERLORD.map
 
+  // highway면 대충 넘기자
+  const roomCoord = roomName.match(/[a-zA-Z]+|[0-9]+/g)
+  roomCoord[1] = Number(roomCoord[1])
+  roomCoord[3] = Number(roomCoord[3])
+  const x = roomCoord[1]
+  const y = roomCoord[3]
+  if (x % 10 === 0 || y % 10 === 0) {
+    let host = this.name
+
+    const lastScout = Game.time
+
+    const numSource = 0
+    const isController = false
+
+    const isClaimed = false
+    const isReserved = false
+
+    const defense = undefined
+
+    const inaccessible = false
+
+    const isRemoteCandidate = false
+    const isClaimCandidate = false
+
+    map[roomName] = {
+      lastScout,
+      numSource,
+      isController,
+      isClaimed,
+      isReserved,
+      defense,
+      host,
+      distance,
+      isRemoteCandidate,
+      isClaimCandidate,
+      inaccessible
+    }
+    return OK
+  }
+
   const scouters = getCreepsByRole(this.name, 'scouter')
   const scouter = scouters[0]
   if (!scouter) {
@@ -170,7 +222,7 @@ Room.prototype.scoutRoom = function (roomName, distance) {
   scouter.notifyWhenAttacked(false)
 
   if (scouter.room.name !== roomName) {
-    const result = scouter.moveToRoom(roomName)
+    const result = scouter.moveToRoom(roomName, 1)
     if (result.incomplete || result === ERR_NO_PATH) {
       return ERR_NO_PATH
     }

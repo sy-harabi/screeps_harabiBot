@@ -4,11 +4,18 @@ Room.prototype.manageClaim = function () {
         return
     }
     for (const roomName of Object.keys(this.memory.claimRoom)) {
+        Game.map.visual.line(new RoomPosition(25, 25, this.name), new RoomPosition(25, 25, roomName), { color: '#001eff', width: '2', opacity: 1 })
+        Game.map.visual.circle(new RoomPosition(25, 25, roomName), { fill: '#001eff' })
         this.claimRoom(roomName)
     }
 }
 
 Room.prototype.claimRoom = function (roomName) {
+    if (OVERLORD.myRooms.length >= Game.gcl.level) {
+        delete this.memory.claimRoom[roomName]
+        return
+    }
+
     // room memory에 status object 만들기
     this.memory.claimRoom = this.memory.claimRoom || {}
     this.memory.claimRoom[roomName] = this.memory.claimRoom[roomName] || {}
@@ -60,9 +67,14 @@ Room.prototype.claimRoom = function (roomName) {
     // defense part
 
     // defender가 죽은거면 방어 어려우니까 포기
+    if (targetRoom) {
+        targetRoom.checkTombstone()
+    }
     const map = OVERLORD.map
     if (map[roomName] && map[roomName].threat) {
         delete this.memory.claimRoom[roomName]
+        const centerPos = new RoomPosition(25, 25, this.name)
+        centerPos.createFlag(`clear ${this.name}`)
         return
     }
     const defenders = getCreepsByRole(roomName, 'colonyDefender')

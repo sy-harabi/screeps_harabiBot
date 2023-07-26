@@ -90,6 +90,9 @@ Room.prototype.ruleColony = function (colonyName) {
 
         const sources = Object.keys(status.infraPlan).map(id => Game.getObjectById(id))
         for (const source of sources) {
+            if (!source) {
+                this.abandonColony(colonyName)
+            }
             const laborers = getCreepsByRole(colonyName, 'colonyLaborer').filter(creep => creep.memory.sourceId === source.id)
             let numWork = 0;
             for (const laborer of laborers) {
@@ -220,7 +223,13 @@ Room.prototype.manageColony = function () {
 }
 
 Room.prototype.abandonColony = function (colonyName) {
-    if (this.memory.colony && this.memory.colony) {
+    const colony = Game.rooms[colonyName]
+    if (colony) {
+        for (const constructionSite of colony.constructionSites) {
+            constructionSite.remove()
+        }
+    }
+    if (this.memory.colony) {
         return delete this.memory.colony[colonyName]
     }
 }
@@ -234,15 +243,6 @@ Room.prototype.checkColonyInvader = function (colonyName) {
     const hostileCreeps = colony.find(FIND_HOSTILE_CREEPS).filter(creep => creep.checkBodyParts(['work', 'attack', 'ranged_attack', 'heal', 'claim']))
     const killerCreeps = hostileCreeps.filter(creep => creep.checkBodyParts(['attack', 'ranged_attack', 'heal']))
 
-    let attackPower = 0
-    let healPower = 0
-    for (const killerCreep of killerCreeps) {
-        attackPower += killerCreep.calcAttackPower()
-        healPower += killerCreep.calcHealPower()
-    }
-    if (healPower > 100) {
-        this.abandonColony(colonyName)
-    }
     if (!status.isInvader && hostileCreeps.length) {
         status.isInvader = true
         colony.memory.isInvader = true
@@ -322,6 +322,16 @@ Room.prototype.getColonyInfraPlan = function (colonyName, status) {
     console.log(`Get infraPlan for ${colonyName}`)
     status.infraPlan = {}
     const roadPositions = []
+    const basePlan = this.basePlan
+    if (basePlan) {
+        for (let i = 1; i <= 8; i++) {
+            for (const structure of basePlan[`lv${i}`]) {
+                if (structure.structureType === STRUCTURE_ROAD) {
+                    roadPositions.push(structure.pos)
+                }
+            }
+        }
+    }
     outer:
     for (const source of colony.sources) {
         const path = PathFinder.search(source.pos, { pos: this.storage.pos, range: 1 }, {

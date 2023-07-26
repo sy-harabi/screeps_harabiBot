@@ -67,7 +67,7 @@ Room.prototype.checkTombstone = function () {
     // tower 있다는건 다른 사람 방이거나 InvaderCore 있다는 뜻.
     if (hostileStructures.length) {
         map[this.name].inaccessible = Game.time + 20000
-        map[this.name].lastScout = this.time
+        map[this.name].lastScout = Game.time
         return
     }
 
@@ -78,7 +78,11 @@ Room.prototype.checkTombstone = function () {
     isDefenderMurdered = false
     for (const attackEvent of attackEvents) {
         const targetId = attackEvent.data.targetId
-        const deadCreep = myTombstones.find(tombstone => tombstone.creep.id === targetId).creep
+        const targetTombstone = myTombstones.find(tombstone => tombstone.creep.id === targetId)
+        if (!targetTombstone) {
+            continue
+        }
+        const deadCreep = targetTombstone.creep
         const attacker = Game.getObjectById(attackEvent.objectId)
         const owner = attacker ? attacker.owner : undefined
         const username = owner ? owner.username : undefined
@@ -102,12 +106,12 @@ Room.prototype.checkTombstone = function () {
 
     if (isMurdered) {
         map[this.name].inaccessible = Game.time + 1500
-        map[this.name].lastScout = this.time
+        map[this.name].lastScout = Game.time
     }
 
     if (isDefenderMurdered) {
         map[this.name].inaccessible = Game.time + 1500
-        map[this.name].lastScout = this.time
+        map[this.name].lastScout = Game.time
         map[this.name].threat = true
         if (OVERLORD.colonies.includes(this.name) && this.memory.host) {
             const hostRoom = Game.rooms[this.memory.host]
@@ -330,12 +334,11 @@ Room.prototype.manageFactory = function () {
 
     this.factoryDistribution()
 
-    if (!this.memory.factoryObjective && this.memory.factoryObjectiveChecked && Game.time - this.memory.factoryObjectiveChecked < 1000) {
-        return
+    const factoryTarget = this.getFactoryTarget()
+
+    if (factoryTarget) {
+        this.operateFactory(factoryTarget)
     }
-
-    this.operateFactory(this.factoryObjective)
-
 }
 
 Room.prototype.managePowerSpawn = function () {

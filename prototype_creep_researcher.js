@@ -81,7 +81,7 @@ Creep.prototype.returnAll = function () {
 
 Creep.prototype.delivery = function () {
 
-    if (this.ticksToLive < 30) {
+    if (this.ticksToLive < 50) {
         if (this.store.getUsedCapacity()) {
             this.returnAll()
             return
@@ -92,23 +92,37 @@ Creep.prototype.delivery = function () {
     }
 
     if (this.isFree) {
-        if (!this.store.getUsedCapacity()) {
-            return
+
+        if (this.store.getUsedCapacity() > 0) {
+            return this.returnAll()
         }
-        if (!this.room.labs) {
+
+        if (this.room.structures.lab.length < 3) {
             return
         }
 
-        if (!this.room.labs.centerLab.length) {
+        if (!this.heap.researcherPos) {
+            let xSum = 0
+            let ySum = 0
+            for (i = 0; i < 3; i++) {
+                const lab = this.room.structures.lab[i]
+                if (!lab) {
+                    break
+                }
+                xSum += lab.pos.x
+                ySum += lab.pos.y
+            }
+            const x = xSum / 3
+            const y = ySum / 3 + 1
+            if (isValidCoord(x, y)) {
+                this.heap.researcherPos = new RoomPosition(x, y, this.room.name)
+            }
             return
         }
-
-        const centerLab = Game.getObjectById(this.room.labs.centerLab[0])
-
-        if (this.pos.getRangeTo(centerLab) < 2) {
+        if (this.pos.getRangeTo(this.heap.researcherPos) <= 1) {
             return
         }
-        return this.moveMy(centerLab, { range: 1 })
+        return this.moveMy(this.heap.researcherPos, { range: 1 })
     }
 
     const deliveryRequest = this.heap.deliveryRequest

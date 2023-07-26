@@ -90,40 +90,21 @@ global.SELF_DIRECTED_CREEP_ROELS = [
 ]
 
 global.CROSS = [
-    { x: 0, y: 0 },
     { x: 1, y: 0 },
     { x: -1, y: 0 },
     { x: 0, y: 1 },
     { x: 0, y: -1 },
-]
-
-global.CROSS_EDGE = [
-    { x: 2, y: 0 },
-    { x: 1, y: 1 },
-    { x: 0, y: 2 },
-    { x: -1, y: 1 },
-    { x: -2, y: 0 },
-    { x: -1, y: -1 },
-    { x: 0, y: -2 },
-    { x: 1, y: -1 },
-]
-
-global.CORNER = [
-    { x: 1, y: 1 },
-    { x: -1, y: 1 },
-    { x: -1, y: -1 },
-    { x: 1, y: -1 },
 ]
 
 global.NEAR = [
+    { x: 0, y: 1 },
+    { x: 0, y: -1 },
+    { x: -1, y: 0 },
     { x: 1, y: 0 },
     { x: 1, y: 1 },
-    { x: 0, y: 1 },
-    { x: -1, y: 1 },
-    { x: -1, y: 0 },
-    { x: -1, y: -1 },
-    { x: 0, y: -1 },
     { x: 1, y: -1 },
+    { x: -1, y: 1 },
+    { x: -1, y: -1 },
 ]
 
 global.ECONOMY_STANDARD = {
@@ -155,7 +136,7 @@ global.WORK_BY_CONTROLLER_LEVEL = [
     { min: 6, max: 20 },
     { min: 8, max: 24 },
     { min: 9, max: 24 },
-    { min: 11, max: 33 },
+    { min: 10, max: 30 },
     { min: 10, max: 30 },
 ]
 

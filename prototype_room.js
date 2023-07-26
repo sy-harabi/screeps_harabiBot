@@ -113,6 +113,13 @@ Object.defineProperties(Room.prototype, {
                 for (const structure of this.structures[STRUCTURE_ROAD]) {
                     costs.set(structure.pos.x, structure.pos.y, 1)
                 }
+                for (const source of this.sources) {
+                    for (const pos of source.pos.getAtRange(1)) {
+                        if (pos.terrain !== 1) {
+                            costs.set(pos.x, pos.y, 10)
+                        }
+                    }
+                }
                 for (const structure of this.structures.obstacles) {
                     costs.set(structure.pos.x, structure.pos.y, 255)
                 }

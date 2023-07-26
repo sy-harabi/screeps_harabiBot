@@ -123,6 +123,12 @@ module.exports.loop = () => {
         if (name.includes('intershard')) {
             flag.claimIntershard()
         }
+        if (name.includes('baseplan')) {
+            if (flag.room) {
+                delete flag.room.heap.basePlan
+                flag.room.getBasePlanByPos(flag.pos)
+            }
+        }
     }
 
     // 방마다 roomManager 동작

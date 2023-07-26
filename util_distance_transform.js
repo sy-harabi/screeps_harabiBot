@@ -56,7 +56,6 @@ Room.prototype.getDistanceTransform = function () {
       nearDistances.push(cost.get(x, y))
       const distance = Math.min(...nearDistances)
       cost.set(x, y, distance)
-      this.visual.text(distance, x, y)
       result[distance].push(new RoomPosition(x, y, this.name))
     }
   }

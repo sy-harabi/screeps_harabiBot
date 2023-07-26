@@ -160,36 +160,6 @@ RoomPosition.prototype.isEqualTo = function (target) {
     return false
 }
 
-RoomPosition.prototype.getCorner = function (range) {
-    const result = []
-    for (const vector of CORNER) {
-        if (0 < Math.min(this.x + range * vector.x, this.y + range * vector.y) && Math.max(this.x + range * vector.x, this.y + range * vector.y) < 49) {
-            result.push(new RoomPosition(this.x + range * vector.x, this.y + range * vector.y, this.roomName))
-        }
-    }
-    return result
-}
-
-RoomPosition.prototype.getCross = function () {
-    const result = []
-    for (const vector of CROSS) {
-        if (isValidCoord(this.x + vector.x, this.y + vector.y)) {
-            result.push(new RoomPosition(this.x + vector.x, this.y + vector.y, this.roomName))
-        }
-    }
-    return result
-}
-
-RoomPosition.prototype.getCrossEdge = function () {
-    const result = []
-    for (const vector of CROSS_EDGE) {
-        if (isValidCoord(this.x + vector.x, this.y + vector.y)) {
-            result.push(new RoomPosition(this.x + vector.x, this.y + vector.y, this.roomName))
-        }
-    }
-    return result
-}
-
 RoomPosition.prototype.getAtRange = function (range) {
     const result = []
     for (let i = -range; i <= range; i++) {
@@ -219,60 +189,6 @@ RoomPosition.prototype.getInRange = function (range) {
     return result
 }
 
-RoomPosition.prototype.getAtDiagonalRange = function (range) {
-    const result = []
-    if (isValidCoord(this.x + range, this.y)) {
-        result.push(new RoomPosition(this.x + range, this.y, this.roomName))
-    }
-    if (isValidCoord(this.x - range, this.y)) {
-        result.push(new RoomPosition(this.x - range, this.y, this.roomName))
-    }
-    if (isValidCoord(this.x, this.y + range)) {
-        result.push(new RoomPosition(this.x, this.y + range, this.roomName))
-    }
-    if (isValidCoord(this.x, this.y - range)) {
-        result.push(new RoomPosition(this.x, this.y - range, this.roomName))
-    }
-    for (let dx = 1; dx < range; dx++) {
-        const dy = range - dx
-        if (isValidCoord(this.x + dx, this.y + dy)) {
-            result.push(new RoomPosition(this.x + dx, this.y + dy, this.roomName))
-        }
-        if (isValidCoord(this.x + dx, this.y - dy)) {
-            result.push(new RoomPosition(this.x + dx, this.y - dy, this.roomName))
-        }
-        if (isValidCoord(this.x - dx, this.y + dy)) {
-            result.push(new RoomPosition(this.x - dx, this.y + dy, this.roomName))
-        }
-        if (isValidCoord(this.x - dx, this.y - dy)) {
-            result.push(new RoomPosition(this.x - dx, this.y - dy, this.roomName))
-        }
-    }
-    result.sort((a, b) => this.getRangeTo(a) - this.getRangeTo(b))
-    return result
-}
-
-RoomPosition.prototype.getAtDiagonalRangeWithoutVertices = function (range) {
-    const result = []
-    for (let dx = 1; dx < range; dx++) {
-        const dy = range - dx
-        if (isValidCoord(this.x + dx, this.y + dy)) {
-            result.push(new RoomPosition(this.x + dx, this.y + dy, this.roomName))
-        }
-        if (isValidCoord(this.x + dx, this.y - dy)) {
-            result.push(new RoomPosition(this.x + dx, this.y - dy, this.roomName))
-        }
-        if (isValidCoord(this.x - dx, this.y + dy)) {
-            result.push(new RoomPosition(this.x - dx, this.y + dy, this.roomName))
-        }
-        if (isValidCoord(this.x - dx, this.y - dy)) {
-            result.push(new RoomPosition(this.x - dx, this.y - dy, this.roomName))
-        }
-    }
-    result.sort((a, b) => this.getRangeTo(a) - this.getRangeTo(b))
-    return result
-}
-
 RoomPosition.prototype.getAverageRange = function (array) {
     if (!array.length) {
         return false
@@ -285,14 +201,8 @@ RoomPosition.prototype.getAverageRange = function (array) {
 }
 
 RoomPosition.prototype.getClosestPathLength = function (array) {
-    let result = PathFinder.search(this, { pos: (array[0].pos || array[0]), range: 0 }).path.length
-    for (const obj of array) {
-        const newResult = PathFinder.search(this, { pos: (obj.pos || obj), range: 0 }).path.length
-        if (newResult < result) {
-            result = newResult
-        }
-    }
-    return result
+    const goals = array.map(obj => obj.pos || obj)
+    return PathFinder.search(this, goals).path.length
 }
 
 RoomPosition.prototype.getClosestRange = function (array) {
