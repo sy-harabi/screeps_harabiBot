@@ -49,7 +49,7 @@ Creep.prototype.moveToRoom = function (goalRoomName, ignoreMap = 0) {
 
 Creep.prototype.getEnergyFrom = function (id) {
     const target = Game.getObjectById(id)
-    if (!target) {
+    if (!target || (!target.amount && !(target.store && target.store[RESOURCE_ENERGY]))) {
         return ERR_INVALID_TARGET
     }
     if (this.pos.getRangeTo(target) > 1) {
@@ -84,14 +84,15 @@ Creep.prototype.searchPath = function (target, range = 0, maxRooms = 1, option =
     const mobility = this.getMobility()
     const targetPos = target.pos || target
 
-    // 목적지가 접근금지면 길 없음
-    if (ignoreMap === 0 && Memory.map[targetPos.roomName] && Memory.map[targetPos.roomName].inaccessible > Game.time) {
-        return ERR_NO_PATH
-    }
-
     let route = undefined
     // maxRooms가 1보다 크면 route 먼저 찾자
     if (maxRooms > 1) {
+
+        // 목적지가 접근금지면 길 없음
+        if (ignoreMap === 0 && Memory.map[targetPos.roomName] && Memory.map[targetPos.roomName].inaccessible > Game.time) {
+            return ERR_NO_PATH
+        }
+
         route = Game.map.findRoute(this.room, targetPos.roomName, {
             routeCallback(roomName, fromRoomName) {
                 // 현재 creep이 있는 방이면 무조건 쓴다
@@ -385,7 +386,7 @@ Creep.prototype.moveMy = function (target, option = {}) { //option = {range, avo
     }
 
     // path의 첫번째에 도착했으면 첫 번째를 지우자
-    if (this.pos.isEqualTo(this.heap.path[0])) {
+    if (this.heap.path[0] && this.pos.isEqualTo(this.heap.path[0])) {
         this.heap.path.shift()
     }
 

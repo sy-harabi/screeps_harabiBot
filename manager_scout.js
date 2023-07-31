@@ -50,7 +50,7 @@ Room.prototype.manageScout = function () {
         continue
       }
       if (map[node].distance >= MAX_DISTANCE) {
-        data.recordLog(`${this.name} ends scouting. we searched everything`)
+        data.recordLog(`${this.name} ends scouting. searched everything`)
         status.nextScoutTime = Game.time + SCOUT_INTERVAL
         status.state = 'wait'
         return
@@ -129,7 +129,6 @@ Room.prototype.manageScout = function () {
       delete status.next
       status.state = 'BFS'
     } else if (result === ERR_NO_PATH) {
-      data.recordLog(`${this.name} scouter cannot find path to ${status.next}`)
       delete status.next
       status.state = 'BFS'
     }
@@ -209,6 +208,11 @@ Room.prototype.scoutRoom = function (roomName, distance) {
     return OK
   }
 
+  // BFS 이후에 다른방에서 정찰했고 distance가 더 작으면
+  if (map[roomName] && map[roomName].distance && map[roomName].distance < distance) {
+    return OK
+  }
+
   const scouters = getCreepsByRole(this.name, 'scouter')
   const scouter = scouters[0]
   if (!scouter) {
@@ -241,7 +245,7 @@ Room.prototype.scoutRoom = function (roomName, distance) {
   const isClaimed = isController && room.controller.owner && (room.controller.owner.username !== MY_NAME)
   const isReserved = isController && room.controller.reservation && !['Invader'].includes(room.controller.reservation.username)
 
-  const numTower = room.structures.tower.filter(tower => tower.isActive()).length
+  const numTower = room.structures.tower.filter(tower => tower.RCLActionable).length
   const defense = numTower > 0 ? { numTower: numTower } : undefined
 
   const isAccessibleToContorller = isController && (scouter.moveMy(room.controller.pos, { range: 1 }) === OK)

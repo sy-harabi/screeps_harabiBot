@@ -175,7 +175,6 @@ global.getLevels = function (sourceVertices, exit, capacityMap) {
           connected = true
         }
       }
-
     }
   }
 

@@ -28,7 +28,6 @@ function Applicant(creep) {
 
 function Request(client) {
     this.id = client.id
-    this.client = client
     this.pos = client.pos
     this.priority = ENERGY_PRIORITY[client.structureType] || (!client.working ? 3 : ((client.store.getUsedCapacity() / client.store.getCapacity()) > 0.5 ? 5 : 4))
     this.amount = client.store.getFreeCapacity(RESOURCE_ENERGY)
@@ -172,7 +171,7 @@ Room.prototype.manageEnergySupply = function (arrayOfCreeps) {
     for (const applicant of applicants) {
         const creep = applicant.creep
         if (applicant.engaged) {
-            if (creep.giveEnergyTo(applicant.engaged.client.id) !== OK) {
+            if (creep.giveEnergyTo(applicant.engaged.id) !== OK) {
                 creep.heap.engaged = applicant.engaged
             }
             continue
@@ -196,7 +195,6 @@ function EnergyRequest(creep) {
 
 function EnergyDepot(depot) {
     this.id = depot.id
-    this.depot = depot
     this.pos = depot.pos
     this.priority = ENERGY_DEPOT_PRIORITY[depot.structureType] || (depot.destroyTime ? 2 : 1)
     this.amount = depot.amount || depot.store[RESOURCE_ENERGY]
@@ -207,20 +205,20 @@ Room.prototype.getEnergyDepots = function () {
     const level = this.controller.level
 
     if (!this.memory.militaryThreat) {
-        const tombstones = this.find(FIND_TOMBSTONES).filter(tombstone => tombstone.store[RESOURCE_ENERGY])
+        const tombstones = this.find(FIND_TOMBSTONES).filter(tombstone => tombstone.store[RESOURCE_ENERGY] > 50)
         for (const tombstone of tombstones) {
             energyDepots[tombstone.id] = new EnergyDepot(tombstone)
             energyDepots[tombstone.id].threshold = 50
         }
 
-        const droppedResources = this.find(FIND_DROPPED_RESOURCES).filter(droppedResource => droppedResource.resourceType === RESOURCE_ENERGY && droppedResource.amount > 200)
+        const droppedResources = this.find(FIND_DROPPED_RESOURCES).filter(droppedResource => droppedResource.resourceType === RESOURCE_ENERGY && droppedResource.amount > 100)
         const filteredDroppedResources = droppedResources.filter(droppedResource => droppedResource.pos.getClosestRange(this.sources) > 1)
         for (const droppedResource of filteredDroppedResources) {
             energyDepots[droppedResource.id] = new EnergyDepot(droppedResource)
             energyDepots[droppedResource.id].threshold = 100
         }
 
-        const ruins = this.find(FIND_RUINS).filter(ruin => ruin.store[RESOURCE_ENERGY] > 0)
+        const ruins = this.find(FIND_RUINS).filter(ruin => ruin.store[RESOURCE_ENERGY] > 50)
         for (const ruin of ruins) {
             energyDepots[ruin.id] = new EnergyDepot(ruin)
             energyDepots[ruin.id].threshold = 50
@@ -230,7 +228,6 @@ Room.prototype.getEnergyDepots = function () {
             const droppedEnergies = source.droppedEnergies
             for (const droppedEnergy of droppedEnergies) {
                 energyDepots[droppedEnergy.id] = new EnergyDepot(droppedEnergy)
-                energyDepots[droppedEnergy.id].threshold = 100
                 energyDepots[droppedEnergy.id].sourceId = source.id
             }
 
@@ -245,35 +242,22 @@ Room.prototype.getEnergyDepots = function () {
 
     if (this.terminal && this.terminal.store[RESOURCE_ENERGY] > (level === 8 ? 63000 : 5000)) {
         energyDepots[this.terminal.id] = new EnergyDepot(this.terminal)
+        energyDepots[this.terminal.id].forManager = true
     }
 
     if (this.storage) {
         if (this.heap.storageUse > 0) {
             energyDepots[this.storage.id] = new EnergyDepot(this.storage)
-            energyDepots[this.storage.id].numUse = this.heap.storageUse
+            energyDepots[this.storage.id].forManager = true
         }
 
         if (this.storage.link && this.storage.link.store.getUsedCapacity(RESOURCE_ENERGY) > 400 && !this.heap.emptyControllerLink) {
             energyDepots[this.storage.link.id] = new EnergyDepot(this.storage.link, 400)
+            energyDepots[this.storage.link.id].forManager = true
         }
     }
 
     return energyDepots
-}
-
-Room.prototype.getSourceEnergyDepots = function (source) {
-    const result = {}
-    const droppedEnergies = source.droppedEnergies
-    for (const droppedEnergy of droppedEnergies) {
-        result[droppedEnergy.id] = new EnergyDepot(droppedEnergy, 100, true)
-    }
-
-    const container = source.container
-    if (container) {
-        result[container.id] = new EnergyDepot(container, 0, true)
-    }
-
-    return result
 }
 
 Room.prototype.manageEnergyFetch = function (arrayOfCreeps) {
@@ -285,46 +269,61 @@ Room.prototype.manageEnergyFetch = function (arrayOfCreeps) {
     if (!Object.keys(requests).length) {
         return
     }
+
     const applicants = []
+    const sourceApplicants = {}
+    for (const source of this.sources) {
+        sourceApplicants[source.id] = []
+    }
+    const managerApplicants = []
+
     for (const creep of arrayOfCreeps) {
         if (creep.heap.reserved) {
-            const depot = Game.getObjectById(creep.heap.reserved.id)
-            if (!depot || (!depot.amount && !(depot.store && depot.store[RESOURCE_ENERGY]))) {
-                delete creep.heap.reserved
-                applicants.push(new EnergyRequest(creep))
+            const id = creep.heap.reserved.id
+            const result = creep.getEnergyFrom(id)
+            if (result !== ERR_INVALID_TARGET) {
+                if (result === OK) {
+                    delete creep.heap.reserved
+                }
+                if (requests[id]) {
+                    requests[id].amount -= creep.store.getFreeCapacity()
+                }
                 continue
             }
-            if (creep.getEnergyFrom(depot.id) === OK) {
-                delete creep.heap.reserved
-            }
-            if (requests[depot.id]) {
-                requests[depot.id].amount -= creep.store.getFreeCapacity()
-                if (requests[depot.id].numUse !== undefined) {
-                    requests[depot.id].numUse--
-                }
-            }
-        } else {
-            applicants.push(new EnergyRequest(creep))
+            delete creep.heap.reserved
+        }
+        const applicant = new EnergyRequest(creep)
+        applicants.push(applicant)
+        if (creep.memory.role === 'manager' || this.memory.militaryThreat) {
+            managerApplicants.push(applicant)
+            continue
+        }
+        if (creep.memory.sourceId && sourceApplicants[creep.memory.sourceId]) {
+            sourceApplicants[creep.memory.sourceId].push(applicant)
         }
     }
 
+
     const requestsArray = Object.values(requests)
 
-    const sourceApplicants = {}
-    for (const source of this.sources) {
-        sourceApplicants[source.id] = applicants.filter(applicant => applicant.creep.memory.sourceId === source.id)
-    }
-
     for (const request of requestsArray) {
+        if (request.amount <= (request.threshold || 0)) {
+            request.applicants = []
+            continue
+        }
         if (request.sourceId !== undefined) {
             request.applicants = new Array(...sourceApplicants[request.sourceId]).sort((a, b) => a.pos.getRangeTo(request.pos) - b.pos.getRangeTo(request.pos))
             continue
+        }
+        if (request.forManager) {
+            request.applicants = new Array(...managerApplicants).sort((a, b) => a.pos.getRangeTo(request.pos) - b.pos.getRangeTo(request.pos))
+
         }
         request.applicants = new Array(...applicants).sort((a, b) => a.pos.getRangeTo(request.pos) - b.pos.getRangeTo(request.pos))
     }
 
     while (true) {
-        const freeRequests = requestsArray.filter(request => (request.amount >= (request.threshold || 0) && request.applicants.length))
+        const freeRequests = requestsArray.filter(request => (request.amount > (request.threshold || 0) && request.applicants.length))
         if (!freeRequests.length) {
             break
         }
@@ -336,9 +335,6 @@ Room.prototype.manageEnergyFetch = function (arrayOfCreeps) {
             if (!bestApplicant.reserved) {
                 request.amount -= bestApplicant.amount
                 bestApplicant.reserved = request
-                if (request.numUse !== undefined) {
-                    request.numUse--
-                }
                 continue
             }
             const existingRequest = bestApplicant.reserved
@@ -349,13 +345,6 @@ Room.prototype.manageEnergyFetch = function (arrayOfCreeps) {
                 continue
             }
             request.amount -= bestApplicant.amount
-            if (request.numUse !== undefined) {
-                request.numUse--
-            }
-            existingRequest.amount += bestApplicant.amount
-            if (existingRequest.numUse !== undefined) {
-                existingRequest.numUse++
-            }
             bestApplicant.reserved = request
         }
     }
@@ -363,13 +352,13 @@ Room.prototype.manageEnergyFetch = function (arrayOfCreeps) {
     for (const applicant of applicants) {
         const creep = applicant.creep
         if (applicant.reserved) {
-            if (creep.getEnergyFrom(applicant.reserved.depot.id) !== OK) {
+            if (creep.getEnergyFrom(applicant.reserved.id) !== OK) {
                 creep.heap.reserved = applicant.reserved
             }
             continue
         }
 
-        if (creep.memory.role === 'manager') {
+        if (creep.memory.role === 'manager' || this.memory.militaryThreat) {
             if (this.storage) {
                 creep.moveMy(this.storage, { range: 1 })
                 continue

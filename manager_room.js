@@ -1,8 +1,4 @@
 Room.prototype.runRoomManager = function () {
-    if (!data.rooms[this.name]) {
-        data.rooms[this.name] = {}
-    }
-
     if (this.abondon) {
         this.abondonRoom()
     }
@@ -124,60 +120,63 @@ Room.prototype.checkTombstone = function () {
 }
 
 Room.prototype.manageSource = function () {
-    this.heap.sourceUtilizationRate = 0
-
+    let sourceUtilizationRate = 0
     for (const source of this.sources) {
         // RoomVisual
-        this.visual.text(`⛏️${source.info.numWork}/6`, source.pos.x + 0.5, source.pos.y - 0.25, { font: 0.5, align: 'left' })
-        this.visual.text(`🚚${source.info.numCarry}/${source.info.maxCarry}`, source.pos.x + 0.5, source.pos.y + 0.5, { font: 0.5, align: 'left' })
+        this.visual.text(`⛏️${source.info.numWork}/6`,
+            source.pos.x + 0.5, source.pos.y - 0.25,
+            { font: 0.5, align: 'left' }
+        )
+
+        this.visual.text(`🚚${source.info.numCarry}/${source.info.maxCarry}`,
+            source.pos.x + 0.5, source.pos.y + 0.5,
+            { font: 0.5, align: 'left' }
+        )
 
         // source 근처 energy 저장량 (container + dropped energy)
-        this.visual.text(` 🔋${source.energyAmountNear}/2000`, source.pos.x + 0.5, source.pos.y + 1.25, { font: 0.5, align: 'left' })
+        this.visual.text(` 🔋${source.energyAmountNear}/2000`,
+            source.pos.x + 0.5, source.pos.y + 1.25,
+            { font: 0.5, align: 'left' }
+        )
 
         // miner 비율 : 5 넘으면 1로 고정
         const minerRatio = Math.min(1, source.info.numWork / 5)
-        this.heap.sourceUtilizationRate += minerRatio
 
-        if (source.linked) {
-            // miner가 부족한 경우
-            if (source.info.numMiner === 0) {
-                this.requestMiner(source, 2)
-                continue
-            }
+        // hauler 비율 : miner비율 따라간다.
+        // linked여도 source 주변 에너지 많으면 maxHaluer 늘어나서 생산하게됨
+        const maxCarry = Math.ceil(minerRatio * source.info.maxCarry)
 
-            if (source.info.numMiner < source.available && source.info.numWork < 5) {
-                this.requestMiner(source, 3)
-                continue
-            }
+        // 0/0=NAN 꼴이 나오는 걸 방지하기 위해 삼항연산자 사용.
+        const haulerRatio =
+            maxCarry > 0
+                ? Math.min(source.info.numCarry / maxCarry, 1)
+                : 1
 
-            // hauler는 miner에 비레해서 생산
-            if (source.info.numCarry < Math.ceil(minerRatio * source.info.maxCarry) && source.info.numHauler < source.info.maxNumHauler) {
-                this.requestHauler(source.info.maxCarry - source.info.numCarry, { isUrgent: false, isManager: false, office: source })
-                continue
-            }
-        } else {
-            if (source.info.numWork === 0) {
-                this.requestMiner(source, 2)
-                continue
-            }
-            if (source.info.numCarry === 0) {
-                this.requestHauler(source.info.maxCarry, { isUrgent: true, isManager: false, office: source })
-                continue
-            }
-            if (source.info.numMiner < source.available && source.info.numWork < 5) {
-                this.requestMiner(source, 3)
-                continue
-            }
+        // minerRatio와 haulerRatio중에 작은 것이 이 souce의 utilizaitionRate
+        sourceUtilizationRate += Math.min(minerRatio, haulerRatio)
 
-            // hauler는 miner에 비레해서 생산
-            if (source.info.numCarry < Math.ceil(minerRatio * source.info.maxCarry) && source.info.numHauler < source.info.maxNumHauler) {
-                this.requestHauler(source.info.maxCarry - source.info.numCarry, { isUrgent: false, isManager: false, office: source })
-                continue
-            }
+        if (minerRatio === 0) {
+            this.requestMiner(source, 2)
+            continue
+        }
+
+        if (haulerRatio === 0) {
+            this.requestHauler(source.info.maxCarry, { isUrgent: true, isManager: false, office: source })
+            continue
+        }
+
+        if (minerRatio < 1 && source.info.numMiner < source.available) {
+            this.requestMiner(source, 3)
+            continue
+        }
+
+        if (haulerRatio < 1 && source.info.numHauler < source.info.maxNumHauler) {
+            this.requestHauler(source.info.maxCarry - source.info.numCarry, { isUrgent: false, isManager: false, office: source })
+            continue
         }
 
     }
-    this.heap.sourceUtilizationRate = this.heap.sourceUtilizationRate / (this.sources.length || 1) // 가동률 평균
+    this.heap.sourceUtilizationRate = sourceUtilizationRate / (this.sources.length || 1) // 가동률 평균
 }
 
 Room.prototype.manageExtractor = function () {
@@ -237,11 +236,7 @@ Object.defineProperties(Room.prototype, {
     },
     totalProgress: {
         get() {
-            if (!data.rooms[this.name]) {
-                data.rooms[this.name] = {}
-            }
-            data.rooms[this.name].totalProgress = this.controller.totalProgress
-            return
+            return this.controller.totalProgress
         }
     }
 })
@@ -318,9 +313,9 @@ Room.prototype.manageLab = function () {
         return this.operateBoost()
     }
 
-    const labTargetCompound = this.getLabTargetCompound()
-    if (labTargetCompound) {
-        const formula = COMPOUNDS_FORMULA[labTargetCompound]
+    const labTarget = this.getLabTarget()
+    if (labTarget) {
+        const formula = COMPOUNDS_FORMULA[labTarget]
         return this.operateLab(formula.resourceType0, formula.resourceType1)
     }
 }
@@ -376,7 +371,7 @@ Room.prototype.manageHighWay = function () {
 Room.prototype.manageVisual = function () {
     if (data.info) {
         const i = OVERLORD.myRooms.indexOf(this)
-        this.visual.rect(0, 1.75 + i, 37, 1, { fill: 'transparent', opacity: 1, stroke: 'white' })
+        this.visual.rect(X_ENTIRE.start, 1.75 + i, X_ENTIRE.end + 0.5, 1, { fill: 'transparent', opacity: 1, stroke: 'white' })
     }
 
     const controller = this.controller

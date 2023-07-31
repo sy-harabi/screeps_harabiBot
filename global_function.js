@@ -34,10 +34,8 @@ global.cleanRoomMemory = function () {
             colonyList.push(colonyName)
         }
     }
-    if (colonyList.length) {
-        data.recordLog(`number of colony: ${colonyList.length}`)
-        data.recordLog(`list of colony: ${colonyList}`)
-    }
+    Memory.info = Memory.info || {}
+    Memory.info.numRemotes = colonyList.length
     Object.keys(Memory.rooms).forEach( //메모리에 있는 방이름마다 검사
         function (roomName) {
             if (!Game.rooms[roomName] && !colonyList.includes(roomName)) { //해당 이름을 가진 방이 존재하지 않으면

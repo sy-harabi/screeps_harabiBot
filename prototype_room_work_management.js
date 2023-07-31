@@ -13,8 +13,10 @@ Room.prototype.manageWork = function () {
 
     // 건설할 곳이 있고 downgrade가 급하지 않으면 build부터
     if (this.constructionSites.length && !this.heap.upgradeFirst) {
-        this.constructing = true
+        this.heap.constructing = true
         return this.manageBuild()
+    } else {
+        this.heap.constructing = false
     }
 
     // 아니면 upgrade부터
@@ -46,6 +48,9 @@ Room.prototype.manageBuild = function () {
             if (laborer.room.name !== this.name) {
                 continue
             }
+            if (laborer.memory.task !== undefined) {
+                continue
+            }
             laborer.memory.task = laborer.pos.findClosestByRange(priorityTasks).id
         }
     }
@@ -72,7 +77,7 @@ Room.prototype.manageUpgrade = function () {
     // laborer 동작 및 이용가능한 laborer 찾기
     let laborers = getCreepsByRole(this.name, 'laborer')
     let controllerLink = undefined
-    if (this.controller.link && this.controller.link.isActive()) {
+    if (this.controller.link && this.controller.link.RCLActionable) {
         controllerLink = this.controller.link
     }
     const container = this.controller.container
@@ -256,7 +261,8 @@ Creep.prototype.buildTask = function () {
             delete this.heap.workingSpot
         } else {
             this.build(constructionSite)
-            return this.moveMy(this.heap.workingSpot.pos)
+            this.moveMy(this.heap.workingSpot.pos)
+            return
         }
     }
 

@@ -221,32 +221,29 @@ function colonyLaborer(creep) {
 
     // 행동
     if (creep.memory.working) {
-        if (!Game.getObjectById(creep.memory.task)) {
+        if (!creep.memory.task) {
             if (creep.room.constructionSites.length) {
                 creep.memory.task = creep.pos.findClosestByRange(creep.room.constructionSites).id
             } else {
-                creep.memory.task = false
+                creep.memory.task = undefined
             }
         }
 
-        if (creep.memory.task) {
-            const workshop = Game.getObjectById(creep.memory.task)
-            if (!workshop) {
-                delete creep.memory.task
-                return
+        const target = creep.memory.task ? Game.getObjectById(creep.memory.task) : undefined
+
+        if (!target) {
+            delete creep.memory.task
+            if (creep.room.name !== creep.memory.base) {
+                return creep.moveToRoom(creep.memory.base)
             }
-            if (creep.build(workshop) === -9) {
-                creep.moveMy(workshop, { range: 3 })
-            }
-            return
+            return creep.getRecycled()
         }
 
-        if (creep.room.name !== creep.memory.base) {
-            creep.moveMy(base, { range: 20 })
-            return
+        if (creep.pos.getRangeTo(target) > 3) {
+            return creep.moveMy(target, { range: 3 })
         }
-        creep.getRecycled()
-        return
+
+        return creep.build(target)
     }
 
     const colony = Game.rooms[creep.memory.colony]
@@ -257,9 +254,12 @@ function colonyLaborer(creep) {
             creep.moveMy(source, { range: 1 })
         }
         return
+    } else {
+        creep.moveToRoom(creep.memory.colony)
+        return
     }
 
-    creep.moveToRoom(creep.memory.colony)
+
 }
 
 function colonyMiner(creep) {
@@ -295,9 +295,8 @@ function colonyMiner(creep) {
     if (!source.container) {
         return false
     }
-
     if (creep.room.name !== creep.memory.colony || creep.harvest(source) === -9 || creep.pos.getRangeTo(source.container) > 0) {
-        creep.moveMy(source.container.pos)
+        creep.moveMy(source.container)
         return
     }
 

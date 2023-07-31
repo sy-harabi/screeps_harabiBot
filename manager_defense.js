@@ -134,8 +134,11 @@ Room.prototype.manageTower = function () {
 
     // 제일 약한 rampart도 threshold 넘으면 종료
     if (weakestRampart.hits >= threshold) {
+        this.heap.rampartOK = true
         return
     }
+
+    this.heap.rampartOK = false
 
     // wallMaker 없으면 spawn
     if (!this.creeps.wallMaker.length && this.storage && this.storage.store[RESOURCE_ENERGY] > 10000) {

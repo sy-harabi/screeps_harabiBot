@@ -5,7 +5,7 @@ Object.defineProperties(Source.prototype, {
                 return this.heap.waitingArea
             }
             const floodFill = this.room.floodFill([this.pos], { maxLevel: 3 }).positions
-            return this.heap.waitingArea = [...floodFill[1], ...floodFill[2], ...floodFill[3]]
+            return this.heap.waitingArea = [...floodFill[2], ...floodFill[3]]
         }
     },
     available: {
@@ -67,13 +67,13 @@ Object.defineProperties(Source.prototype, {
     },
     linked: {
         get() {
-            if (!this.link || !this.link.isActive()) {
+            if (!this.link || !this.link.RCLActionable) {
                 return false
             }
             if (!this.room.storage) {
                 return false
             }
-            if (!this.room.storage.link || !this.room.storage.link.isActive()) {
+            if (!this.room.storage.link || !this.room.storage.link.RCLActionable) {
                 return false
             }
             return true
@@ -99,7 +99,7 @@ Object.defineProperties(Source.prototype, {
             for (const hauler of haulers) {
                 this._info.numCarry += (hauler.body.filter(part => part.type === CARRY).length)
             }
-            this._info.maxCarry = this.linked ? 0 : (this.room.controller.linked || this.room.constructing) ? Math.max(10, Math.ceil(0.6 * this.range.spawn)) : Math.max(10, Math.ceil(0.6 * this.range.controller))
+            this._info.maxCarry = this.linked ? 0 : (this.room.controller.linked || this.room.heap.constructing) ? Math.max(10, Math.ceil(0.6 * this.range.spawn)) : Math.max(10, Math.ceil(0.6 * this.range.controller))
             if (this.energyAmountNear > 1500) {
                 this._info.maxCarry += 10
             }
@@ -111,18 +111,16 @@ Object.defineProperties(Source.prototype, {
     },
     range: {
         get() {
-            if (!this.room.heap.sourceRange) {
-                this.room.heap.sourceRange = {}
+            if (this.heap.range !== undefined) {
+                return this.heap.range
             }
-            if (!this.room.heap.sourceRange[this.id] || !this.room.heap.sourceRange[this.id].spawn) {
-                const spawn = this.room.structures.spawn[0]
-                const controller = this.room.controller
-                const option = { ignoreCreeps: true, range: 1 }
-                const pathLengthToSpawn = spawn ? this.pos.findPathTo(spawn, option).length : 0
-                const pathLengthToController = controller ? this.pos.findPathTo(controller, option).length : 0
-                this.room.heap.sourceRange[this.id] = { spawn: pathLengthToSpawn, controller: pathLengthToController }
-            }
-            return this.room.heap.sourceRange[this.id]
+            const spawn = this.room.structures.spawn[0]
+            const controller = this.room.controller
+            const option = { ignoreCreeps: true, range: 1 }
+            const pathLengthToSpawn = spawn ? this.pos.findPathTo(spawn, option).length : 0
+            const pathLengthToController = controller ? this.pos.findPathTo(controller, option).length : 0
+
+            return this.heap.range = { spawn: pathLengthToSpawn, controller: pathLengthToController }
         }
     },
     droppedEnergies: {

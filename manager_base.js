@@ -164,8 +164,20 @@ Room.prototype.optimizeBasePlan = function (numFirstAnchor = 10) {
     return OK
 }
 
-Room.prototype.getBasePlan = function (firstAnchor, costs) {
-    costs = costs.clone()
+const ROAD_COST = 1
+const DISCONNECTED_COST = 200
+const WORKSPACE_COST = 50
+const NEAR_WORKSPACE_COST = 30
+const STRUCTURE_COST = 255
+const WALL_COST = 255
+const EDGE_COST = 255
+
+function mod(m, n) {
+    return ((m % n) + n) % n
+}
+
+Room.prototype.getBasePlan = function (firstAnchor, inputCosts) {
+    const costs = inputCosts.clone()
     const basePlan = {}
     for (let i = 1; i <= 8; i++) {
         basePlan[`lv${i}`] = []
@@ -198,57 +210,32 @@ Room.prototype.getBasePlan = function (firstAnchor, costs) {
     for (const stamp of CLUSTER_STAMP) {
         const pos = new RoomPosition(firstAnchor.pos.x + stamp.x, firstAnchor.pos.y + stamp.y, this.name)
         structures[stamp.structureType].push(pos)
+        mincutSources.push(pos)
         if (stamp.structureType === 'road') {
             basePlan[`lv3`].push(pos.packPos('road'))
-        }
-        costs.set(pos.x, pos.y, 255)
-        mincutSources.push(pos)
-    }
-    for (const pos of anchors[0].border) {
-        structures.road.push(pos)
-        basePlan[`lv3`].push(pos.packPos('road'))
-        costs.set(pos.x, pos.y, 1)
-    }
-
-    // get third anchor (lab)
-    const floodFillForLabs = this.floodFill(structures.road, { maxLevel: 4, adjacents: CROSS }).positions
-    const labStampCandidats = [...floodFillForLabs[3], ...floodFillForLabs[4]]
-
-    let gotThirdAnchor = false
-    for (const pos of labStampCandidats) {
-        const anchor = pos.getAnchor(2, costs)
-        if (!anchor) {
+            costs.set(pos.x, pos.y, ROAD_COST)
             continue
         }
-        gotThirdAnchor = true
-        for (const stamp of LABS_STAMP) {
-            const areaPos = new RoomPosition(pos.x + stamp.x, pos.y + stamp.y, pos.roomName)
-            costs.set(areaPos.x, areaPos.y, 255)
-            mincutSources.push(areaPos)
-            structures[stamp.structureType].push(areaPos)
-            if (stamp.structureType === 'road') {
-                basePlan[`lv6`].push(areaPos.packPos('road'))
-            }
+        costs.set(pos.x, pos.y, STRUCTURE_COST)
+    }
+    for (const stamp of CLUSTER_BORDER_STAMP) {
+        const pos = new RoomPosition(firstAnchor.pos.x + stamp.x, firstAnchor.pos.y + stamp.y, this.name)
+        mincutSources.push(pos)
+        if (costs.get(pos.x, pos.y) < NEAR_WORKSPACE_COST) {
+            basePlan[`lv3`].push(pos.packPos('road'))
+            costs.set(pos.x, pos.y, ROAD_COST)
         }
-
-        for (const borderPos of anchor.border) {
-            costs.set(borderPos.x, borderPos.y, 1)
-            structures.road.push(borderPos)
-            basePlan[`lv6`].push(borderPos.packPos('road'))
-        }
-        break
     }
 
-    if (!gotThirdAnchor) {
-        console.log('cannot find lab position')
-        return { basePlan: basePlan, cost: Infinity }
-    }
+    const linkPositions = {}
+    linkPositions.storage = structures.link[0].pack()
 
-    // flood fill spawn && extensions && towers,observer
-    const floodFill = this.floodFill(structures.road)
+    // Flood fill spawn && extensions && towers,observer
+    const floodFill = this.floodFill(structures.spawn, { costMatrix: inputCosts })
+
     const floodFillCosts = floodFill.costMatrix
     const floodFillPositions = floodFill.positions
-    const floodFillResults = []
+
     const cross = [
         { x: 1, y: 0 },
         { x: -1, y: 0 },
@@ -256,60 +243,197 @@ Room.prototype.getBasePlan = function (firstAnchor, costs) {
         { x: 0, y: -1 },
     ]
 
-    const CENTER_X = (firstAnchor.pos.x + firstAnchor.pos.y - 1) % 4
-    const CENTER_Y = Math.abs(firstAnchor.pos.x - firstAnchor.pos.y + 1) % 4
-    const ROAD_X = (CENTER_X + 2) % 4
-    const ROAD_Y = (CENTER_Y + 2) % 4
+    let floodFillResults = []
+    const CENTER_SUM = mod(firstAnchor.pos.x + firstAnchor.pos.y + 1, 4)
+    const CENTER_DIFF = mod(firstAnchor.pos.x - firstAnchor.pos.y - 1, 4)
+    const ROAD_SUM = mod(CENTER_SUM + 2, 4)
+    const ROAD_DIFF = mod(CENTER_DIFF + 2, 4)
+
     outer:
-    for (let level = 1; level <= 15; level++) {
+    for (let level = 1; level <= 20; level++) {
         const positions = floodFillPositions[level]
+        if (!positions) {
+            console.log(`not enough extensions.`)
+            break
+        }
         for (const pos of positions) {
-            if (floodFillResults.length >= 67) {
+            // 73개 찾았으면 끝내자
+            if (floodFillResults.length >= 73) {
                 break outer
             }
-            if (Math.abs(pos.x + pos.y) % 4 === ROAD_X || Math.abs(pos.x - pos.y) % 4 === ROAD_Y) {
+            // 길 깔아야 되는 위치면 넘어가자
+            if ((mod(pos.x + pos.y, 4) === ROAD_SUM) || (mod(pos.x - pos.y, 4) === ROAD_DIFF)) {
                 continue
             }
+            // costs가 0이 아니면 넘어가자
             if (costs.get(pos.x, pos.y) > 0) {
                 continue
             }
-            floodFillResults.push(pos)
-            costs.set(pos.x, pos.y, 255)
-            mincutSources.push(pos)
-            if (Math.abs(pos.x + pos.y) % 4 === CENTER_X) {
+            // 위 1칸 아래 1칸 또는 왼쪽 1칸 오른쪽 1칸이 모두 cost가 200 이상이면 지나다닐 수가 없는거니까 제외
+            if (costs.get(pos.x + 1, pos.y) >= 200 && costs.get(pos.x - 1, pos.y) >= 200) {
                 continue
             }
-            for (const vector of cross) {
-                const roadPos = new RoomPosition(pos.x + vector.x, pos.y + vector.y, this.name)
-                if (Math.abs(roadPos.x + roadPos.y) % 4 === CENTER_X && Math.abs(roadPos.x - roadPos.y) % 4 === CENTER_Y) {
+            if (costs.get(pos.x, pos.y + 1) >= 200 && costs.get(pos.x, pos.y - 1) >= 200) {
+                continue
+            }
+
+            // 중앙일 때 위 2칸 아래 2칸 또는 왼쪽 2칸 오른쪽 2칸이 모두 cost가 200 이상이면 지나다닐 수가 없는거니까 제외
+
+            if (mod(pos.x + pos.y, 4) === CENTER_SUM) {
+                if (costs.get(pos.x + 2, pos.y) >= 200 && costs.get(pos.x - 2, pos.y) >= 200) {
                     continue
                 }
-                if (costs.get(roadPos.x, roadPos.y) <= 10) {
-                    structures.road.push(roadPos)
-                    basePlan[`lv4`].push(roadPos.packPos('road'))
-                    costs.set(roadPos.x, roadPos.y, 1)
+                if (costs.get(pos.x, pos.y + 2) >= 200 && costs.get(pos.x, pos.y - 2) >= 200) {
+                    continue
                 }
+            }
+
+            floodFillResults.push(pos)
+            costs.set(pos.x, pos.y, STRUCTURE_COST)
+            mincutSources.push(pos)
+        }
+    }
+    structures.factory.push(floodFillResults.shift())
+
+    const sourceLabPositions = []
+    const sourceLabCosts = new PathFinder.CostMatrix
+
+    for (const pos of floodFillResults) {
+        sourceLabCosts.set(pos.x, pos.y, 1)
+        // center에 있는 위치면 주변에 길 안깔아도 됨
+        if (mod(pos.x + pos.y, 4) === CENTER_SUM) {
+            continue
+        }
+        // 주변 확인하자
+        sourceLabPositions.push(pos)
+        for (const vector of cross) {
+            const roadPos = new RoomPosition(pos.x + vector.x, pos.y + vector.y, this.name)
+            // 중앙일때, 건물 있으면 길 깔지 말고 건물 없으면 길 깔자
+            if (mod(roadPos.x + roadPos.y, 4) === CENTER_SUM && mod(roadPos.x - roadPos.y, 4) === CENTER_DIFF) {
+                if (costs.get(roadPos.x, roadPos.y) <= NEAR_WORKSPACE_COST) {
+                    structures.road.push(roadPos)
+                    costs.set(roadPos.x, roadPos.y, ROAD_COST)
+                }
+                continue
+            }
+            // 중앙 아니면 주변에 길 깔자
+            if (costs.get(roadPos.x, roadPos.y) <= NEAR_WORKSPACE_COST) {
+                structures.road.push(roadPos)
+                costs.set(roadPos.x, roadPos.y, ROAD_COST)
             }
         }
     }
-    for (let i = 0; i < 1; i++) {
-        const pos = floodFillResults.pop()
-        structures.observer.push(pos)
+
+    const SECOND_SOURCE_LAB = [
+        { x: 0, y: -1 },
+        { x: 0, y: -2 },
+        { x: 1, y: -1 },
+        { x: 1, y: 0 },
+        { x: 1, y: 1 },
+        { x: 2, y: 0 },
+    ]
+
+    let isLab = false
+    outerLab:
+    for (const firstSourceLab of sourceLabPositions) {
+        let secondSourceLabCandidates = []
+        SECOND_SOURCE_LAB.forEach(vector => {
+            const x = firstSourceLab.x + vector.x
+            const y = firstSourceLab.y + vector.y
+            if (isValidCoord(x, y)) {
+                secondSourceLabCandidates.push(new RoomPosition(x, y, this.name))
+            }
+        })
+        for (const secondSourceLab of secondSourceLabCandidates) {
+            if (sourceLabCosts.get(secondSourceLab.x, secondSourceLab.y) < 1) {
+                continue
+            }
+            let numReactionLab = 0
+            let labPositions = []
+            for (const pos of firstSourceLab.getInRange(2)) {
+                if (numReactionLab >= 10) {
+                    break
+                }
+                if (sourceLabCosts.get(pos.x, pos.y) < 1) {
+                    continue
+                }
+                if (pos.getRangeTo(secondSourceLab) > 2) {
+                    continue
+                }
+                numReactionLab++
+                labPositions.push(pos)
+            }
+            if (numReactionLab === 10) {
+                isLab = true
+                for (const pos of labPositions) {
+                    structures.lab.push(pos)
+                    floodFillResults = floodFillResults.filter(element => element.getRangeTo(pos) > 0)
+                    this.visual.circle(pos, { fill: 'green', radius: 0.5 })
+                }
+                break outerLab
+            }
+        }
     }
+
+    if (!isLab) {
+        console.log('cannot find lab position')
+        return { basePlan: basePlan, cost: Infinity }
+    }
+
+    structures.observer.push(floodFillResults.pop())
+    structures.nuker.push(floodFillResults.shift())
+
+    // get third anchor (lab)
+    // const MAX_DISTANCE_TO_LAB = 30
+    // const floodFillForLabs = this.floodFill(structures.terminal, { maxLevel: MAX_DISTANCE_TO_LAB, adjacents: CROSS }).positions
+    // const labStampCandidats = []
+    // for (i = 1; i < MAX_DISTANCE_TO_LAB; i++) {
+    //     labStampCandidats.push(...floodFillForLabs[i])
+    // }
+
+    // let gotThirdAnchor = false
+    // for (const pos of labStampCandidats) {
+    //     const dx = pos.x - firstAnchor.pos.x
+    //     const dy = pos.y - firstAnchor.pos.y
+
+    //     const LABS_STAMP =
+    //         dx * dy >= 0
+    //             ? LABS_STAMP_TOP_LEFT
+    //             : LABS_STAMP_TOP_RIGHT
+
+    //     const anchor = pos.getLabAnchor(costs, LABS_STAMP)
+    //     if (!anchor) {
+    //         continue
+    //     }
+
+    //     gotThirdAnchor = true
+    //     for (const stamp of LABS_STAMP) {
+    //         const areaPos = new RoomPosition(pos.x + stamp.x, pos.y + stamp.y, pos.roomName)
+    //         mincutSources.push(areaPos)
+    //         structures[stamp.structureType].push(areaPos)
+    //         if (stamp.structureType === 'road') {
+    //             basePlan[`lv6`].push(areaPos.packPos('road'))
+    //             costs.set(areaPos.x, areaPos.y, ROAD_COST)
+    //         } else {
+    //             costs.set(areaPos.x, areaPos.y, STRUCTURE_COST)
+    //         }
+    //     }
+    //     break
+    // }
+
+    // if (!gotThirdAnchor) {
+
+    // }
+
 
     // roads to controller
     let pathCost = 0
-    let costsForRoad = costs.clone()
-
-    for (const pos of structures.road) {
-        costsForRoad.set(pos.x, pos.y, 1)
-    }
 
     const controllerPathSearch = PathFinder.search(firstSpawnPos, { pos: this.controller.pos, range: 2 }, {
         plainCost: 2,
         swampCost: 2,
         roomCallback: function (roomName) {
-            return costsForRoad
+            return costs
         },
         maxOps: 10000,
         maxRooms: 1
@@ -325,17 +449,13 @@ Room.prototype.getBasePlan = function (firstAnchor, costs) {
 
     const controllerLinkPos = path.pop()
     structures.link.push(controllerLinkPos)
-    costs.set(controllerLinkPos.x, controllerLinkPos.y, 255)
-    costsForRoad.set(controllerLinkPos.x, controllerLinkPos.y, 255)
+    linkPositions.controller = controllerLinkPos.pack()
+    costs.set(controllerLinkPos.x, controllerLinkPos.y, STRUCTURE_COST)
 
     for (const pos of path) {
         structures.road.push(pos)
         basePlan[`lv3`].push(pos.packPos('road'))
-        if (this.controller.pos.getRangeTo(pos) < 3) {
-            continue
-        }
-        costs.set(pos.x, pos.y, 5)
-        costsForRoad.set(pos.x, pos.y, 1)
+        costs.set(pos.x, pos.y, ROAD_COST)
     }
 
     // roads to sources
@@ -345,7 +465,7 @@ Room.prototype.getBasePlan = function (firstAnchor, costs) {
             plainCost: 2,
             swampCost: 2,
             roomCallback: function (roomName) {
-                return costsForRoad
+                return costs
             },
             maxOps: 10000,
             maxRooms: 1
@@ -362,22 +482,20 @@ Room.prototype.getBasePlan = function (firstAnchor, costs) {
         const containerPos = path.pop()
         structures.container.push(containerPos)
 
-        costs.set(containerPos.x, containerPos.y, 255)
-        costsForRoad.set(containerPos.x, containerPos.y, 255)
+        costs.set(containerPos.x, containerPos.y, STRUCTURE_COST)
 
         structures.road.push(...path)
         for (const pos of path) {
             basePlan[`lv3`].push(pos.packPos('road'))
-            costs.set(pos.x, pos.y, 5)
-            costsForRoad.set(pos.x, pos.y, 1)
+            costs.set(pos.x, pos.y, ROAD_COST)
         }
-        const linkPos = structures.link[0].findClosestByRange(containerPos.getAtRange(1).filter(pos => ![1, 5, 255].includes(costs.get(pos.x, pos.y))))
+        const linkPos = structures.link[0].findClosestByRange(containerPos.getAtRange(1).filter(pos => [NEAR_WORKSPACE_COST, WORKSPACE_COST].includes(costs.get(pos.x, pos.y))))
         if (!linkPos) {
             continue
         }
         structures.link.push(linkPos)
-        costs.set(linkPos.x, linkPos.y, 255)
-        costsForRoad.set(linkPos.x, linkPos.y, 255)
+        linkPositions[source.id] = linkPos.pack()
+        costs.set(linkPos.x, linkPos.y, STRUCTURE_COST)
     }
 
     // roads to mineral + extractor
@@ -386,7 +504,7 @@ Room.prototype.getBasePlan = function (firstAnchor, costs) {
         plainCost: 2,
         swampCost: 2,
         roomCallback: function (roomName) {
-            return costsForRoad
+            return costs
         },
         maxOps: 10000,
         maxRooms: 1
@@ -397,32 +515,35 @@ Room.prototype.getBasePlan = function (firstAnchor, costs) {
     }
 
     const mineralPath = mineralPathSearch.path
-    pathCost += mineralPath.length
 
     const mineralContainerPos = mineralPath.pop()
     structures.container.push(mineralContainerPos)
-    costs.set(mineralContainerPos.x, mineralContainerPos.y, 255)
-    costsForRoad.set(mineralContainerPos.x, mineralContainerPos.y, 255)
+    costs.set(mineralContainerPos.x, mineralContainerPos.y, STRUCTURE_COST)
     structures.road.push(...mineralPath)
     for (const pos of mineralPath) {
         basePlan[`lv6`].push(pos.packPos('road'))
-        costs.set(pos.x, pos.y, 5)
-        costsForRoad.set(pos.x, pos.y, 1)
+        costs.set(pos.x, pos.y, ROAD_COST)
     }
 
     // min-cut
-    const nearPoses = new Set()
-    for (const pos of mincutSources) {
+    const mincutFloodFill = this.floodFill(mincutSources, { maxLevel: 3, costMatrix: inputCosts })
+    const sourcePositions = [...mincutSources, ...mincutFloodFill.positions[1], ...mincutFloodFill.positions[2], ...mincutFloodFill.positions[3]]
+
+    const nearPoses = []
+    for (const pos of sourcePositions) {
+
+        // this.visual.circle(pos, { fill: 'blue', radius: 0.5, opacity: 0.3 })
         for (const posNear of pos.getAtRange(3)) {
-            nearPoses.add(posNear)
+            nearPoses.push(posNear)
         }
     }
+
     const mincutCostMap = new PathFinder.CostMatrix
     const terrain = this.getTerrain()
     for (let x = 0; x < 50; x++) {
         for (let y = 0; y < 50; y++) {
             if (terrain.get(x, y) === 1) {
-                mincutCostMap.set(x, y, 255)
+                mincutCostMap.set(x, y, WALL_COST)
                 continue
             }
             const cost = 1 + (floodFillCosts.get(x, y) >> 1)
@@ -431,40 +552,45 @@ Room.prototype.getBasePlan = function (firstAnchor, costs) {
     }
 
     const mincut = this.mincutToExit(nearPoses, mincutCostMap)
-    const cuts = mincut.cuts
+    const cuts = mincut.cuts.map((cut) => {
+        const coord = parseVerticeToPos(cut)
+        return new RoomPosition(coord.x, coord.y, this.name)
+    })
     const insides = mincut.insides
-    const outsides = mincut.outsides
+    const outsides = mincut.outsides.map((outside) => {
+        const coord = parseVerticeToPos(outside)
+        return new RoomPosition(coord.x, coord.y, this.name)
+    })
 
     let cost = 0
     const checkRampart = new PathFinder.CostMatrix
     const storagePos = structures.storage[0]
-    const costsForRampart = costsForRoad.clone()
+    const costsForRampart = costs.clone()
+    const RAMPART_ROAD_COST = 5
     for (let x = 0; x <= 49; x++) {
         for (let y = 0; y <= 49; y++) {
-            if (costsForRampart.get(x, y) === 1) {
-                costsForRampart.set(x, y, 5)
+            if (costsForRampart.get(x, y) === ROAD_COST) {
+                costsForRampart.set(x, y, RAMPART_ROAD_COST)
             }
+            // this.visual.text(costsForRampart.get(x, y), x, y, { font: 0.5 })
         }
     }
-    for (const cut of cuts) {
-        const coord = parseVerticeToPos(cut)
-        const pos = new RoomPosition(coord.x, coord.y, this.name)
 
-        this.visual.circle(pos, { fill: 'yellow', radius: 0.5 })
+    for (const pos of outsides) {
+        costsForRampart.set(pos.x, pos.y, 255)
+        // this.visual.circle(pos, { fill: 'red', radius:0.5 })
+    }
+
+    for (const pos of cuts) {
+        // this.visual.circle(pos, { fill: 'yellow', radius: 0.5 })
         structures.road.push(pos)
         basePlan[`lv6`].push(pos.packPos('road'))
-        costsForRampart.set(pos.x, pos.y, 1)
+        costsForRampart.set(pos.x, pos.y, ROAD_COST)
+        costs.set(pos.x, pos.y, ROAD_COST)
     }
 
-    for (const inside of insides) {
-        const coord = parseVerticeToPos(inside)
-        const pos = new RoomPosition(coord.x, coord.y, this.name)
-    }
-
-    for (const cut of cuts) {
-        const coord = parseVerticeToPos(cut)
-        const pos = new RoomPosition(coord.x, coord.y, this.name)
-        const rampartPath = PathFinder.search(storagePos, { pos: pos, range: 0 }, {
+    for (const pos of cuts) {
+        const rampartPathSearch = PathFinder.search(storagePos, { pos: pos, range: 0 }, {
             plainCost: 15,
             swampCost: 15,
             roomCallback: function (roomName) {
@@ -472,11 +598,17 @@ Room.prototype.getBasePlan = function (firstAnchor, costs) {
             },
             maxOps: 10000,
             maxRooms: 1
-        }).path
+        })
+        if (rampartPathSearch.incomplete) {
+            console.log('cannot find roads to rampart')
+            return { basePlan: basePlan, cost: Infinity }
+        }
+        const rampartPath = rampartPathSearch.path
         for (const pathPos of rampartPath) {
             structures.road.push(pathPos)
+            costs.set(pathPos.x, pathPos.y, ROAD_COST)
             basePlan[`lv6`].push(pathPos.packPos('road'))
-            costsForRampart.set(pathPos.x, pathPos.y, 1)
+            costsForRampart.set(pathPos.x, pathPos.y, ROAD_COST)
             if (rampartPath.length - rampartPath.indexOf(pathPos) <= 3) {
                 if (checkRampart.get(pathPos.x, pathPos.y) > 0) {
                     continue
@@ -489,33 +621,71 @@ Room.prototype.getBasePlan = function (firstAnchor, costs) {
     }
 
     // place towers and extensions
-    floodFillResults.sort((a, b) => a.getAverageRange(structures.rampart) - b.getAverageRange(structures.rampart))
-    for (let i = 0; i < 6; i++) {
-        const pos = floodFillResults.shift()
-        structures.tower.push(pos)
+    const ramparts = [...structures.rampart]
+    const towerPosCandidates = [...mincutFloodFill.positions[1].filter(pos => {
+        if (costs.get(pos.x, pos.y) > 0) {
+            return false
+        }
+        for (const posNear of pos.getAtRange(1)) {
+            if (costs.get(posNear.x, posNear.y) === 1) {
+                return true
+            }
+        }
+        return false
+    }),
+    ...floodFillResults
+    ]
+
+    while (structures.tower.length < 6) {
+        if (structures.tower.length === 0) {
+            const rampartPos = ramparts[0]
+            const towerPos = rampartPos.findClosestByRange(towerPosCandidates)
+            structures.tower.push(towerPos)
+            const index = towerPosCandidates.indexOf(towerPos)
+            towerPosCandidates.splice(index, 1)
+            continue
+        }
+        let rampartMin = undefined
+        let minDamage = Infinity
+        for (const rampartPos of ramparts) {
+            let damage = 0
+            for (const pos of structures.tower) {
+                damage += pos.calcTowerDamage(rampartPos)
+            }
+            if (damage < minDamage) {
+                minDamage = damage
+                rampartMin = rampartPos
+            }
+        }
+        if (rampartMin) {
+            const towerPos = rampartMin.findClosestByRange(towerPosCandidates)
+            structures.tower.push(towerPos)
+            const index = towerPosCandidates.indexOf(towerPos)
+            towerPosCandidates.splice(index, 1)
+        }
     }
 
-    for (let i = 0; i < 60; i++) {
-        const pos = floodFillResults.shift()
-        structures.extension.push(pos)
+    structures.extension.push(...towerPosCandidates.filter(pos => costs.get(pos.x, pos.y) === 255).splice(0, 60))
+
+    // remove roads which are not connected
+    for (const pos of structures.road) {
+        const adjacents = pos.getAtRange(1)
+        let connected = false
+        for (const adjacent of adjacents) {
+            if (costs.get(adjacent.x, adjacent.y) === 1) {
+                connected = true
+                break
+            }
+        }
+        if (connected) {
+            basePlan['lv4'].push(pos.packPos('road'))
+        }
     }
-
-
 
     // sort extensions by range to first spawn
     structures.extension.sort((a, b) => a.getRangeTo(firstSpawnPos) - b.getRangeTo(firstSpawnPos))
 
     // packPos
-    // link : storage -> controller -> 먼 source -> 가까운 source
-    const linkPositions = {
-        storage: structures.link[0].pack(),
-        controller: structures.link[1].pack()
-    }
-    linkPositions[sources[0].id] = structures.link[2].pack()
-    if (sources[1] && structures.link[3]) {
-        linkPositions[sources[1].id] = structures.link[3].pack()
-    }
-
     basePlan.linkPositions = linkPositions
 
     for (const structureType of Object.keys(CONTROLLER_STRUCTURES)) {
@@ -575,7 +745,7 @@ Room.prototype.getBasePlanBySpawn = function () {
 
     const costs = this.getCostMatrixForBasePlan()
 
-    const firstAnchor = pos.getAnchor(2, costs)
+    const firstAnchor = pos.getClusterAnchor(costs)
 
     const result = this.getBasePlan(firstAnchor, costs)
 
@@ -593,7 +763,7 @@ Room.prototype.getBasePlanBySpawn = function () {
 Room.prototype.getBasePlanByPos = function (pos) {
     const costs = this.getCostMatrixForBasePlan()
 
-    const firstAnchor = pos.getAnchor(2, costs)
+    const firstAnchor = pos.getClusterAnchor(costs)
 
     const result = this.getBasePlan(firstAnchor, costs)
 
@@ -613,26 +783,27 @@ Room.prototype.getCostMatrixForBasePlan = function () {
         return this.heap._getCostMatrixForBasePlan
     }
     const costs = this.basicCostMatrixForRoomPlan.clone()
-    for (const pos of this.controller.pos.getInRange(4)) {
-        if (costs.get(pos.x, pos.y) < 30) {
-            costs.set(pos.x, pos.y, 30)
+
+    for (const pos of this.controller.pos.getInRange(3)) {
+        if (costs.get(pos.x, pos.y) < NEAR_WORKSPACE_COST) {
+            costs.set(pos.x, pos.y, NEAR_WORKSPACE_COST)
         }
     }
     for (const source of this.sources) {
         for (const pos of source.pos.getInRange(1)) {
-            if (costs.get(pos.x, pos.y) < 30) {
-                costs.set(pos.x, pos.y, 30)
+            if (costs.get(pos.x, pos.y) < WORKSPACE_COST) {
+                costs.set(pos.x, pos.y, WORKSPACE_COST)
             }
         }
         for (const pos of source.pos.getAtRange(2)) {
-            if (costs.get(pos.x, pos.y) < 4) {
-                costs.set(pos.x, pos.y, 4)
+            if (costs.get(pos.x, pos.y) < NEAR_WORKSPACE_COST) {
+                costs.set(pos.x, pos.y, NEAR_WORKSPACE_COST)
             }
         }
     }
     for (const pos of this.mineral.pos.getInRange(1)) {
-        if (costs.get(pos.x, pos.y) < 30) {
-            costs.set(pos.x, pos.y, 30)
+        if (costs.get(pos.x, pos.y) < WORKSPACE_COST) {
+            costs.set(pos.x, pos.y, WORKSPACE_COST)
         }
     }
 
@@ -641,8 +812,8 @@ Room.prototype.getCostMatrixForBasePlan = function () {
             const pos = new RoomPosition(x, y, this.name)
             if (!pos.isConnected()) {
                 this.visual.circle(x, y, { fill: 'yellow', radius: 0.5 })
-                if (costs.get(x, y) < 10) {
-                    costs.set(x, y, 10)
+                if (costs.get(x, y) < DISCONNECTED_COST) {
+                    costs.set(x, y, DISCONNECTED_COST)
                 }
             }
         }
@@ -655,14 +826,26 @@ const CLUSTER_STAMP = [
     { x: -1, y: -1, structureType: 'storage' },
     { x: 0, y: -1, structureType: 'spawn' },
     { x: 1, y: -1, structureType: 'powerSpawn' },
-    { x: -2, y: 0, structureType: 'factory' },
     { x: -1, y: 0, structureType: 'terminal' },
     { x: 1, y: 0, structureType: 'spawn' },
     { x: -1, y: 1, structureType: 'spawn' },
     { x: +1, y: 1, structureType: 'link' },
     { x: 0, y: 0, structureType: 'road' },
     { x: 0, y: 1, structureType: 'road' },
-    { x: 0, y: 2, structureType: 'nuker' },
+]
+
+const CLUSTER_BORDER_STAMP = [
+    { x: -2, y: -1, structureType: 'road' },
+    { x: -2, y: 0, structureType: 'road' },
+    { x: -2, y: 1, structureType: 'road' },
+    { x: -1, y: -2, structureType: 'road' },
+    { x: -1, y: 2, structureType: 'road' },
+    { x: 0, y: -2, structureType: 'road' },
+    { x: 1, y: -2, structureType: 'road' },
+    { x: 1, y: 2, structureType: 'road' },
+    { x: 2, y: -1, structureType: 'road' },
+    { x: 2, y: 0, structureType: 'road' },
+    { x: 2, y: 1, structureType: 'road' },
 ]
 
 const CLUSTER_STRUCTURETYPE = [
@@ -676,19 +859,44 @@ const CLUSTER_STRUCTURETYPE = [
     'spawn'
 ]
 
-const LABS_STAMP = [
-    { x: -1, y: -1, structureType: 'lab' },
-    { x: 0, y: -1, structureType: 'lab' },
-    { x: 1, y: -1, structureType: 'lab' },
-    { x: -2, y: 0, structureType: 'lab' },
+const LABS_STAMP_TOP_RIGHT = [
     { x: 0, y: 0, structureType: 'lab' },
-    { x: +2, y: 0, structureType: 'lab' },
-    { x: -1, y: 1, structureType: 'lab' },
-    { x: 0, y: 1, structureType: 'lab' },
     { x: 1, y: 1, structureType: 'lab' },
+    { x: -1, y: 0, structureType: 'lab' },
+    { x: -1, y: 1, structureType: 'lab' },
+    { x: 0, y: -1, structureType: 'lab' },
     { x: 0, y: 2, structureType: 'lab' },
-    { x: -1, y: 0, structureType: 'road' },
-    { x: +1, y: 0, structureType: 'road' },
+    { x: 1, y: -1, structureType: 'lab' },
+    { x: 1, y: 2, structureType: 'lab' },
+    { x: 2, y: 0, structureType: 'lab' },
+    { x: 2, y: 1, structureType: 'lab' },
+
+    { x: -1, y: 2, structureType: 'road' },
+    { x: 0, y: 1, structureType: 'road' },
+    { x: 1, y: 0, structureType: 'road' },
+    { x: 2, y: -1, structureType: 'road' },
+]
+
+const LABS_STAMP_TOP_LEFT = [
+    { x: -1, y: 0, structureType: 'lab' },
+    { x: -1, y: 1, structureType: 'lab' },
+    { x: 0, y: -1, structureType: 'lab' },
+    { x: 0, y: 2, structureType: 'lab' },
+    { x: 1, y: -1, structureType: 'lab' },
+    { x: 1, y: 2, structureType: 'lab' },
+    { x: 2, y: 0, structureType: 'lab' },
+    { x: 2, y: 1, structureType: 'lab' },
+    { x: 0, y: 1, structureType: 'lab' },
+    { x: 1, y: 0, structureType: 'lab' },
+
+    { x: 0, y: 0, structureType: 'road' },
+
+    { x: 1, y: 1, structureType: 'road' },
+    { x: 2, y: 2, structureType: 'road' },
+    { x: -1, y: -1, structureType: 'road' },
+
+
+
 ]
 
 Room.prototype.getFirstAnchorsByDT = function (costs, numFirstAnchor) {
@@ -696,17 +904,12 @@ Room.prototype.getFirstAnchorsByDT = function (costs, numFirstAnchor) {
         return this.heap.possibleAnchors
     }
 
-    const importantPositions = []
-    importantPositions.push(this.controller.pos)
-    importantPositions.push(...this.sources.map(source => source.pos))
-    importantPositions.push(...this.find(FIND_MINERALS).map(mineral => mineral.pos))
-
     const DT = this.getDistanceTransform()
     const result = []
 
     for (i = 25; i > 2; i--) {
         for (const pos of DT[i]) {
-            const anchor = pos.getAnchor(2, costs)
+            const anchor = pos.getClusterAnchor(costs)
             if (!anchor) {
                 continue
             }
@@ -719,83 +922,40 @@ Room.prototype.getFirstAnchorsByDT = function (costs, numFirstAnchor) {
     return this.heap.possibleAnchors
 }
 
+RoomPosition.prototype.getLabAnchor = function (costs, LABS_STAMP) {
+    const anchor = {}
+    anchor.pos = this
 
-RoomPosition.prototype.getClusterAnchor = function (costs) {
-    const anchor = {
-        pos: this,
-        size: 2,
-    }
-
-    const area = this.getInRange(1)
-    for (const pos of area) {
-        if (!isValidCoord(pos.x, pos.y) || costs.get(pos.x, pos.y) > 0) {
-            return undefined
+    const area = [this]
+    for (const vector of LABS_STAMP) {
+        const x = this.x + vector.x
+        const y = this.y + vector.y
+        if (!isValidCoord(x, y) || costs.get(x, y) > 0) {
+            return false
         }
+        area.push(new RoomPosition(x, y, this.roomName))
     }
 
-    const border = []
-    for (let x of [-2, 2]) {
-        for (let y of [-1, 0, 1]) {
-            const pos = new RoomPosition(this.x + x, this.y + y, this.roomName)
-            if (!isValidCoord(pos.x, pos.y) || costs.get(pos.x, pos.y) > 1) {
-                return undefined
-            }
-            border.push(new RoomPosition(pos.x, pos.y, this.roomName))
-        }
-    }
-    for (let y of [-2, 2]) {
-        for (let x of [-1, 0, 1]) {
-            const pos = new RoomPosition(this.x + x, this.y + y, this.roomName)
-            if (!isValidCoord(pos.x, pos.y) || costs.get(pos.x, pos.y) > 1) {
-                return undefined
-            }
-            border.push(new RoomPosition(pos.x, pos.y, this.roomName))
-        }
-    }
-
-    anchor.area = area
-    anchor.border = border
+    this.area = area
 
     return anchor
 }
 
-RoomPosition.prototype.getAnchor = function (size, costs) {
+RoomPosition.prototype.getClusterAnchor = function (costs) {
     const anchor = {}
     anchor.pos = this
-    anchor.size = size
 
     const area = [this]
-    for (let i = 1; i <= size; i++) {
-        for (let x = 0; x <= i; x++) {
-            const X = x === 0 ? [0] : [x, -x]
-            const Y = x === i ? [0] : [x - i, i - x]
-            for (const x of X) {
-                for (const y of Y) {
-                    if (!isValidCoord(this.x + x, this.y + y) || costs.get(this.x + x, this.y + y) > 0) {
-                        return undefined
-                    }
-                    area.push(new RoomPosition(this.x + x, this.y + y, this.roomName))
-                }
-            }
+    for (const vector of CLUSTER_STAMP) {
+        const x = this.x + vector.x
+        const y = this.y + vector.y
+        if (!isValidCoord(x, y) || costs.get(x, y) > 0) {
+            return false
         }
+        area.push(new RoomPosition(x, y, this.roomName))
     }
-    anchor.area = area
 
-    const border = []
-    const i = size + 1
-    for (let x = 0; x <= i; x++) {
-        const X = x === 0 ? [0] : [x, -x]
-        const Y = x === i ? [0] : [x - i, i - x]
-        for (const x of X) {
-            for (const y of Y) {
-                if (!isValidCoord(this.x + x, this.y + y) || costs.get(this.x + x, this.y + y) > 5) {
-                    return undefined
-                }
-                border.push(new RoomPosition(this.x + x, this.y + y, this.roomName))
-            }
-        }
-    }
-    anchor.border = border
+    this.area = area
 
     return anchor
 }
@@ -830,23 +990,25 @@ Object.defineProperties(Room.prototype, {
     },
     basicCostMatrixForRoomPlan: {
         get() {
-            if (!this._basicCostMatrixForRoomPlan) {
-                this._basicCostMatrixForRoomPlan = new PathFinder.CostMatrix;
-                const terrain = this.getTerrain()
-                for (const exit of this.find(FIND_EXIT)) {
-                    for (const pos of exit.getAtRange(4)) {
-                        this._basicCostMatrixForRoomPlan.set(pos.x, pos.y, 100)
-                    }
+            if (this.heap.basicCostMatrixForRoomPlan) {
+                return this.heap.basicCostMatrixForRoomPlan
+            }
+            const NEAR_EXIT_COST = 200
+            const costs = new PathFinder.CostMatrix;
+            const terrain = this.getTerrain()
+            for (const exit of this.find(FIND_EXIT)) {
+                for (const pos of exit.getInRange(4)) {
+                    costs.set(pos.x, pos.y, NEAR_EXIT_COST)
                 }
-                for (let x = 0; x < 50; x++) {
-                    for (let y = 0; y < 50; y++) {
-                        if (terrain.get(x, y) === 1) {
-                            this._basicCostMatrixForRoomPlan.set(x, y, 255)
-                        }
+            }
+            for (let x = 0; x < 50; x++) {
+                for (let y = 0; y < 50; y++) {
+                    if (terrain.get(x, y) === 1) {
+                        costs.set(x, y, WALL_COST)
                     }
                 }
             }
-            return this._basicCostMatrixForRoomPlan
+            return this.heap.basicCostMatrixForRoomPlan = costs
         }
     },
 })
@@ -867,36 +1029,30 @@ Room.prototype.floodFill = function (sources, option = {}) {
     }
     const queue = [];
     const terrain = new Room.Terrain(this.name);
-    const exits = this.find(FIND_EXIT);
 
     const positionsByLevel = {}
+
+    const START_COST = 150
 
     // Set the initial costMatrix values for each position in the room
     for (let x = 0; x <= 49; x++) {
         for (let y = 0; y <= 49; y++) {
             // set 255 to wall
             if (terrain.get(x, y) === TERRAIN_MASK_WALL) {
-                costMatrix.set(x, y, 255);
+                costMatrix.set(x, y, WALL_COST);
                 continue;
             }
 
             // set 255 to room edges
             if (x === 0 || x === 49 || y === 0 || y === 49) {
-                costMatrix.set(x, y, 255);
+                costMatrix.set(x, y, EDGE_COST);
                 continue;
             }
 
-            // set 200 to everything else
-            if (costMatrix.get(x, y) < 200) {
-                costMatrix.set(x, y, 200);
+            // set START_COST to everything else
+            if (costMatrix.get(x, y) < START_COST) {
+                costMatrix.set(x, y, START_COST);
             }
-        }
-    }
-
-    // Set the cost to 255 for positions adjacent to exits
-    for (const exit of exits) {
-        for (const pos of exit.getInRange(1)) {
-            costMatrix.set(pos.x, pos.y, 255);
         }
     }
 
@@ -911,23 +1067,16 @@ Room.prototype.floodFill = function (sources, option = {}) {
         const currentPos = queue.shift();
 
         // Get neighboring positions
-        const neighbors = []
-
         for (const vector of adjacents) {
             const x = currentPos.x + vector.x
             const y = currentPos.y + vector.y
             if (!isValidCoord(x, y)) {
                 continue
             }
-            neighbors.push(new RoomPosition(x, y, this.name))
-        }
 
-        for (const neighbor of neighbors) {
-            const x = neighbor.x;
-            const y = neighbor.y;
-
-            if (costMatrix.get(x, y) === 200 && costMatrix.get(currentPos.x, currentPos.y) < maxLevel) {
+            if (costMatrix.get(x, y) === START_COST && costMatrix.get(currentPos.x, currentPos.y) < maxLevel) {
                 // Set the cost to the current position's cost plus 1
+                const neighbor = new RoomPosition(x, y, this.name)
                 const level = costMatrix.get(currentPos.x, currentPos.y) + 1
                 positionsByLevel[level] = positionsByLevel[level] || []
                 costMatrix.set(x, y, level);
@@ -989,4 +1138,16 @@ RoomPosition.prototype.isConnected = function () {
         return 7 * dx + dy
     }
 
+}
+
+RoomPosition.prototype.calcTowerDamage = function (target) { //target은 roomPosition 혹은 roomPosition 가지는 Object
+    const targetPos = target.pos || target
+    const range = this.getRangeTo(targetPos)
+    if (range <= 5) {
+        return 600
+    }
+    if (range >= 20) {
+        return 150
+    }
+    return 750 - 30 * range
 }

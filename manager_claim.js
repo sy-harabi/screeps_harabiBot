@@ -11,10 +11,6 @@ Room.prototype.manageClaim = function () {
 }
 
 Room.prototype.claimRoom = function (roomName) {
-    if (OVERLORD.myRooms.length >= Game.gcl.level) {
-        delete this.memory.claimRoom[roomName]
-        return
-    }
 
     // room memory에 status object 만들기
     this.memory.claimRoom = this.memory.claimRoom || {}
@@ -73,8 +69,8 @@ Room.prototype.claimRoom = function (roomName) {
     const map = OVERLORD.map
     if (map[roomName] && map[roomName].threat) {
         delete this.memory.claimRoom[roomName]
-        const centerPos = new RoomPosition(25, 25, this.name)
-        centerPos.createFlag(`clear ${this.name}`)
+        // const centerPos = new RoomPosition(25, 25, roomName)
+        // centerPos.createFlag(`clear ${roomName}`)
         return
     }
     const defenders = getCreepsByRole(roomName, 'colonyDefender')
@@ -89,7 +85,7 @@ Room.prototype.claimRoom = function (roomName) {
 
     // 작동하는 타워까지 있으면 이제 claim 끝
     const spawn = targetRoom.structures.spawn[0]
-    const towerActive = targetRoom.structures.tower.find(tower => tower.isActive && tower.store[RESOURCE_ENERGY] > 0)
+    const towerActive = targetRoom.structures.tower.find(tower => tower.RCLActionable && tower.store[RESOURCE_ENERGY] > 0)
     if (targetRoom && spawn && towerActive && status.isCleared) {
         delete this.memory.claimRoom[roomName]
         return

@@ -1,5 +1,4 @@
 global.data = {}
-data.rooms = {}
 data.creeps = {}
 data.time = new Date().getTime()
 data.tick = Game.time

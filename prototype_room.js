@@ -1,4 +1,13 @@
 Object.defineProperties(Room.prototype, {
+    GRCL: {
+        get() {
+            if (this._GRCL !== undefined) {
+                return this._GRCL
+            }
+            this.memory.GRCL = Math.max((this.memory.GRCL || 0), this.controller.level)
+            return this._GRCL = this.memory.GRCL
+        }
+    },
     sources: {
         get() {
             if (this._sources) {
@@ -386,6 +395,3 @@ Object.defineProperties(Room.prototype, {
         }
     }
 })
-Room.prototype.isWall = function (x, y) {
-    return this.terrain.get(x, y) === 1
-}

@@ -1,3 +1,20 @@
+Object.defineProperties(Structure.prototype, {
+    RCLActionable: {
+        get() {
+            if (this._RCLActionable !== undefined) {
+                return this._RCLActionable
+            }
+            if (!this.room.controller) {
+                return this._RCLActionable = true
+            }
+            if (this.room.GRCL === this.room.controller.level) {
+                return this._RCLActionable = true
+            }
+            return this._RCLActionable = this.RCLActionable
+        }
+    }
+})
+
 Object.defineProperties(StructureController.prototype, {
     available: {
         get() {
@@ -19,7 +36,7 @@ Object.defineProperties(StructureController.prototype, {
                 return this._container
             }
             if (Game.getObjectById(this.room.heap.controllerContainerId)) {
-                return this._link = Game.getObjectById(this.room.heap.controllerContainerId)
+                return this._container = Game.getObjectById(this.room.heap.controllerContainerId)
             }
             try {
                 const containerPos = this.room.parsePos(this.room.memory.basePlan.linkPositions.controller)
@@ -57,13 +74,13 @@ Object.defineProperties(StructureController.prototype, {
     },
     linked: {
         get() {
-            if (!this.link || !this.link.isActive()) {
+            if (!this.link || !this.link.RCLActionable) {
                 return false
             }
             if (!this.room.storage) {
                 return false
             }
-            if (!this.room.storage.link || !this.room.storage.link.isActive()) {
+            if (!this.room.storage.link || !this.room.storage.link.RCLActionable) {
                 return false
             }
             return true

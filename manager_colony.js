@@ -6,18 +6,35 @@ Room.prototype.ruleColony = function (colonyName) {
     const status = this.memory.colony[colonyName]
     status.state = status.state || 'init'
 
+    // RoomVisual 관리
     const visualPos = new RoomPosition(25, 25, colonyName)
+
+    // status 나타내기
     new RoomVisual(colonyName).text(`📶${status.state.toUpperCase()}`, visualPos.x + 1, visualPos.y, { align: 'left' })
+
+    // efficiency 나타내기
     if (!status.tick || (Game.time - status.tick > 10000)) {
         this.resetColonyEfficiency(colonyName)
     }
-    new RoomVisual(colonyName).text(`🏭${Math.floor(100 * (status.profit - status.cost) / (Game.time - status.tick)) / 100}e/tick`, visualPos.x + 1, visualPos.y + 2, { align: 'left' })
-    Game.map.visual.text(`🏭${Math.floor(100 * (status.profit - status.cost) / (Game.time - status.tick)) / 100}e/tick`, visualPos, { fontSize: 7 })
+    const efficiencyRate = Math.floor(100 * (status.profit - status.cost) / (Game.time - status.tick)) / 100
 
+    // roomVisual
+    new RoomVisual(colonyName).text(`🏭${efficiencyRate}e/tick`, visualPos.x + 1, visualPos.y + 2, { align: 'left' })
+
+    // mapVisual
+    Game.map.visual.text(`🏭${efficiencyRate}e/tick`, visualPos, { fontSize: 7 })
+
+    // reservation
+    if (colony && colony.controller.reservation) {
+        colony.visual.text(`⏱️${colony.controller.reservation.ticksToEnd}`, colony.controller.pos.x + 1, colony.controller.pos.y + 1, { align: 'left' })
+    }
+
+    // 다른 사람이 claim한 방이면 포기하자
     if (colony && colony.controller.owner && !['Invader'].includes(colony.controller.owner.username)) {
         return this.abandonColony(colonyName)
     }
 
+    // invader 혹은 invaderCore 처리
     if (this.checkColonyInvader(colonyName)) {
         new RoomVisual(colonyName).text(`👿Invader`, visualPos.x + 1, visualPos.y - 1, { align: 'left' })
         if (!getNumCreepsByRole(colonyName, 'colonyDefender')) {
@@ -32,35 +49,105 @@ Room.prototype.ruleColony = function (colonyName) {
         }
     }
 
-    if (status.state === 'init') {
-        if (!(this.storage && this.energyCapacityAvailable >= 1300)) {
+    // state machine
+    if (status.state === 'extraction') {
+        // 가끔 전부 지어졌는지 다시 확인
+        if (Game.time % 1000 === 0) {
+            const infraPlan = this.getColonyInfraPlan(colonyName, status)
+            if (!infraPlan) {
+                return this.abandonColony(colonyName)
+            }
+            let numNewConstructionSites = 0
+            for (const infraPos of infraPlan) {
+                if (infraPos.pos.createConstructionSite(infraPos.structureType) === OK && infraPos.pos.roomName === colonyName) {
+                    numNewConstructionSites++
+                }
+            }
+            if (colony.constructionSites.length || numNewConstructionSites > 0) {
+                status.state = 'build'
+                return
+            }
+        }
+
+        // reservation 잘 되고 있는지 확인. 필요하면 reserver 부르기
+        if (!colony || !colony.controller.reservation || colony.controller.reservation.username === 'Invader' || colony.controller.reservation.ticksToEnd < 500) {
+            if (!getNumCreepsByRole(colonyName, 'reserver')) {
+                this.requestReserver(colonyName)
+            }
+        }
+
+        // colony 안보이면 return
+        if (!colony) {
             return
         }
-        status.state = 'reservation'
-        return
-    }
 
-    if (status.state === 'reservation') {
-        if (colony && colony.controller.reservation && colony.controller.reservation.username === MY_NAME) {
-            status.state = 'build'
-        } else if (!getNumCreepsByRole(colonyName, 'reserver')) {
-            this.requestReserver(colonyName)
+        // 각 source마다 확인
+        const sources = colony.sources
+        const colonyMiners = getCreepsByRole(colonyName, 'colonyMiner')
+        const colonyHaulers = getCreepsByRole(colonyName, 'colonyHauler')
+        const visualOption = { font: 0.5, align: 'left' }
+        for (const source of sources) {
+            // 문제있으면 전 단계로 돌아가기
+            if (!source) {
+                delete status.infraPlan
+                status.state = 'init'
+                return
+            }
+            if (!source.container) {
+                status.state = 'build'
+                return
+            }
+
+            // miner 확인
+            const miners = colonyMiners.filter(creep =>
+                creep.memory.sourceId === source.id &&
+                (creep.ticksToLive || 1500) > (3 * creep.body.length + status.infraPlan[source.id].pathLength)
+            )
+            let numWork = 0;
+            for (const miner of miners) {
+                numWork += miner.getActiveBodyparts(WORK)
+            }
+
+
+            // numCarry 및 maxCarry 계산 및 visual
+            let numCarry = 0;
+            const haulers = colonyHaulers.filter(creep => creep.memory.sourceId === source.id
+                && (creep.ticksToLive || 1500) > 3 * creep.body.length)
+            for (const haluer of haulers) {
+                numCarry += haluer.getActiveBodyparts(CARRY)
+            }
+
+            const maxCarry = Math.floor(status.infraPlan[source.id].pathLength * 0.5)
+            const maxNumHauler = Math.ceil(maxCarry / (2 * Math.min(Math.floor(this.energyCapacityAvailable / 150), 16)))
+
+            colony.visual.text(`⛏️${numWork} / 6`, source.pos.x + 0.5, source.pos.y - 0.25, visualOption)
+            colony.visual.text(`🚚${numCarry} / ${maxCarry}`, source.pos.x + 0.5, source.pos.y + 0.5, visualOption)
+
+            // 주변 떨어진 energy 계산 및 visual
+            const droppedEnergies = source.droppedEnergies
+            let energyAmount = 0
+            for (const droppedEnergy of droppedEnergies) {
+                energyAmount += droppedEnergy.amount
+            }
+            const container = source.container
+            if (container) {
+                energyAmount += (container.store[RESOURCE_ENERGY] || 0)
+                colony.visual.text(` 🔋${energyAmount}/2000`, source.pos.x + 0.5, source.pos.y + 1.25, { font: 0.5, align: 'left' })
+            }
+
+            // miner 또는 hauler 필요하면 요청
+
+            if (numWork < 6 && miners.length < source.available) {
+                this.requestColonyMiner(colonyName, source.id)
+                continue;
+            }
+
+            if (numCarry < maxCarry && haulers.length < maxNumHauler && source.container.hits >= 180000) {
+                this.requestColonyHauler(colonyName, source.id, maxCarry - numCarry, status.infraPlan[source.id].pathLength)
+                continue;
+            }
         }
         return
-    }
-
-    if (!colony || !colony.controller.reservation || colony.controller.reservation.username === 'Invader' || colony.controller.reservation.ticksToEnd < 500) {
-        if (!getNumCreepsByRole(colonyName, 'reserver')) {
-            this.requestReserver(colonyName)
-        }
-    }
-
-    if (!colony) {
-        return
-    } else {
-        if (colony.controller.reservation) {
-            colony.visual.text(`⏱️${colony.controller.reservation.ticksToEnd}`, colony.controller.pos.x + 1, colony.controller.pos.y + 1, { align: 'left' })
-        }
     }
 
     if (status.state === 'build') {
@@ -105,77 +192,23 @@ Room.prototype.ruleColony = function (colonyName) {
         return
     }
 
-    if (status.state === 'extraction') {
-        if (Game.time % 1000 === 0) {
-            const infraPlan = this.getColonyInfraPlan(colonyName, status)
-            if (!infraPlan) {
-                return this.abandonColony(colonyName)
-            }
-            let numNewConstructionSites = 0
-            for (const infraPos of infraPlan) {
-                if (infraPos.pos.createConstructionSite(infraPos.structureType) === OK && infraPos.pos.roomName === colonyName) {
-                    numNewConstructionSites++
-                }
-            }
-            if (colony.constructionSites.length || numNewConstructionSites > 0) {
-                status.state = 'build'
-                return
-            }
+    if (status.state === 'reservation') {
+        if (colony && colony.controller.reservation && colony.controller.reservation.username === MY_NAME) {
+            status.state = 'build'
+        } else if (!getNumCreepsByRole(colonyName, 'reserver')) {
+            this.requestReserver(colonyName)
         }
+        return
+    }
 
-        const sources = colony.sources
-        for (const source of sources) {
-            if (!source) {
-                delete status.infraPlan
-                status.state = 'init'
-            }
-            if (!source.container) {
-                status.state = 'build'
-                return
-            }
-
-            const colonyMiners = Object.values(Game.creeps).filter(creep => creep.memory.role === 'colonyMiner' && creep.memory.sourceId === source.id && (creep.ticksToLive || 1500) > (3 * creep.body.length + status.infraPlan[source.id].pathLength))
-            let numWork = 0;
-            for (const colonyMiner of colonyMiners) {
-                numWork += colonyMiner.body.filter(part => part.type === WORK && part.hits >= 100).length
-            }
-
-            const colonyHaulers = Object.values(Game.creeps).filter(creep => creep.memory.role === 'colonyHauler' && creep.memory.sourceId === source.id && (creep.ticksToLive || 1500) > 3 * creep.body.length)
-            let numCarry = 0;
-            const maxCarry = Math.floor(status.infraPlan[source.id].pathLength * 0.5)
-            const maxNumHauler = Math.ceil(maxCarry / (2 * Math.min(Math.floor(this.energyCapacityAvailable / 150), 16)))
-            for (const colonyHaluer of colonyHaulers) {
-                numCarry += colonyHaluer.body.filter(part => part.type === CARRY && part.hits >= 100).length
-            }
-
-            if (colony) {
-
-                const visualOption = { font: 0.5, align: 'left' }
-                colony.visual.text(`⛏️${numWork} / 6`, source.pos.x + 0.5, source.pos.y - 0.25, visualOption)
-                colony.visual.text(`🚚${numCarry} / ${maxCarry}`, source.pos.x + 0.5, source.pos.y + 0.5, visualOption)
-
-                const droppedEnergies = source.droppedEnergies
-                let energyAmount = 0
-                for (const droppedEnergy of droppedEnergies) {
-                    energyAmount += droppedEnergy.amount
-                }
-                const container = source.container
-                if (container) {
-                    energyAmount += (container.store[RESOURCE_ENERGY] || 0)
-                    colony.visual.text(` 🔋${energyAmount}/2000`, source.pos.x + 0.5, source.pos.y + 1.25, { font: 0.5, align: 'left' })
-                }
-            }
-
-            if (colonyMiners.length < source.available && numWork < 6) {
-                this.requestColonyMiner(colonyName, source.id)
-                continue;
-            }
-
-            if (colonyHaulers.length < maxNumHauler && numCarry < maxCarry && source.container.hits >= 180000) {
-                this.requestColonyHauler(colonyName, source.id, maxCarry - numCarry, status.infraPlan[source.id].pathLength)
-                continue;
-            }
+    if (status.state === 'init') {
+        if (!(this.storage && this.energyCapacityAvailable >= 1300)) {
+            return
         }
+        status.state = 'reservation'
+        status.profit = status.profit || 0
+        status.cost = status.cost || 0
+        return
     }
 }
 
@@ -216,7 +249,7 @@ Room.prototype.manageColony = function () {
         return
     }
 
-    for (const colonyName of Object.keys(this.memory.colony)) {
+    for (const colonyName in this.memory.colony) {
         this.ruleColony(colonyName)
     }
     return
@@ -269,10 +302,8 @@ Room.prototype.checkColonyInvaderCore = function (colonyName) {
     }
     const hostileStructures = colony.find(FIND_HOSTILE_STRUCTURES)
     if (!status.isInvaderCore && hostileStructures.length) {
-        data.recordLog(`InvaderCore have appeared in ${colonyName}`)
         status.isInvaderCore = true
     } else if (status.isInvaderCore && !hostileStructures.length) {
-        data.recordLog(`InvaderCore has been destroyed in ${colonyName}`)
         status.isInvaderCore = false
     }
     return status.isInvaderCore

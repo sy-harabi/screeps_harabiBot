@@ -145,13 +145,13 @@ global.ROOMNAMES_TO_AVOID = [
 ]
 
 global.BASIC_MINERALS = {
-    H: { ratio: 8 },
-    O: { ratio: 8 },
-    Z: { ratio: 4 },
-    K: { ratio: 4 },
-    U: { ratio: 4 },
-    L: { ratio: 4 },
-    X: { ratio: 4 }
+    H: { ratio: 2 },
+    O: { ratio: 2 },
+    Z: { ratio: 2 },
+    K: { ratio: 2 },
+    U: { ratio: 2 },
+    L: { ratio: 2 },
+    X: { ratio: 2 }
 }
 
 global.ATTACK_BOOST_COMPOUNDS_TIER2 = {
@@ -171,7 +171,7 @@ global.ATTACK_BOOST_COMPOUNDS_TIER3 = {
 }
 
 global.BASE_COMPOUNDS = {
-    OH: { ratio: 10, resourceType0: 'O', resourceType1: 'H' },
+    OH: { ratio: 2, resourceType0: 'O', resourceType1: 'H' },
     ZK: { ratio: 2, resourceType0: 'Z', resourceType1: 'K' },
     UL: { ratio: 2, resourceType0: 'U', resourceType1: 'L' },
     G: { ratio: 2, resourceType0: 'ZK', resourceType1: 'UL' },

@@ -1,7 +1,7 @@
 Flag.prototype.manageReconstruction = function () {
     const roomName = this.pos.roomName
     const thisRoom = Game.rooms[roomName]
-    const closestMyRoom = this.findClosestMyRoom(7)
+    const closestMyRoom = this.findClosestMyRoom(5)
 
     if (!thisRoom || !thisRoom.isMy) {
         return this.remove()
@@ -32,6 +32,9 @@ Flag.prototype.manageReconstruction = function () {
                 }
                 structure.destroy()
             }
+            for (const cs of thisRoom.constructionSites) {
+                cs.remove()
+            }
             thisRoom.memory.level = 0
             return this.memory.stage++
         case 3:
@@ -40,7 +43,9 @@ Flag.prototype.manageReconstruction = function () {
             }
             const defenders = getCreepsByRole(this.room.name, 'colonyDefender')
             if (defenders.length < 2) {
-                closestMyRoom.requestColonyDefender(roomName)
+                if (closestMyRoom) {
+                    closestMyRoom.requestColonyDefender(roomName)
+                }
             }
 
             const maxWork = 60
