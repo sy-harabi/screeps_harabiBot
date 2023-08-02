@@ -23,7 +23,7 @@ PowerCreep.prototype.actRoomOperator = function () {
 
     const target = this.room.storage || this
     if (this.pos.lookFor(LOOK_STRUCTURES).filter(structure => structure.structureType === STRUCTURE_ROAD).length) {
-        const spot = this.pos.findClosestByPath(target.pos.workingSpot)
+        const spot = this.pos.getClosestByPath(target.pos.workingSpot)
         if (!spot) {
             return
         }

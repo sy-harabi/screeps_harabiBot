@@ -213,27 +213,29 @@ Room.prototype.scoutRoom = function (roomName, distance) {
     return OK
   }
 
-  const scouters = getCreepsByRole(this.name, 'scouter')
-  const scouter = scouters[0]
-  if (!scouter) {
-    this.requestScouter()
-    return ERR_NOT_FOUND
-  }
-  if (scouter.spawning) {
-    return ERR_NOT_FOUND
-  }
-
-  scouter.notifyWhenAttacked(false)
-
-  if (scouter.room.name !== roomName) {
-    const result = scouter.moveToRoom(roomName, 1)
-    if (result.incomplete || result === ERR_NO_PATH) {
-      return ERR_NO_PATH
-    }
-    return ERR_NOT_FOUND
-  }
-
   const room = Game.rooms[roomName]
+  if (!room) {
+    const scouters = getCreepsByRole(this.name, 'scouter')
+    const scouter = scouters[0]
+    if (!scouter) {
+      this.requestScouter()
+      return ERR_NOT_FOUND
+    }
+    if (scouter.spawning) {
+      return ERR_NOT_FOUND
+    }
+
+    scouter.notifyWhenAttacked(false)
+
+    if (scouter.room.name !== roomName) {
+      const result = scouter.moveToRoom(roomName, 1)
+      if (result.incomplete || result === ERR_NO_PATH) {
+        return ERR_NO_PATH
+      }
+      return ERR_NOT_FOUND
+    }
+  }
+
   let host = this.name
 
   const lastScout = Game.time
@@ -248,7 +250,7 @@ Room.prototype.scoutRoom = function (roomName, distance) {
   const numTower = room.structures.tower.filter(tower => tower.RCLActionable).length
   const defense = numTower > 0 ? { numTower: numTower } : undefined
 
-  const isAccessibleToContorller = isController && (scouter.moveMy(room.controller.pos, { range: 1 }) === OK)
+  const isAccessibleToContorller = room.getAccessibleToController()
   const inaccessible = ((defense && (!room.isMy)) || (isController && !isAccessibleToContorller)) ? (Game.time + SCOUT_INTERVAL) : false
 
   const isRemoteCandidate = isAccessibleToContorller && !inaccessible && !isClaimed && !isReserved && (distance <= 1) && (numSource > 0) && !OVERLORD.colonies.includes(roomName)
@@ -277,7 +279,26 @@ Room.prototype.scoutRoom = function (roomName, distance) {
     inaccessible
   }
 
-  scouter.say(`🚶${distance}`, true)
-
   return OK
+}
+
+Room.prototype.getAccessibleToController = function () {
+  const controller = this.controller
+  if (!controller) {
+    return false
+  }
+  const exits = this.find(FIND_EXIT)
+  const search = PathFinder.search(
+    controller.pos, exits, {
+    maxRooms: 1,
+    maxOps: 10000,
+    roomCallback: function (roomName) {
+      const room = Game.rooms[roomName]
+      if (room) {
+        return room.basicCostmatrix
+      }
+    }
+  }
+  )
+  return !search.incomplete
 }

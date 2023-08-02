@@ -212,14 +212,15 @@ module.exports.loop = () => {
 
         if (data.info) {
             OVERLORD.visualizeRoomInfo()
+            OVERLORD.mapInfo()
         } else {
+            OVERLORD.purgeMapInfo
             new RoomVisual().text('time: ' + Game.time, 0, 46, { align: 'left' })
             new RoomVisual().text('CPU: ' + Game.cpu.getUsed().toFixed(1), 0, 47, { align: 'left' })
             new RoomVisual().text("AvgCPU: " + Math.round(100 * (_.sum(CPU) / CPU.length)) / 100 + `(for ${CPU.length} ticks)`, 0, 48, { align: 'left' })
             new RoomVisual().text(`bucket: ${Game.cpu.bucket.toFixed(0)}(${data.enoughCPU ? 'market, ' : ''}${data.okCPU ? 'lab' : ''})`, 0, 49, { align: 'left' })
         }
 
-        mapInfo()
 
         CPU.push(Math.floor(Game.cpu.getUsed()))
         if (CPU.length > 200) {

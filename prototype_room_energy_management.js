@@ -77,11 +77,9 @@ Room.prototype.getEnergyRequests = function (numApplicants) {
         requests[factory.id] = new Request(factory)
     }
 
-    if (this.laborersNeedDelivery) {
-        for (const creep of this.creeps.laborer) {
-            if (creep.store.getFreeCapacity(RESOURCE_ENERGY)) {
-                requests[creep.id] = new Request(creep)
-            }
+    for (const creep of this.creeps.laborer) {
+        if (creep.needDelivery && creep.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
+            requests[creep.id] = new Request(creep)
         }
     }
 
@@ -228,6 +226,7 @@ Room.prototype.getEnergyDepots = function () {
             const droppedEnergies = source.droppedEnergies
             for (const droppedEnergy of droppedEnergies) {
                 energyDepots[droppedEnergy.id] = new EnergyDepot(droppedEnergy)
+                energyDepots[droppedEnergy.id].threshold = 10
                 energyDepots[droppedEnergy.id].sourceId = source.id
             }
 
@@ -252,7 +251,8 @@ Room.prototype.getEnergyDepots = function () {
         }
 
         if (this.storage.link && this.storage.link.store.getUsedCapacity(RESOURCE_ENERGY) > 400 && !this.heap.emptyControllerLink) {
-            energyDepots[this.storage.link.id] = new EnergyDepot(this.storage.link, 400)
+            energyDepots[this.storage.link.id] = new EnergyDepot(this.storage.link)
+            energyDepots[this.storage.link.id].threshold = 400
             energyDepots[this.storage.link.id].forManager = true
         }
     }
@@ -317,7 +317,7 @@ Room.prototype.manageEnergyFetch = function (arrayOfCreeps) {
         }
         if (request.forManager) {
             request.applicants = new Array(...managerApplicants).sort((a, b) => a.pos.getRangeTo(request.pos) - b.pos.getRangeTo(request.pos))
-
+            continue
         }
         request.applicants = new Array(...applicants).sort((a, b) => a.pos.getRangeTo(request.pos) - b.pos.getRangeTo(request.pos))
     }
@@ -358,12 +358,7 @@ Room.prototype.manageEnergyFetch = function (arrayOfCreeps) {
             continue
         }
 
-        if (creep.memory.role === 'manager' || this.memory.militaryThreat) {
-            if (this.storage) {
-                creep.moveMy(this.storage, { range: 1 })
-                continue
-            }
-        } else {
+        if (creep.memory.role === 'hauler' && !this.memory.militaryThreat) {
             const source = Game.getObjectById(creep.memory.sourceId)
             if (source) {
                 if (creep.heap.waitingPos) {

@@ -34,7 +34,6 @@ const roomName = new VisualItem('Name', 5, (room) => {
     return { content, option }
 })
 
-let start = X_ENTIRE.start
 
 // RCL
 const rcl = new VisualItem('RCL', 3.5, (room) => {
@@ -87,11 +86,21 @@ const harvest = new VisualItem('Harvest', 3, (room) => {
 })
 
 // Remote
-const remoteIncome = new VisualItem('Remote', 4, (room) => {
-    const num =
-        room.memory.colony
-            ? Object.keys(room.memory.colony).length
-            : 0
+const remoteIncome = new VisualItem('Remote', 5, (room) => {
+    const num = (() => {
+        if (!room.memory.colony) {
+            return 0
+        }
+        let result = 0
+        for (const colonyStatus of Object.values(room.memory.colony)) {
+            const numSource =
+                colonyStatus.infraPlan
+                    ? Object.keys(colonyStatus.infraPlan).length
+                    : 0
+            result += numSource
+        }
+        return result
+    })()
 
     if (num === 0) {
         const content = '-'
@@ -102,11 +111,11 @@ const remoteIncome = new VisualItem('Remote', 4, (room) => {
     let income = 0
     for (const colonyName in room.memory.colony) {
         const status = room.memory.colony[colonyName]
-        income += (status.profit - status.cost) / (Game.time - status.tick)
+        income += ((status.lastProfit || 0) + status.profit - (status.lastCost || 0) - status.cost) / (Game.time - (status.lastTick || status.tick))
     }
 
-    const content = `${num}(${income.toFixed(1)}e/t)`
-    const option = { color: income > 0 ? 'lime' : 'magenta' }
+    const content = `${income.toFixed(1)}e/t (S:${num})`
+    const option = { color: income / num >= 6 ? 'lime' : 'magenta' }
     return { content, option }
 })
 

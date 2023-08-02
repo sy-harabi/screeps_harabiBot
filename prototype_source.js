@@ -84,6 +84,9 @@ Object.defineProperties(Source.prototype, {
             if (this._info) {
                 return this._info
             }
+            if (!this.room.controller) {
+                return undefined
+            }
             this._info = {}
             const miners = this.room.creeps.miner.filter(creep => (creep.ticksToLive || 1500) > (this.range.spawn + 3 * creep.body.length) && creep.memory.sourceId === this.id)
             const haulers = this.room.creeps.hauler.filter(creep => (creep.ticksToLive || 1500) > 3 * creep.body.length && creep.memory.sourceId === this.id)

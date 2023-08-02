@@ -24,7 +24,25 @@ Room.prototype.manageWork = function () {
 }
 
 Room.prototype.manageReinforce = function () {
-    const rampartLowest = this.structures.rampart.sort((a, b) => { return a.hits - b.hits })[0]
+    const REPAIR_RANGE = 4
+    if (this.heap.reinforceTargetId && Game.time % 5 !== 0) {
+        const reinforceTarget = Game.getObjectById(this.heap.reinforceTargetId)
+        if (reinforceTarget) {
+            return this.repairStructure(reinforceTarget)
+        }
+    }
+
+    const targets = this.find(FIND_HOSTILE_CREEPS)
+    if (!targets.length) {
+        return
+    }
+    const aggressiveTargets = targets.filter(creep => creep.checkBodyParts(INVADER_BODY_PARTS))
+    const rampartsNear = this.structures.rampart.filter(rampart => rampart.pos.getClosestRange(aggressiveTargets) <= REPAIR_RANGE)
+    const rampartLowest =
+        rampartsNear.length > 0
+            ? rampartsNear.sort((a, b) => { return a.hits - b.hits })[0]
+            : targets[0].pos.findClosestByRange(this.structures.rampart)
+    this.heap.reinforceTargetId = rampartLowest.id
     this.repairStructure(rampartLowest)
 }
 
@@ -56,21 +74,25 @@ Room.prototype.manageBuild = function () {
     }
 
     for (const laborer of laborers) {
+        //storage가 가까우면 storage에서 energy 받자
+        const workPlace = Game.getObjectById(laborer.memory.task)
+        if (this.storage && (this.storage.pos.getRangeTo(workPlace) <= 5 || this.buildersGetEnergyFromStorage)) {
+            laborer.needDelivery = false
+        } else {
+            // 그게 아니면 배달받자
+            laborer.needDelivery = true
+        }
         // energy 없으면 energy 받아라
-        this.laborersNeedDelivery = this.storage ? false : true
         if (!laborer.working) {
-            //storage가 가까우면 storage에서 energy 받자
-            const workPlace = Game.getObjectById(laborer.memory.task)
-            if (this.storage && (this.storage.pos.getRangeTo(workPlace) <= 5 || this.buildersGetEnergyFromStorage)) {
+            if (!laborer.needDelivery) {
                 laborer.getEnergyFrom(this.storage.id)
                 continue
             }
-            // 그게 아니면 hauler들이 갖다주길 기다리자
-            this.laborersNeedDelivery = true
         }
         // energy 있으면 일해라
         laborer.buildTask()
     }
+
 }
 
 Room.prototype.manageUpgrade = function () {
@@ -111,7 +133,7 @@ Room.prototype.manageUpgrade = function () {
                 }
                 continue
             }
-            this.laborersNeedDelivery = true
+            laborer.needDelivery = true
         }
         laborer.upgradeRCL()
     }
@@ -120,8 +142,14 @@ Room.prototype.manageUpgrade = function () {
 Room.prototype.repairStructure = function (rampart) {
     let laborers = getCreepsByRole(this.name, 'laborer')
     const rampartLowest = rampart
-    this.laborersNeedDelivery = true
+    const costs = this.defenseCostMatrix
+    const spawn = this.structures.spawn[0]
     for (const laborer of laborers) {
+        // 위험한 곳에 있으면 즉시 탈출해라
+        if (costs.get(laborer.pos.x, laborer.pos.y) >= 254 && spawn) {
+            laborer.moveMy(spawn, { range: 1, avoidRampart: false })
+        }
+        laborer.needDelivery = true
         // energy 없으면 energy 받아라
         if (!laborer.working) {
             //storage가 가까우면 storage에서 energy 받자
@@ -129,8 +157,6 @@ Room.prototype.repairStructure = function (rampart) {
                 laborer.getEnergyFrom(this.storage.id)
                 continue
             }
-            // 그게 아니면 hauler들이 갖다주길 기다리자
-            this.laborersNeedDelivery = true
         }
         // energy 있으면 일해라
         laborer.repairMy(rampartLowest)
@@ -206,11 +232,36 @@ Room.prototype.parsePos = function (packedPos) {
 }
 
 Creep.prototype.repairMy = function (target) {
-    if (this.pos.getRangeTo(target) > 3) {
-        const result = this.moveMy(target, { range: 3, avoidEnemy: false, avoidRampart: true })
-        if (result.incomplete) {
-            this.moveMy(this.structures.spawn[0], { range: 1 })
+    const costs = this.room.defenseCostMatrix
+    if (costs.get(this.pos.x, this.pos.y) >= 254) {
+        this.heap.run = 3
+    }
+
+    if (this.heap.run > 0) {
+        const spawn = this.room.structures.spawn[0]
+        this.heap.run--
+        if (spawn) {
+            return this.moveMy(spawn, { range: 1, ignoreCreeps: true })
         }
+    }
+
+    if (this.heap.workingSpot) {
+        if (this.heap.workingSpot.targetId !== target.id || this.pos.isEqualTo(this.heap.workingSpot.pos)) {
+            delete this.heap.workingSpot
+        } else {
+            return this.moveMy(this.heap.workingSpot.pos)
+        }
+    }
+
+    if (this.pos.getRangeTo(target) > 3) {
+        const workingSpot = this.pos.findClosestByRange(target.pos.getInRange(3).filter(pos => !pos.isWall && costs.get(pos.x, pos.y) < 254 && this.checkEmpty(pos)))
+        if (workingSpot) {
+            this.heap.workingSpot = {}
+            this.heap.workingSpot.targetId = target.id
+            this.heap.workingSpot.pos = workingSpot
+            return this.moveMy(workingSpot)
+        }
+        return this.say('no spot')
     }
 
     this.repair(target)
@@ -238,7 +289,7 @@ Creep.prototype.upgradeRCL = function () {
     }
 
     if (!this.isWorkable(this.pos)) {
-        const workingSpot = this.pos.findClosestByPath(this.getWorkingSpots(controller.pos))
+        const workingSpot = this.pos.getClosestByPath(this.getWorkingSpots(controller.pos))
         if (workingSpot) {
             this.heap.workingSpot = { id: controller.id, pos: workingSpot }
             this.moveMy(workingSpot)
@@ -267,7 +318,7 @@ Creep.prototype.buildTask = function () {
     }
 
     if (this.pos.getRangeTo(constructionSite) > 3) {
-        const workingSpot = this.pos.findClosestByPath(this.getWorkingSpots(constructionSite.pos))
+        const workingSpot = this.pos.getClosestByPath(this.getWorkingSpots(constructionSite.pos))
         if (workingSpot) {
             this.heap.workingSpot = { id: this.memory.task, pos: workingSpot }
             return this.moveMy(workingSpot)

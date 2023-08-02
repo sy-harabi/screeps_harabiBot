@@ -1,6 +1,9 @@
 Object.defineProperties(Creep.prototype, {
     assignedRoom: {
         get() {
+            if (this.memory.assignedRoom) {
+                return this.memory.assignedRoom
+            }
             const splitedName = this.name.split(' ')
             return splitedName[0]
         }
@@ -164,7 +167,7 @@ Creep.prototype.searchPath = function (target, range = 0, maxRooms = 1, option =
             }
 
             // avoidRampart가 true면 defenseCostMatrix 사용. 아니면 basicCostmatrix 사용.
-            let costs = (thisCreep.room.name === roomName && avoidRampart) ? room.getDefenseCostMatrix().clone() : room.basicCostmatrix.clone()
+            let costs = (thisCreep.room.name === roomName && avoidRampart) ? room.defenseCostMatrix.clone() : room.basicCostmatrix.clone()
             // 방 보이고 ignoreCreeps가 false고 지금 이 방이 creep이 있는 방이면 creep 위치에 cost 255 설정
             if (!ignoreCreeps && thisCreep.room.name === roomName) {
                 for (const creep of thisCreep.room.find(FIND_CREEPS)) {
@@ -269,7 +272,7 @@ Creep.prototype.resetPath = function () {
 }
 
 Creep.prototype.moveMy = function (target, option = {}) { //option = {range, avoidEnemy, avoidRampart, ignoreMap}
-    let { range, avoidEnemy, avoidRampart, ignoreMap } = option
+    let { range, avoidEnemy, avoidRampart, ignoreMap, ignoreCreeps } = option
     if (range === undefined) {
         range = 0
     }
@@ -282,19 +285,38 @@ Creep.prototype.moveMy = function (target, option = {}) { //option = {range, avo
     if (ignoreMap === undefined) {
         ignoreMap = 0
     }
-    if (avoidRampart) {
-        const defenseCostMatrix = this.room.getDefenseCostMatrix()
-        const spawn = this.room.structures.spawn[0]
-        if (defenseCostMatrix.get(this.pos.x, this.pos.y) >= 200 && spawn) {
-            return this.moveMy(spawn, { range: 1, avoidRampart: false })
-        }
+    if (ignoreCreeps === undefined) {
+        ignoreCreeps = true
     }
 
     const targetPos = target.pos || target
     if (!(targetPos instanceof RoomPosition)) {
         data.recordLog(`${this.name} has wrong target`)
-        return
+        return ERR_INVALID_TARGET
     }
+
+
+    if (avoidRampart) {
+        const defenseCostMatrix = this.room.defenseCostMatrix
+        const spawn = this.room.structures.spawn[0]
+        if (defenseCostMatrix.get(this.pos.x, this.pos.y) >= 254 && spawn) {
+            return this.moveMy(spawn, { range: 1, avoidRampart: false })
+        }
+
+        let isValidTarget = false
+        for (const pos of targetPos.getInRange(range)) {
+            if (defenseCostMatrix.get(pos.x, pos.y) < 254) {
+                isValidTarget = true
+                break
+            }
+        }
+
+        if (!isValidTarget) {
+            return ERR_INVALID_TARGET
+        }
+    }
+
+
 
 
     // stay 중이면 return
@@ -331,7 +353,7 @@ Creep.prototype.moveMy = function (target, option = {}) { //option = {range, avo
     if ((this.heap.target && !targetPos.isEqualTo(this.heap.target)) || !this.heap.path || !this.heap.path.length || avoidEnemy) {
         this.resetPath() //일단 지금 기억하고 있는 거 다 지우고 시작
         // searchPath는 route가 안찾아지면 ERR_NO_PATH고 그 외의 경우에는 PathFinder.search의 result다.
-        const result = this.searchPath(targetPos, range, maxRooms, { ignoreCreeps: true, avoidEnemy, avoidRampart, ignoreMap })
+        const result = this.searchPath(targetPos, range, maxRooms, { ignoreCreeps: ignoreCreeps, avoidEnemy, avoidRampart, ignoreMap })
         // 도착지까지 길이 안찾아지는 경우
         if (result.incomplete || result === ERR_NO_PATH) {
             this.heap.noPath = this.heap.noPath || 0

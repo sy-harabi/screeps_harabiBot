@@ -194,10 +194,6 @@ global.classifyCreeps = function () {
         result[roomName].wounded = []
     }
     for (const creep of creeps) {
-        if (creep.owner.username !== MY_NAME) {
-            continue
-        }
-
         if (!result[creep.assignedRoom]) {
             result[creep.assignedRoom] = {}
         }
@@ -278,9 +274,20 @@ global.visual = function () {
     return "show basePlan"
 }
 
-global.mapInfo = function () {
-    const map = OVERLORD.map
-    const EXPIRATION_PERIOD = 40000
+
+const EXPIRATION_PERIOD = 40000
+
+Overlord.prototype.purgeMapInfo = function () {
+    const map = this.map
+    for (const roomName in map) {
+        if (!map[roomName].lastScout || Game.time > map[roomName].lastScout + EXPIRATION_PERIOD) {
+            delete map[roomName]
+        }
+    }
+}
+
+Overlord.prototype.mapInfo = function () {
+    const map = this.map
     for (const roomName of Object.keys(map)) {
         try {
             const info = map[roomName]
@@ -315,7 +322,8 @@ global.mapInfo = function () {
                         Game.map.visual.circle(new RoomPosition(25, 25, room.memory.scout.next), { fill: '#ffe700' })
                     }
                 }
-                continue
+            } else {
+                Game.map.visual.text(`🚶${info.distance}`, new RoomPosition(center.x + 15, center.y + 15, center.roomName), { fontSize: 7 })
             }
 
             // host가 있는 info인지 체크. 즉 scouter가 확인한 방인지 체크
@@ -324,15 +332,47 @@ global.mapInfo = function () {
             }
 
             const hostPos = new RoomPosition(25, 25, info.host)
-            Game.map.visual.line(hostPos, center, { color: '#00ffe8', width: '1', opacity: 0.2 })
-            Game.map.visual.text(`🚶${info.distance}`, new RoomPosition(center.x + 15, center.y + 15, center.roomName), { fontSize: 7 })
+            // Game.map.visual.line(hostPos, center, { color: '#00ffe8', width: '1', opacity: 0.2 })
+
+            const describedExits = Game.map.describeExits(roomName)
+            for (const direction of ['1', '3', '5', '7']) {
+                const adjacentName = describedExits[direction]
+                if (describedExits[direction] && map[adjacentName] && info.host === map[adjacentName].host) {
+                    continue
+                }
+                let startPos = undefined
+                let endPos = undefined
+                switch (direction) {
+                    case '1':
+                        startPos = new RoomPosition(0, 0, roomName)
+                        endPos = new RoomPosition(49, 0, roomName)
+                        break
+                    case '3':
+                        startPos = new RoomPosition(49, 49, roomName)
+                        endPos = new RoomPosition(49, 0, roomName)
+                        break
+                    case '5':
+                        startPos = new RoomPosition(0, 49, roomName)
+                        endPos = new RoomPosition(49, 49, roomName)
+                        break
+                    case '7':
+                        startPos = new RoomPosition(0, 0, roomName)
+                        endPos = new RoomPosition(0, 49, roomName)
+                        break
+                }
+                if (!startPos || !endPos) {
+                    continue
+                }
+                Game.map.visual.line(startPos, endPos, { color: '#00ffe8', width: '2', opacity: 1 })
+            }
+
+
         }
         catch (error) {
             console.log(error)
             data.recordLog(`${roomName} has error ${error}`)
-            delete map[roomName]
+            // delete map[roomName]
         }
-
     }
 }
 

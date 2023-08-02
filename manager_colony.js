@@ -13,9 +13,13 @@ Room.prototype.ruleColony = function (colonyName) {
     new RoomVisual(colonyName).text(`📶${status.state.toUpperCase()}`, visualPos.x + 1, visualPos.y, { align: 'left' })
 
     // efficiency 나타내기
-    if (!status.tick || (Game.time - status.tick > 10000)) {
+    if (!status.tick || (Game.time - status.tick > 1000)) {
+        status.lastProfit = status.profit
+        status.lastCost = status.cost
+        status.lastTick = status.tick
         this.resetColonyEfficiency(colonyName)
     }
+
     const efficiencyRate = Math.floor(100 * (status.profit - status.cost) / (Game.time - status.tick)) / 100
 
     // roomVisual
@@ -262,6 +266,7 @@ Room.prototype.abandonColony = function (colonyName) {
             constructionSite.remove()
         }
     }
+    delete Memory.rooms[colonyName]
     if (this.memory.colony) {
         return delete this.memory.colony[colonyName]
     }
@@ -336,7 +341,9 @@ Room.prototype.resetColonyEfficiency = function (colonyName) {
         const numSource = Object.keys(status.infraPlan).length
         const efficiency = Math.floor(10 * (status.profit - status.cost) / (Game.time - status.tick) / numSource) / 100
         status.lastEfficiency = efficiency
-        data.recordLog(`${colonyName} has efficiency ${efficiency * 100}%`)
+        if (efficiency < 0.5) {
+            data.recordLog(`${colonyName} has efficiency ${efficiency * 100}%`)
+        }
     }
 
     status.tick = Game.time

@@ -7,30 +7,25 @@ Room.prototype.manageSpawn = function () {
         this.requestColonyDefender(this.name)
     }
 
+    const level = this.controller.level
+
     // manager 생산. 전시에는 무조건 생산
     if (this.storage) {
         const managers = this.creeps.manager.filter(creep => (creep.ticksToLive || 1500) > 3 * creep.body.length)
-        const maxCarry = this.controller.level >= 6 ? 24 : this.controller.level >= 5 ? 20 : 16
-        let manageCarryTotal = 0
-        for (const creep of managers) {
-            manageCarryTotal += creep.getNumParts('carry')
+        const MAX_CARRY = 24 // 50개 중 32개가 CARRY면 최대
+        const MAX_NUM = Math.max(1, this.structures.link.length - 1)
+        if (managers.length < MAX_NUM) {
+            this.requestHauler(MAX_CARRY, { isUrgent: (managers.length <= 0), isManager: true, office: this.storage.link })
         }
-
-        const maxNumManager = Math.ceil(75 * maxCarry / this.energyAvailable)
-
-        if (manageCarryTotal < maxCarry && managers.length < maxNumManager) {
-            this.requestHauler(maxCarry - manageCarryTotal, { isUrgent: (manageCarryTotal <= 0), isManager: true, office: this.storage.link })
-        }
-        this.visual.text(`📤${manageCarryTotal}`, this.storage.pos.x - 2.9, this.storage.pos.y + 0.75, { font: 0.5, align: 'left' })
+        this.visual.text(`📤${managers.length}/${MAX_NUM}`, this.storage.pos.x - 2.9, this.storage.pos.y + 0.75, { font: 0.5, align: 'left' })
     }
 
     // laborer 생산
-    const level = this.controller.level
-    const WORK_MAX = 30
+    const EMERGENCY_WORK_MAX = 60
 
     let maxWork = 0
     if ((this.memory.militaryThreat || this.memory.defenseNuke) && this.storage && this.storage.store['energy'] > 20000) {
-        maxWork = WORK_MAX
+        maxWork = EMERGENCY_WORK_MAX
     } else {
         maxWork = (this.heap.sourceUtilizationRate || 0) * this.maxWork
     }

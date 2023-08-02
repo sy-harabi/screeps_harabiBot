@@ -196,7 +196,21 @@ RoomPosition.prototype.getAverageRange = function (array) {
 
 RoomPosition.prototype.getClosestPathLength = function (array) {
     const goals = array.map(obj => obj.pos || obj)
-    return PathFinder.search(this, goals).path.length
+    const search = PathFinder.search(this, goals)
+    if (search.incomplete) {
+        return undefined
+    }
+    return search.path.length
+}
+
+RoomPosition.prototype.getClosestByPath = function (array) {
+    const goals = array.map(obj => obj.pos || obj)
+    const search = PathFinder.search(this, goals)
+    if (search.incomplete) {
+        return undefined
+    }
+    const path = search.path
+    return path[path.length - 1]
 }
 
 RoomPosition.prototype.getClosestRange = function (array) {

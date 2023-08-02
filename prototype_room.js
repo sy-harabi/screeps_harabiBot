@@ -25,7 +25,10 @@ Object.defineProperties(Room.prototype, {
                 })
                 return this._sources
             }
-            this._sources = this.find(FIND_SOURCES).sort((a, b) => a.info.maxCarry - b.info.maxCarry)
+            this._sources = this.find(FIND_SOURCES)
+            if (this.controller) {
+                this._sources = this._sources.sort((a, b) => a.info.maxCarry - b.info.maxCarry)
+            }
             this.memory.sources = this._sources.map(source => source.id)
             return this._sources
         }

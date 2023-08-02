@@ -447,4 +447,4 @@ global.RESOURCES_TO_TERMINAL = {
     RESOURCE_CATALYZED_GHODIUM_ALKALIDE: "XGHO2",
 }
 
-global.INVADER_BODY_PARTS = ['attack', 'ranged_attack', 'work']
+global.INVADER_BODY_PARTS = ['attack', 'ranged_attack', 'heal', 'work']

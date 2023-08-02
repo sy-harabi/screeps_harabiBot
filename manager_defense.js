@@ -13,8 +13,8 @@ Room.prototype.manageDefense = function () {
     const strong = []
     const weak = []
 
-    for (const target of targets) {
-        if (!this.controller.safeMode && this.calcEnemyHealPower(target) - this.getTowerDamageFor(target) > 0) {
+    for (const target of aggressiveTargets) {
+        if (!this.controller.safeMode && this.calcEnemyHealPower(target) - this.getTowerDamageFor(target) >= 0) {
             strong.push(target)
             continue
         }
@@ -33,23 +33,57 @@ Room.prototype.manageDefense = function () {
     }
 
     if (status.state === 'emergency') {
+        const spawn = this.structures.spawn[0]
+        for (const creep of this.find(FIND_MY_CREEPS)) {
+            if (creep.memory.role === 'recycle') {
+                creep.getRecycled()
+            }
+            if (creep.assignedRoom === this.name) {
+                if (spawn && this.defenseCostMatrix.get(creep.pos.x, creep.pos.y) >= 254) {
+                    creep.heap.backToBase = 10
+                }
+                if (creep.heap.backToBase > 0) {
+                    creep.heap.backToBase--
+                    creep.moveMy(spawn, { range: 1, avoidRampart: false })
+                }
+                continue
+            }
+            creep.memory.assignedRoom = this.name
+            if (creep.getActiveBodyparts(WORK) > 5) {
+                creep.memory.role = 'laborer'
+                continue
+            }
+            if (creep.getActiveBodyparts(CARRY) > 5) {
+                creep.memory.role = 'manager'
+                continue
+            }
+            creep.memory.role = 'recycle'
+        }
         const roomDefenders = this.creeps.roomDefender
         if (roomDefenders.length < Math.ceil(strong.length / 2)) {
             this.requestRoomDefender()
         }
         let towerAttackCall = false
         for (const roomDefender of roomDefenders) {
-            const target = roomDefender.pos.findClosestByRange(targets)
+            const target = roomDefender.pos.findClosestByRange(strong)
             if (roomDefender.holdBunker(target) === OK) {
                 towerAttackCall = true
             }
         }
         if (!towerAttackCall) {
             const weakestRampart = this.weakestRampart
-            if (this.weakestRampart) {
+            if (this.weakestRampart.hits < 200000) {
                 for (const tower of this.structures.tower) {
                     tower.repair(weakestRampart)
                 }
+                return
+            }
+            if (this.creeps.wounded.length) {
+                const safeWounded = this.creeps.wounded.filter(creep => this.defenseCostMatrix.get(creep.pos.x, creep.pos.y) < 254)
+                for (const tower of this.structures.tower) {
+                    tower.heal(tower.pos.findClosestByRange(safeWounded))
+                }
+                return
             }
         }
     }
@@ -81,8 +115,12 @@ Creep.prototype.holdBunker = function (target) { //target is enemy creep
     const targetPos = target.pos || target
     const ramparts = this.room.structures.rampart.sort((a, b) => targetPos.getRangeTo(a) - targetPos.getRangeTo(b))
     for (const rampart of ramparts) {
-        if (this.checkEmpty(rampart.pos) && this.pos.getRangeTo(rampart.pos) > 0) {
-            this.moveMy(rampart.pos)
+        this.room.visual.line(this.pos, rampart.pos)
+        if (!this.checkEmpty(rampart.pos)) {
+            continue
+        }
+        if (this.pos.getRangeTo(rampart.pos) > 0) {
+            return this.moveMy(rampart.pos)
         }
         if (this.pos.getRangeTo(target) <= 1) {
             if (this.attack(target) === OK) {
@@ -118,10 +156,16 @@ Room.prototype.manageTower = function () {
 
     // 고장난 건물 있으면 수리
     if (this.structures.damaged.length) {
-        for (const tower of this.structures.tower) {
-            tower.repair(tower.pos.findClosestByRange(this.structures.damaged))
+        outer:
+        for (const structure of this.structures.damaged) {
+            const towers = this.structures.tower.filter(tower => !tower.busy)
+            for (const tower of towers.sort((a, b) => a.pos.getRangeTo(structure.pos) - b.pos.getRangeTo(structure.pos))) {
+                if (tower.repair(structure) === OK) {
+                    tower.busy = true
+                    continue outer
+                }
+            }
         }
-        return
     }
 
     // rampart 없으면 종료
@@ -147,8 +191,20 @@ Room.prototype.manageTower = function () {
 
     // 제일 약한 rampart가 200k 안되면 수리
     if (weakestRampart.hits < 200000 && this.storage && this.storage.store[RESOURCE_ENERGY] > 10000) {
-        for (const tower of this.structures.tower) {
-            tower.repair(weakestRampart)
+        const weakRamparts = this.structures.rampart.filter(ramart => ramart.hits < 200000).sort((a, b) => a.hits - b.hits)
+        outer:
+        for (const structure of weakRamparts) {
+            const towers = this.structures.tower.filter(tower => !tower.busy)
+            if (towers.length === 0) {
+                break outer
+            }
+            const towersSorted = towers.sort((a, b) => a.pos.getRangeTo(structure.pos) - b.pos.getRangeTo(structure.pos))
+            for (const tower of towersSorted) {
+                if (tower.repair(structure) === OK) {
+                    tower.busy = true
+                    continue outer
+                }
+            }
         }
         return
     }
@@ -227,6 +283,7 @@ RoomPosition.prototype.getTowerDamageAt = function () { //target은 roomPosition
 StructureTower.prototype.attackDamage = function (target) { //target은 roomPosition 혹은 roomPosition 가지는 Object
     const targetPos = target.pos || target
     const range = this.pos.getRangeTo(targetPos)
+    // return 0 //for test
     if (range <= 5) {
         return 600
     }
@@ -318,6 +375,7 @@ Creep.prototype.calcAttackPower = function () {
 }
 
 // rampart 바깥쪽을 모두 구해서 cost를 높이는 method
+
 Room.prototype.getDefenseCostMatrix = function (resultCost = 254, option = {}) { //option = {checkResult:false, exitDirection:FIND_EXIT}
     let { checkResult, exitDirection } = option
 
@@ -341,6 +399,7 @@ Room.prototype.getDefenseCostMatrix = function (resultCost = 254, option = {}) {
         }
         return costMatrix
     }
+    console.log('calc defense cost matrix')
 
     const costMatrix = this.basicCostmatrix.clone()
     const sources = this.find(exitDirection) // exit에서 시작해서 닿을 수 있는 곳은 모두 outer
@@ -417,6 +476,102 @@ Room.prototype.getDefenseCostMatrix = function (resultCost = 254, option = {}) {
 }
 
 Object.defineProperties(Room.prototype, {
+    defenseCostMatrix: {
+        get() {
+            const resultCost = 255
+            const checkResult = true
+            const exitDirection = FIND_EXIT
+
+            // heap에 있으면 heap을 return. 10tick 마다 갱신
+            if (this.heap._defenseCostMatrix && this.heap._defenseCostMatrixLastTick && (Game.time - this.heap._defenseCostMatrixLastTick) < 10) {
+                const costMatrix = this.heap._defenseCostMatrix
+                if (checkResult && !this.defenseCostMatrixCheckedResult) {
+                    for (let x = 0; x <= 49; x++) {
+                        for (let y = 0; y <= 49; y++) {
+                            if (costMatrix.get(x, y) === resultCost && new RoomPosition(x, y, this.name).walkable) {
+                                this.visual.rect(x - 0.5, y - 0.5, 1, 1, { fill: 'red', opacity: 0.15 })
+                            }
+
+                        }
+                    }
+                }
+                this.defenseCostMatrixCheckedResult = true
+                return costMatrix
+            }
+
+            const costMatrix = this.basicCostmatrix.clone()
+            const sources = this.find(exitDirection) // exit에서 시작해서 닿을 수 있는 곳은 모두 outer
+
+            const queue = [];
+
+            // Set the cost to resultCost for each source position and add them to the queue
+            for (const source of sources) {
+                costMatrix.set(source.x, source.y, resultCost);
+                queue.push(source);
+            }
+
+            const ADJACENT_VECTORS = [
+                { x: 0, y: 1 },
+                { x: 0, y: -1 },
+                { x: -1, y: 0 },
+                { x: 1, y: 0 },
+                { x: 1, y: 1 },
+                { x: 1, y: -1 },
+                { x: -1, y: 1 },
+                { x: -1, y: -1 },
+            ]
+
+            const leafNodes = []
+            // Start the flood-fill algorithm
+            while (queue.length) {
+                const currentPos = queue.shift();
+                // Get neighboring positions
+                const neighbors = []
+
+                for (const vector of ADJACENT_VECTORS) {
+                    if (0 <= currentPos.x + vector.x && currentPos.x + vector.x <= 49 && 0 <= currentPos.y + vector.y && currentPos.y + vector.y <= 49) {
+                        neighbors.push(new RoomPosition(currentPos.x + vector.x, currentPos.y + vector.y, this.name))
+                    }
+                }
+
+                let isLeaf = false
+                for (const neighbor of neighbors) {
+                    const x = neighbor.x;
+                    const y = neighbor.y;
+                    if (neighbor.isWall) {
+                        isLeaf = true
+                        continue
+                    }
+                    if (neighbor.isRampart) {
+                        isLeaf = true
+                        continue
+                    }
+                    if (costMatrix.get(x, y) < resultCost) {
+                        costMatrix.set(x, y, resultCost)
+                        queue.push(neighbor)
+                    }
+                }
+                if (isLeaf) {
+                    leafNodes.push(currentPos)
+                }
+            }
+
+            for (const leafPos of leafNodes) {
+                for (const pos of leafPos.getAtRange(3)) {
+                    if (!pos.isRampart && costMatrix.get(pos.x, pos.y) < resultCost) {
+                        costMatrix.set(pos.x, pos.y, resultCost)
+                    }
+                }
+                for (const pos of leafPos.getAtRange(2)) {
+                    if (!pos.isRampart && costMatrix.get(pos.x, pos.y) < resultCost) {
+                        costMatrix.set(pos.x, pos.y, resultCost)
+                    }
+                }
+            }
+            this.heap._defenseCostMatrixLastTick = Game.time
+            return this.heap._defenseCostMatrix = costMatrix
+        }
+    },
     isWalledUp: {
         get() {
             if (this.heap._isWalledUp && Game.time % 10 !== 0) {
@@ -429,7 +584,7 @@ Object.defineProperties(Room.prototype, {
             }
             // spawn 주변 위치 확인
             const nearSpawnPositions = spawn.pos.getAtRange(1)
-            const defenseCostMatrix = this.getDefenseCostMatrix()
+            const defenseCostMatrix = this.defenseCostMatrix
             for (const pos of nearSpawnPositions) {
                 if (defenseCostMatrix.get(pos.x, pos.y) >= 200) {
                     continue

@@ -16,18 +16,16 @@ Room.prototype.runRoomManager = function () {
 
     this.manageConstruction()
 
+    this.manageInfo()
+    this.manageLink()
+
+    this.manageLab()
+
     this.manageDefense()
     this.defenseNuke()
     if (!this.memory.defenseNuke || this.memory.defenseNuke.state !== 'repair' || this.memory.militaryThreat) {
         this.manageWork()
     }
-
-    this.manageEnergy()
-
-    this.manageInfo()
-    this.manageLink()
-
-    this.manageLab()
 
     // 여기서부터는 전시에는 안함
     if (!this.memory.militaryThreat) {
@@ -41,6 +39,7 @@ Room.prototype.runRoomManager = function () {
         this.manageClaim()
     }
 
+    this.manageEnergy()
     this.manageSpawn()
     this.manageVisual()
     // this.getDefenseCostMatrix(254, { checkResult: true })
