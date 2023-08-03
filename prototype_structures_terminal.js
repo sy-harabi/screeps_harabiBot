@@ -110,7 +110,7 @@ StructureTerminal.prototype.run = function () {
                 }
                 if (room.terminal.send('XGH2O', 1000, this.room.name) === OK) {
                     received = true
-                    data.recordLog(`${room.name} sends 1000 of XGH2O to ${this.room.name}`)
+                    data.recordLog(`SEND: 1000 XGH2O to ${this.room.name}`, room.name)
                     break
                 }
             }
@@ -137,7 +137,7 @@ StructureTerminal.prototype.run = function () {
             }
             const amount = Math.floor(room.terminal.store[RESOURCE_ENERGY] / 2)
             if (room.terminal.send(RESOURCE_ENERGY, amount, this.room.name) === OK) {
-                data.recordLog(`${room.name} sends ${amount} of energy to ${this.room.name}`)
+                data.recordLog(`SEND: ${amount} energy to ${this.room.name}`, room.name)
             }
         }
     } else if (this.room.storage && this.room.storage.store[RESOURCE_ENERGY] < 300000) {
@@ -156,7 +156,7 @@ StructureTerminal.prototype.run = function () {
             }
             const amount = Math.floor(room.terminal.store[RESOURCE_ENERGY] / 2)
             if (room.terminal.send(RESOURCE_ENERGY, amount, this.room.name) === OK) {
-                data.recordLog(`${room.name} sends ${amount} of energy to ${this.room.name}`)
+                data.recordLog(`SEND: ${amount} energy to ${this.room.name}`, room.name)
             }
         }
     }

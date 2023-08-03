@@ -115,7 +115,7 @@ const remoteIncome = new VisualItem('Remote', 5, (room) => {
     }
 
     const content = `${income.toFixed(1)}e/t (S:${num})`
-    const option = { color: income / num >= 6 ? 'lime' : 'magenta' }
+    const option = { color: income / num >= 5 ? 'lime' : 'magenta' }
     return { content, option }
 })
 

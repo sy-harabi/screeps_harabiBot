@@ -66,54 +66,59 @@ Room.prototype.checkTombstone = function () {
         return
     }
 
-    const deadCreepsId = myTombstones.map(tombstone => tombstone.creep.id)
     const deadDefendersId = myDefenderTombstones.map(tombstone => tombstone.creep.id)
     const attackEvents = this.getEventLog().filter(eventLog => eventLog.event === EVENT_ATTACK)
-    isMurdered = false
-    isDefenderMurdered = false
+
+    const checked = {}
     for (const attackEvent of attackEvents) {
         const targetId = attackEvent.data.targetId
+
+        // 내 tombstone 중에 찾아보자
         const targetTombstone = myTombstones.find(tombstone => tombstone.creep.id === targetId)
+
+        // 안찾아지면 내 creep이 죽은 게 아님. 넘기자.
         if (!targetTombstone) {
             continue
         }
+
+        // 여기서부터 targetTombstone은 내 creep의 tombstone임.
         const deadCreep = targetTombstone.creep
         const attacker = Game.getObjectById(attackEvent.objectId)
         const owner = attacker ? attacker.owner : undefined
         const username = owner ? owner.username : undefined
 
-        data.recordLog(`${deadCreep.name} is murdered at ${this.name} by ${username}`)
-
-        if (username && username === 'Invader') {
-            return
+        if (!checked[deadCreep.name]) {
+            data.recordLog(`KILLED: ${deadCreep.name} by ${username}`, this.name)
+            checked[deadCreep.name] = true
         }
 
-        if (deadDefendersId.includes(targetId)) {
-            isDefenderMurdered = true
-            isMurdered = true
+        // 일단 죽은 건 맞으니 inaccessible 붙이자
+        const TTL = attacker.ticksToLive
+        map[this.name].inaccessible = map[this.name].inaccessible || Game.time
+        map[this.name].inaccessible = Math.max(map[this.name].inaccessible, Game.time + TTL)
+        map[this.name].lastScout = Game.time
+
+        if (!deadDefendersId.includes(targetId)) {
+            // defender가 아닐 경우 여기서 넘기자.
             continue
         }
-        if (deadCreepsId.includes(targetId)) {
-            isMurdered = true
-        }
 
-    }
+        // 여기서부터는 defender 가 죽은거임.
 
-    if (isMurdered) {
-        map[this.name].inaccessible = Game.time + 1500
-        map[this.name].lastScout = Game.time
-    }
+        // 다시 와도 되는 시간 설정
+        map[this.name].threat = map[this.name].threat || Game.time
+        map[this.name].threat = Math.max(map[this.name].threat, Game.time + TTL)
 
-    if (isDefenderMurdered) {
-        map[this.name].inaccessible = Game.time + 1500
-        map[this.name].lastScout = Game.time
-        map[this.name].threat = true
-        if (OVERLORD.colonies.includes(this.name) && this.memory.host) {
-            const hostRoom = Game.rooms[this.memory.host]
-            if (!hostRoom) {
-                return
+        // user한테 죽은 경우 colony 버리고 확인 멈추고 return.
+        if (username !== 'Invader') {
+            map[this.name].threat = true
+            if (OVERLORD.colonies.includes(this.name) && this.memory.host) {
+                const hostRoom = Game.rooms[this.memory.host]
+                if (hostRoom) {
+                    hostRoom.abandonColony(this.name)
+                }
             }
-            hostRoom.abandonColony(this.name)
+            return
         }
     }
 }
@@ -199,7 +204,7 @@ Room.prototype.abondonRoom = function () {
     if (this.isMy) {
         if (terminal && terminal.cooldown < 1) {
             if (terminal.store.getUsedCapacity() < 10000 && this.storage.store.getUsedCapacity() < 10000) {
-                data.recordLog(`${this.name} depleted`)
+                data.recordLog(`DEPLETED`, this.name)
                 terminal.pos.createFlag(`${this.name} clearAll`, COLOR_PURPLE)
                 return
             }
@@ -296,7 +301,7 @@ Room.prototype.manageLab = function () {
         return
     }
 
-    if (this.controller.level < 8 && this.operateBoostLaborer() !== ERR_NOT_ENOUGH_RESOURCES) {
+    if (this.controller.level < 8 && this.operateBoostLaborer() !== ERR_NOT_ENOUGH_RESOURCES && !this.heap.constructing) {
         return
     }
 

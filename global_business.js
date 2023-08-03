@@ -14,7 +14,7 @@ global.business = {
             }
         }
         this._numProfitCal++;
-        data.recordLog('recalculate profit of compounds.')
+        data.recordLog('CALC: profitable compounds.')
         return this._profitableCompounds
     }
 }
@@ -152,7 +152,7 @@ business.buy = function (resourceType, amount, roomName = undefined) {
         for (const terminal of terminals) { // 일단 주변 방에서 받을 수 있으면 받기
             if (terminal.store[resourceType] > 12000) {
                 terminal.send(resourceType, amount > 2000 ? amount : 2000, roomName)
-                data.recordLog(`${roomName} received ${amount > 2000 ? amount : 2000} of ${resourceType} from ${terminal.room.name}`)
+                data.recordLog(`RECEIVE: ${amount > 2000 ? amount : 2000} ${resourceType} from ${terminal.room.name}`, roomName)
                 return 'received'
             }
         }
@@ -170,7 +170,7 @@ business.buy = function (resourceType, amount, roomName = undefined) {
     if (minSellPrice <= 1.1 * buyPrice || minSellPrice <= 1) {
         const result = isIntershard ? Game.market.deal(cheapestSellOrder.id, amount) : Game.market.deal(cheapestSellOrder.id, amount, roomName)
         if (result === OK) {
-            data.recordLog(`${roomName ? roomName + ' ' : ''}buy ${resourceType} from market`)
+            data.recordLog(`BUY: ${amount} ${resourceType}`, roomName)
             return 'deal from market'
         }
     }
@@ -206,7 +206,7 @@ business.buy = function (resourceType, amount, roomName = undefined) {
         totalAmount: amount,
         roomName: roomName
     }) === OK) {
-        data.recordLog(`${roomName + ' ' || ''}created ${amount} of ${resourceType} buy order`)
+        data.recordLog(`ORDER: Buy ${amount} ${resourceType} `, roomName)
     }
     return 'new order'
 }
@@ -232,9 +232,10 @@ business.sell = function (resourceType, amount, roomName = undefined) {
 
     //구매주문 가격이 충분히 비싸면 바로 팔자
     if (mostExpensiveBuyOrder && (maxBuyPrice * 1.15 >= sellPrice || Game.market.credits < energyPrice * 500000)) {
-        const result = Game.market.deal(mostExpensiveBuyOrder.id, Math.min(mostExpensiveBuyOrder.amount, amount), roomName)
+        const finalAmount = Math.min(mostExpensiveBuyOrder.amount, amount)
+        const result = Game.market.deal(mostExpensiveBuyOrder.id, finalAmount, roomName)
         if (result === OK) {
-            data.recordLog(`${roomName ? roomName + ' ' : ''}sell ${resourceType} from market`)
+            data.recordLog(`SELL: ${finalAmount} ${resourceType}`, roomName)
             return true
         }
     }
@@ -267,7 +268,7 @@ business.sell = function (resourceType, amount, roomName = undefined) {
         totalAmount: amount,
         roomName: roomName
     })
-    data.recordLog(`${roomName ? roomName + ' ' : ''}created ${amount} of ${resourceType} sell order`)
+    data.recordLog(`ORDER: Sell ${amount} ${resourceType}`, roomName)
     return false
 }
 
@@ -285,7 +286,7 @@ business.dump = function (resourceType, amount, roomName) {
     const sellAmount = Math.min(mostExpensiveBuyOrder.amount, amount)
     const result = Game.market.deal(mostExpensiveBuyOrder.id, sellAmount, roomName)
     if (result === OK) {
-        data.recordLog(`${roomName + ' ' || ''}sell ${sellAmount} of ${resourceType} with price ${mostExpensiveBuyOrder.price} from market`)
+        data.recordLog(`DUMP: ${sellAmount} ${resourceType}`, roomName)
         return true
     }
 }

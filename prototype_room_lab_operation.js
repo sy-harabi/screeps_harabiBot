@@ -54,16 +54,9 @@ Room.prototype.operateLab = function (resource0, resource1) {
             return
         }
 
-        for (const lab of reactionLabs) {
+        for (const lab of this.structures.lab) {
             if (lab.mineralType && lab.store.getUsedCapacity(lab.mineralType) > 0) {
-                researcher.getDeliveryRequest(reactionLabs, terminal, lab.mineralType)
-                return
-            }
-        }
-
-        for (const lab of sourceLabs) {
-            if (lab.mineralType && lab.store.getUsedCapacity(lab.mineralType) > 0) {
-                researcher.getDeliveryRequest(sourceLabs, terminal, lab.mineralType)
+                researcher.getDeliveryRequest(this.structures.lab, terminal, lab.mineralType)
                 return
             }
         }
@@ -208,7 +201,6 @@ Room.prototype.operateBoost = function () {
 Room.prototype.prepareBoostLaborer = function () {
     const researcher = this.creeps.researcher[0]
     const terminal = this.terminal
-
     const boostLab = this.structures.lab[0]
 
     if (!boostLab) {
@@ -257,7 +249,6 @@ Room.prototype.operateBoostLaborer = function () {
     if (!boostLab) {
         return false
     }
-
     const researcher = this.creeps.researcher[0]
     const researcherCarry = researcher ? researcher.store['XGH2O'] : 0
 

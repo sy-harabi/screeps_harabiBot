@@ -242,6 +242,18 @@ global.getCreepsByRole = function (roomName, role) {
     return creeps[roomName][role]
 }
 
+global.getCreepsByRoomName = function (roomName) {
+    const creeps = classifyCreeps()
+    if (!creeps[roomName]) {
+        return []
+    }
+    const result = []
+    for (const roleName in creeps[roomName]) {
+        result.push(...creeps[roomName][roleName])
+    }
+    return result
+}
+
 global.findClosestMyRoom = function (fromRoomName, level = 0) {
     const closestRoomName = Object.keys(Game.rooms).filter(roomName => roomName !== fromRoomName && Game.rooms[roomName].isMy && Game.rooms[roomName].controller.level >= level).sort((a, b) => {
         return Game.map.findRoute(fromRoomName, a, {
@@ -370,7 +382,7 @@ Overlord.prototype.mapInfo = function () {
         }
         catch (error) {
             console.log(error)
-            data.recordLog(`${roomName} has error ${error}`)
+            data.recordLog(`MAP: ${error}`, roomName)
             // delete map[roomName]
         }
     }

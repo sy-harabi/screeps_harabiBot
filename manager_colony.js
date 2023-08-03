@@ -1,4 +1,6 @@
 Room.prototype.ruleColony = function (colonyName) {
+    const map = OVERLORD.map
+
     const colony = Game.rooms[colonyName]
     if (colony) {
         colony.memory.host = this.name
@@ -13,7 +15,7 @@ Room.prototype.ruleColony = function (colonyName) {
     new RoomVisual(colonyName).text(`📶${status.state.toUpperCase()}`, visualPos.x + 1, visualPos.y, { align: 'left' })
 
     // efficiency 나타내기
-    if (!status.tick || (Game.time - status.tick > 1000)) {
+    if (!status.tick || (Game.time - status.tick > 10000)) {
         status.lastProfit = status.profit
         status.lastCost = status.cost
         status.lastTick = status.tick
@@ -33,20 +35,29 @@ Room.prototype.ruleColony = function (colonyName) {
         colony.visual.text(`⏱️${colony.controller.reservation.ticksToEnd}`, colony.controller.pos.x + 1, colony.controller.pos.y + 1, { align: 'left' })
     }
 
+    // evacuate
+    if (map[colonyName] && map[colonyName].threat && Game.time < map[colonyName].threat) {
+        if (status.state !== 'evacuate') {
+            status.state = 'evacuate'
+            data.recordLog(`COLONY: Evacuate.`, colonyName)
+        }
+        new RoomVisual(colonyName).text(`⏱️${map[colonyName].threat - Game.time}`, visualPos.x + 6, visualPos.y, { align: 'left' })
+    }
+
     // 다른 사람이 claim한 방이면 포기하자
     if (colony && colony.controller.owner && !['Invader'].includes(colony.controller.owner.username)) {
         return this.abandonColony(colonyName)
     }
 
-    // invader 혹은 invaderCore 처리
-    if (this.checkColonyInvader(colonyName)) {
+    // invader 혹은 invaderCore 처리 (evacuate 일때는 예외)
+    if (this.checkColonyInvader(colonyName) && status.state !== 'evacuate') {
         new RoomVisual(colonyName).text(`👿Invader`, visualPos.x + 1, visualPos.y - 1, { align: 'left' })
         if (!getNumCreepsByRole(colonyName, 'colonyDefender')) {
             return this.requestColonyDefender(colonyName)
         }
     }
 
-    if (this.checkColonyInvaderCore(colonyName)) {
+    if (this.checkColonyInvaderCore(colonyName) && status.state !== 'evacuate') {
         new RoomVisual(colonyName).text(`👿InvaderCore`, visualPos.x + 1, visualPos.y - 1, { align: 'left' })
         if (!getNumCreepsByRole(colonyName, 'colonyCoreDefender')) {
             return this.requestColonyCoreDefender(colonyName)
@@ -214,6 +225,19 @@ Room.prototype.ruleColony = function (colonyName) {
         status.cost = status.cost || 0
         return
     }
+
+    if (status.state === 'evacuate') {
+        for (const creep of getCreepsByRoomName(colonyName)) {
+            creep.getRecycled()
+        }
+        if (!map[colonyName] || !map[colonyName].threat || Game.time >= map[colonyName].threat) {
+            status.state = 'reservation'
+            status.isInvader = false
+            colony.memory.isInvader = false
+            data.recordLog(`COLONY: Reactivated.`, colonyName)
+            return
+        }
+    }
 }
 
 Object.defineProperties(Flag.prototype, {
@@ -342,7 +366,7 @@ Room.prototype.resetColonyEfficiency = function (colonyName) {
         const efficiency = Math.floor(10 * (status.profit - status.cost) / (Game.time - status.tick) / numSource) / 100
         status.lastEfficiency = efficiency
         if (efficiency < 0.5) {
-            data.recordLog(`${colonyName} has efficiency ${efficiency * 100}%`)
+            data.recordLog(`COLONY: Efficiency ${efficiency * 100}%`, colonyName)
         }
     }
 

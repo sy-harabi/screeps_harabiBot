@@ -137,9 +137,6 @@ function reserver(creep) {
             creep.moveTo(base, { range: 22, maxRooms: 1 })
             return
         }
-        if (creep.pos.lookFor(LOOK_STRUCTURES).length) {
-            creep.move(Math.floor(Math.random() * 8) + 1)
-        }
         return
     }
 
@@ -205,9 +202,6 @@ function colonyLaborer(creep) {
         if (creep.pos.getRangeTo(base) > 20) {
             creep.moveMy(base, { range: 20 })
             return
-        }
-        if (creep.pos.lookFor(LOOK_STRUCTURES).length) {
-            creep.move(Math.floor(Math.random() * 8) + 1)
         }
         return
     }
@@ -279,9 +273,6 @@ function colonyMiner(creep) {
             creep.moveTo(base, { range: 22, maxRooms: 1 })
             return
         }
-        if (creep.pos.lookFor(LOOK_STRUCTURES).length) {
-            creep.move(Math.floor(Math.random() * 8) + 1)
-        }
         return
     }
 
@@ -292,13 +283,15 @@ function colonyMiner(creep) {
         return
     }
 
-    if (!source.container) {
+    if (!source || !source.container) {
         return false
     }
-    if (creep.room.name !== creep.memory.colony || creep.harvest(source) === -9 || creep.pos.getRangeTo(source.container) > 0) {
-        creep.moveMy(source.container)
-        return
+
+    if (creep.pos.getRangeTo(source.container) > 0) {
+        return creep.moveMy(source.container)
     }
+
+    creep.harvest(source)
 
     if (source.container.hits < 200000) {
         creep.repair(source.container)
@@ -322,9 +315,6 @@ function colonyHauler(creep) {
         if (creep.pos.getRangeTo(base) > 22) {
             creep.moveTo(base, { range: 22, maxRooms: 1 })
             return
-        }
-        if (creep.pos.lookFor(LOOK_STRUCTURES).length) {
-            creep.move(Math.floor(Math.random() * 8) + 1)
         }
         return
     }
@@ -397,8 +387,10 @@ function colonyHauler(creep) {
 }
 
 function colonyDefender(creep) {
-    creep.heal(creep)
     if (creep.room.name !== creep.memory.colony) {
+        if (creep.hits < creep.hitsMax) {
+            creep.heal(creep)
+        }
         creep.moveToRoom(creep.memory.colony, 1)
         return
     }
@@ -406,6 +398,7 @@ function colonyDefender(creep) {
     const hostileCreeps = creep.room.find(FIND_HOSTILE_CREEPS)
     const target = creep.pos.findClosestByPath(hostileCreeps)
     if (hostileCreeps.length) {
+        creep.heal(creep)
         const range = creep.pos.getRangeTo(target)
         if (range <= 1) {
             creep.rangedMassAttack(target)

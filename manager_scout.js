@@ -50,7 +50,7 @@ Room.prototype.manageScout = function () {
         continue
       }
       if (map[node].distance >= MAX_DISTANCE) {
-        data.recordLog(`${this.name} ends scouting. searched everything`)
+        data.recordLog(`SCOUT: Searched everything`, this.name)
         status.nextScoutTime = Game.time + SCOUT_INTERVAL
         status.state = 'wait'
         return
@@ -110,7 +110,7 @@ Room.prototype.manageScout = function () {
         return
       }
     }
-    data.recordLog(`${this.name} ends scouting. queue is empty`)
+    data.recordLog(`SCOUT: Queue is empty`, this.name)
     status.nextScoutTime = Game.time + SCOUT_INTERVAL
     status.state = 'wait'
     return

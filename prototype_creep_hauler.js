@@ -1,10 +1,10 @@
 Object.defineProperties(Creep.prototype, {
     supplying: {
         get() {
-            if (this.memory.supplying && this.store.getUsedCapacity() < 1) {
+            if (this.memory.supplying && this.store.getUsedCapacity() <= 0) {
                 this.memory.supplying = false
             }
-            if (!this.memory.supplying && this.store.getFreeCapacity() < 1) {
+            if (!this.memory.supplying && this.store.getFreeCapacity() <= 0) {
                 this.memory.supplying = true;
             }
             return this.memory.supplying

@@ -294,7 +294,7 @@ Room.prototype.manageEnergyFetch = function (arrayOfCreeps) {
         }
         const applicant = new EnergyRequest(creep)
         applicants.push(applicant)
-        if (creep.memory.role === 'manager' || this.memory.militaryThreat) {
+        if (creep.memory.role === 'manager' || creep.memory.role === 'researcher' || this.memory.militaryThreat) {
             managerApplicants.push(applicant)
             continue
         }
@@ -385,6 +385,10 @@ Room.prototype.manageEnergy = function () {
     let suppliers = []
     let fetchers = []
     const haulers = this.creeps.hauler.concat(this.creeps.manager)
+    const researcher = this.creeps.researcher[0]
+    if (researcher && researcher.beHauler === true) {
+        haulers.push(researcher)
+    }
     for (const creep of haulers) {
         if (creep.ticksToLive < 15) {
             creep.getRecycled()

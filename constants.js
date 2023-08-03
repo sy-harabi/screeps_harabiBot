@@ -1,5 +1,7 @@
 global.MY_NAME = 'Harabi'
 
+global.SHARD = Game.shard.name
+
 global.MILLION = 1000000
 
 global.KILO = 1000

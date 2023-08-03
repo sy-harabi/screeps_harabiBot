@@ -291,7 +291,7 @@ Creep.prototype.moveMy = function (target, option = {}) { //option = {range, avo
 
     const targetPos = target.pos || target
     if (!(targetPos instanceof RoomPosition)) {
-        data.recordLog(`${this.name} has wrong target`)
+        data.recordLog(`FAIL: ${this.name} move`, this.room.name)
         return ERR_INVALID_TARGET
     }
 
@@ -440,8 +440,8 @@ Creep.prototype.getRecycled = function () {
         if (!anySpawn) {
             return
         }
-        if (!this.pos.isNearTo(anySpawn)) {
-            this.moveMy(anySpawn, { range: 1 })
+        if (this.pos.getRangeTo(anySpawn) > 2) {
+            this.moveMy(anySpawn, { range: 2 })
         }
         return false
     }

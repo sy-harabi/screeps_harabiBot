@@ -7,10 +7,10 @@ Object.defineProperties(Structure.prototype, {
             if (!this.room.controller) {
                 return this._RCLActionable = true
             }
-            if (this.room.GRCL === this.room.controller.level) {
+            if (this.room.isMy && this.room.GRCL === this.room.controller.level) {
                 return this._RCLActionable = true
             }
-            return this._RCLActionable = this.RCLActionable
+            return this._RCLActionable = this.isActive()
         }
     }
 })

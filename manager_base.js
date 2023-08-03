@@ -448,10 +448,13 @@ Room.prototype.getBasePlan = function (firstAnchor, inputCosts) {
                 continue
             }
             let numReactionLab = 0
-            let labPositions = []
+            const labPositions = [firstSourceLab, secondSourceLab]
             for (const pos of firstSourceLab.getInRange(2)) {
-                if (numReactionLab >= 10) {
+                if (numReactionLab >= 8) {
                     break
+                }
+                if (pos.isEqualTo(firstSourceLab) || pos.isEqualTo(secondSourceLab)) {
+                    continue
                 }
                 if (sourceLabCosts.get(pos.x, pos.y) < 1) {
                     continue
@@ -462,7 +465,7 @@ Room.prototype.getBasePlan = function (firstAnchor, inputCosts) {
                 numReactionLab++
                 labPositions.push(pos)
             }
-            if (numReactionLab === 10) {
+            if (labPositions.length === 10) {
                 isLab = true
                 for (const pos of labPositions) {
                     structures.lab.push(pos)

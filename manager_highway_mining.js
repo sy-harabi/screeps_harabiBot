@@ -25,7 +25,7 @@ StructureObserver.prototype.depositCheck = function (roomName) {
         if (depositRequest.lastCooldown < maxCooldown) {
             depositRequest.maxCooldown = maxCooldown
             this.room.memory.depositRequests[depositRequest.depositId] = depositRequest
-            data.recordLog(`${this.room.name} find deposit in ${roomName} with lastCooldown ${depositRequest.lastCooldown} and maxCooldown ${depositRequest.maxCooldown}`)
+            data.recordLog(`OBSERVE: ${deposit.depositType}(lastCooldown ${depositRequest.lastCooldown}, maxCooldown ${depositRequest.maxCooldown}) in ${roomName}`, this.room.name)
         }
     }
 }

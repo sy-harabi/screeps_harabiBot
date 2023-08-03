@@ -45,7 +45,7 @@ Room.prototype.manageSpawn = function () {
         }
 
         // wallMaker 생산
-        if (!this.savingMode) {
+        if (!this.savingMode && this.structures.rampart.length > 0) {
             const storageEnergy = this.energy
             const buffer = BUFFER[level]
             // RCL 8 미만이면 standard보다 buffer만큼 높아야 wallmaker 생산 시작. 2buffer만큼 storageEnergy 많아질때마다 wallMaker 하나씩 추가. 최대 3마리
@@ -331,7 +331,7 @@ Room.prototype.requestColonyMiner = function (colonyName, sourceId) {
 Room.prototype.requestColonyDefender = function (colonyName) {
     let body = []
     let cost = 0
-    const bodyLength = Math.min(Math.floor((this.energyCapacityAvailable) / 1100), 5)
+    const bodyLength = Math.min(Math.floor((this.energyCapacityAvailable) / 1100), 2)
     for (let i = 0; i < 5 * bodyLength - 1; i++) {
         body.push(MOVE)
         cost += 50
@@ -348,8 +348,11 @@ Room.prototype.requestColonyDefender = function (colonyName) {
     body.push(MOVE, HEAL)
     cost += 300
 
-    if (bodyLength === 0) {
-        body = [TOUGH, TOUGH, TOUGH, TOUGH, TOUGH, MOVE, RANGED_ATTACK]
+    if (bodyLength < 2) {
+        while (cost + 200 <= this.energyCapacityAvailable) {
+            body.unshift(RANGED_ATTACK, MOVE)
+            cost += 200
+        }
     }
 
     const name = `${colonyName} colonyDefender ${Game.time}_${this.spawnQueue.length}`
