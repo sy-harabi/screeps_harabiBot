@@ -38,7 +38,7 @@ data.recordLog = function (text, scope) {
   Memory._log.push(logContents)
   Game.notify(logContents, 180)
   if (Memory._log.length > 100) {
-    Memory._log.splice(0, this._log.length - 50)
+    Memory._log.splice(0, Memory._log.length - 50)
   }
 }
 
@@ -62,9 +62,10 @@ global.log = function () {
   if (!Memory._log) {
     return 'no log until now'
   }
-
+  let num = 1
   for (const text of Memory._log) {
-    console.log(text)
+    console.log(`#${toTwoDigits(num)} ${text}`)
+    num++
   }
   return 'end.'
 }
