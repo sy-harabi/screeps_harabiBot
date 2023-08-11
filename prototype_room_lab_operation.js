@@ -368,7 +368,7 @@ Room.prototype.getLabTarget = function () {
         return this.memory.labTarget
     }
 
-    const targetCompounds = [...Object.keys(USEFULL_COMPOUNDS), ...business.profitableCompounds]
+    const targetCompounds = [...Object.keys(USEFULL_COMPOUNDS)]
 
     const checked = {}
     //target 확인

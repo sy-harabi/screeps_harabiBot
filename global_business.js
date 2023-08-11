@@ -1,10 +1,6 @@
 global.business = {
     get profitableCompounds() {
-        if (!this._numProfitCal) {
-            this._numProfitCal = 0
-        }
-        if (this._profitableCompounds && this._numProfitCal % 100 !== 0) {
-            this._numProfitCal++;
+        if (this._profitableCompounds && (Game.time - this.lastCalc) < 1000) {
             return this._profitableCompounds
         }
         this._profitableCompounds = []
@@ -13,8 +9,8 @@ global.business = {
                 this._profitableCompounds.push(resourceType)
             }
         }
-        this._numProfitCal++;
         data.recordLog('CALC: profitable compounds.')
+        this.lastCalc = Game.time
         return this._profitableCompounds
     }
 }

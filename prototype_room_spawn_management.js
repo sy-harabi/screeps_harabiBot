@@ -12,12 +12,13 @@ Room.prototype.manageSpawn = function () {
     // manager 생산. 전시에는 무조건 생산
     if (this.storage) {
         const managers = this.creeps.manager.filter(creep => (creep.ticksToLive || 1500) > 3 * creep.body.length)
-        const MAX_CARRY = 24 // 50개 중 32개가 CARRY면 최대
+        const researchers = this.creeps.researcher.filter(creep => (creep.ticksToLive || 1500) > 3 * creep.body.length)
+        const MAX_CARRY = 24
         const MAX_NUM = Math.max(1, this.structures.link.length - 1)
         if (managers.length < MAX_NUM) {
-            this.requestHauler(MAX_CARRY, { isUrgent: (managers.length <= 0), isManager: true, office: this.storage.link })
+            this.requestHauler(MAX_CARRY, { isUrgent: (managers.length + researchers.length <= 0), isManager: true, office: this.storage.link })
         }
-        this.visual.text(`📤${managers.length}/${MAX_NUM}`, this.storage.pos.x - 2.9, this.storage.pos.y + 0.75, { font: 0.5, align: 'left' })
+        this.visual.text(`📤${managers.length + researchers.length}/${MAX_NUM}`, this.storage.pos.x - 2.9, this.storage.pos.y + 0.75, { font: 0.5, align: 'left' })
     }
 
     // laborer 생산

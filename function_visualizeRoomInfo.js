@@ -5,6 +5,8 @@ global.X_ENTIRE = {
     end: 0
 }
 
+const OPACITY = 0.8
+
 // item prototype
 function VisualItem(name, length, text) {
     // textFunction : (Room) => {text, option}
@@ -20,13 +22,13 @@ const roomName = new VisualItem('Name', 5, (room) => {
     let emoji = undefined
     let color = undefined
     if (room.memory.militaryThreat) {
-        emoji = '⚔️'
+        emoji = '⚠️'
         color = 'magenta'
     } else if (room.heap.constructing) {
-        emoji = '🏗️'
+        emoji = '🧱'
         color = 'yellow'
     } else {
-        emoji = '🔄'
+        emoji = '🔼'
         color = 'cyan'
     }
     const content = `${emoji}${room.name}(${room.mineral.mineralType})`
@@ -162,16 +164,17 @@ const items = [
 
 Overlord.prototype.visualizeRoomInfo = function () {
     const startPos = { x: 0, y: 0.5 }
-    new RoomVisual().rect(startPos.x + X_ENTIRE.start, startPos.y - 1, startPos.x + X_ENTIRE.end + 0.5, OVERLORD.myRooms.length + 3, { fill: 'black', opacity: 0.5 }); // 틀 만들기
+    new RoomVisual().rect(startPos.x + X_ENTIRE.start, startPos.y - 1, startPos.x + X_ENTIRE.end + 0.5, OVERLORD.myRooms.length + 3, { fill: 'black', opacity: 0.3 }); // 틀 만들기
 
-    new RoomVisual().text("Time " + Game.time, 0.5, startPos.y, { color: 'cyan', strokeWidth: 0.2, align: 'left' })
-    new RoomVisual().text("CPU " + Game.cpu.getUsed().toFixed(2), 6.5, startPos.y, { color: 'cyan', strokeWidth: 0.2, align: 'left' })
-    new RoomVisual().text("Bucket " + Game.cpu.bucket, 11, startPos.y, { color: 'cyan', strokeWidth: 0.2, align: 'left' });
-    new RoomVisual().text("Avg " + Math.round(100 * (_.sum(CPU) / CPU.length)) / 100, 16.5, startPos.y, { color: 'cyan', strokeWidth: 0.2, align: 'left' });
-    new RoomVisual().text("# ticks " + CPU.length, 20.5, startPos.y, { color: 'cyan', strokeWidth: 0.2, align: 'left' });
-    new RoomVisual().text(`Room: ${OVERLORD.myRooms.length}`, 25, startPos.y, { color: 'lime', strokeWidth: 0.2, align: 'left' })
-    new RoomVisual().text(`Creep: ${Object.keys(Game.creeps).length}`, 29.5, startPos.y, { color: 'lime', strokeWidth: 0.2, align: 'left' })
-    new RoomVisual().text(`Remote: ${Memory.info ? Memory.info.numRemotes || 0 : '-'}`, 34.5, startPos.y, { color: 'lime', strokeWidth: 0.2, align: 'left' })
+    const option = { color: 'cyan', strokeWidth: 0.2, align: 'left', opacity: OPACITY }
+    new RoomVisual().text("Time " + Game.time, 0.5, startPos.y, option)
+    new RoomVisual().text("CPU " + Game.cpu.getUsed().toFixed(2), 6.5, startPos.y, option)
+    new RoomVisual().text("Bucket " + Game.cpu.bucket, 11, startPos.y, option);
+    new RoomVisual().text("Avg " + Math.round(100 * (_.sum(CPU) / CPU.length)) / 100, 16.5, startPos.y, option);
+    new RoomVisual().text("# ticks " + CPU.length, 20.5, startPos.y, option);
+    new RoomVisual().text(`Room: ${OVERLORD.myRooms.length}`, 25, startPos.y, option)
+    new RoomVisual().text(`Creep: ${Object.keys(Game.creeps).length}`, 29.5, startPos.y, option)
+    new RoomVisual().text(`Remote: ${Memory.info ? Memory.info.numRemotes || 0 : '-'}`, 34.5, startPos.y, option)
 
     // 각 방마다 표시
     for (let i = -1; i < OVERLORD.myRooms.length; i++) {
@@ -179,14 +182,16 @@ Overlord.prototype.visualizeRoomInfo = function () {
         // 각 item마다 표시
         for (const item of items) {
             // 구분선 삽입
-            new RoomVisual().text('|', startPos.x + item.end, startPos.y + i + 2, { color: 'cyan' })
+            new RoomVisual().text('|', startPos.x + item.end, startPos.y + i + 2, { color: 'cyan', opacity: OPACITY })
             // 처음에는 item 이름
             if (i === -1) {
-                new RoomVisual().text(item.name, startPos.x + item.mid, startPos.y + i + 2, { color: 'cyan' })
+                new RoomVisual().text(item.name, startPos.x + item.mid, startPos.y + i + 2, { color: 'cyan', opacity: OPACITY })
                 continue
             }
             // 그다음부터는 내용
             const text = item.text(room)
+            const option = text.option
+            option.opacity = OPACITY
             new new RoomVisual().text(text.content, startPos.x + item.mid, startPos.y + i + 2, text.option)
         }
     }

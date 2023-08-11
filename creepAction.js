@@ -419,8 +419,9 @@ function colonyDefender(creep) {
         return
     } else {
         const roomInfo = OVERLORD.map[creep.room.name]
-        if (roomInfo && roomInfo.inaccessible) {
+        if (roomInfo) {
             delete roomInfo.inaccessible
+            delete roomInfo.threat
         }
     }
 

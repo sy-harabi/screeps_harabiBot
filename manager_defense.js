@@ -23,16 +23,21 @@ Room.prototype.manageDefense = function () {
 
     if (strong.length > 0 && status.state === 'normal' && this.isWalledUp) {
         status.state = 'emergency'
+        data.recordLog('WAR: Emergency occured', this.name)
         this.memory.militaryThreat = true
         for (const hauler of this.creeps.hauler) {
             hauler.memory.role = 'manager'
         }
     } else if (status.state === 'emergency' && strong.length === 0) {
+        data.recordLog('WAR: Emergency ended', this.name)
         status.state = 'normal'
         this.memory.militaryThreat = false
     }
 
     if (status.state === 'emergency') {
+        for (const target of strong) {
+            this.getNeededDamageFor(target)
+        }
         const spawn = this.structures.spawn[0]
         for (const creep of this.find(FIND_MY_CREEPS)) {
             if (creep.memory.role === 'recycle') {
@@ -220,8 +225,52 @@ Room.prototype.towerAttack = function (target) { //target은 enemy creep
 Room.prototype.getTowerDamageFor = function (target) {//target은 enemy creep
     let damage = target.pos.getTowerDamageAt()
     let netDamage = target.getNetDamageFor(damage)
-    this.visual.text(netDamage, target.pos, { color: '#f000ff' })
+    this.visual.text(netDamage, target.pos.x, target.pos.y + 1, { color: 'magenta' })
     return netDamage
+}
+
+Room.prototype.getNeededDamageFor = function (target, assumeFullPower) {
+    // target은 enemy creep
+    // assumeFullPower : boolean. true면 target이 풀피라고 가정.
+    if (!(target instanceof Creep)) {
+        console.log('getNeededDamageFor:invalid target')
+        return
+    }
+    const healPower = this.calcEnemyHealPower(target)
+    const towerDamage = target.pos.getTowerDamageAt()
+    let result = towerDamage
+    const body = target.body
+    while (result <= healPower && body.length > 0) {
+        const part = body.shift()
+        const hits = assumeFullPower ? 100 : part.hits
+        if (hits === 0) {
+            continue
+        }
+        if (part.type !== TOUGH) {
+            result += hits
+            continue
+        }
+        if (part.boost === undefined) {
+            result += hits
+            continue
+        }
+        let ratio = 1
+        switch (part.boost) {
+            case 'XGHO2':
+                ratio = 0.3
+                break
+            case 'GHO2':
+                ratio = 0.5
+                break
+            case 'GO':
+                ratio = 0.7
+                break
+        }
+        result += Math.ceil(hits / ratio)
+    }
+
+    this.visual.text(result, target.pos, { color: 'cyan' })
+    return result
 }
 
 Creep.prototype.getNetDamageFor = function (damage) {
@@ -266,11 +315,11 @@ Room.prototype.calcEnemyHealPower = function (target) { //target은 enemy creep
         }
         result += (creep.calcHealPower() / 3) // short range 아니면 효율 1/3 됨
     }
-    this.visual.text(result, target.pos.x, target.pos.y + 1, { color: '#74ee15' })
+    this.visual.text(result, target.pos.x, target.pos.y + 2, { color: 'lime' })
     return result
 }
 
-RoomPosition.prototype.getTowerDamageAt = function () { //target은 roomPosition 혹은 roomPosition 가지는 Object
+RoomPosition.prototype.getTowerDamageAt = function () {
     const towers = Game.rooms[this.roomName].structures.tower.filter(tower => tower.store[RESOURCE_ENERGY] > 0)
 
     let result = 0
@@ -373,6 +422,8 @@ Creep.prototype.calcAttackPower = function () {
     }
     return result
 }
+
+
 
 // rampart 바깥쪽을 모두 구해서 cost를 높이는 method
 

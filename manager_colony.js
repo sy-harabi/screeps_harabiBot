@@ -67,7 +67,7 @@ Room.prototype.ruleColony = function (colonyName) {
     // state machine
     if (status.state === 'extraction') {
         // 가끔 전부 지어졌는지 다시 확인
-        if (Game.time % 1000 === 0) {
+        if (colony && Game.time % 1000 === 0) {
             const infraPlan = this.getColonyInfraPlan(colonyName, status)
             if (!infraPlan) {
                 return this.abandonColony(colonyName)
@@ -233,7 +233,9 @@ Room.prototype.ruleColony = function (colonyName) {
         if (!map[colonyName] || !map[colonyName].threat || Game.time >= map[colonyName].threat) {
             status.state = 'reservation'
             status.isInvader = false
-            colony.memory.isInvader = false
+            if (Memory.rooms[colonyName]) {
+                Memory.rooms[colonyName].isInvader = false
+            }
             data.recordLog(`COLONY: Reactivated.`, colonyName)
             return
         }

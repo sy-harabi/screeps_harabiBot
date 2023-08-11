@@ -380,7 +380,7 @@ Room.prototype.manageVisual = function () {
 
     const controller = this.controller
     this.visual.text(`🛠️${this.laborer.numWork}/${this.maxWork}`, controller.pos.x + 0.75, controller.pos.y - 0.5, { align: 'left' })
-    this.visual.text(`🔄${Math.round(100 * controller.progress / controller.progressTotal)}%`, controller.pos.x + 0.75, controller.pos.y + 0.5, { align: 'left' })
+    this.visual.text(`🔼${Math.round(100 * controller.progress / controller.progressTotal)}%`, controller.pos.x + 0.75, controller.pos.y + 0.5, { align: 'left' })
 
     if (this.storage) {
         this.visual.text(` 🔋${Math.floor(this.storage.store.getUsedCapacity(RESOURCE_ENERGY) / 1000)}K`, this.storage.pos.x - 2.9, this.storage.pos.y, { font: 0.5, align: 'left' })

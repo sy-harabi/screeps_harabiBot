@@ -9,12 +9,14 @@ data.cpuEmergency = false
 data.isEnoughCredit = false
 data.info = true
 
-data.recordLog = function (text, scope) {
+data.recordLog = function (text, roomName, groupInterval = 180) {
+  roomName = roomName ? roomName.toUpperCase() : undefined
   if (!Memory._log) {
     Memory._log = []
   }
 
-  const scopeText = `<span style = "color: yellow">[${scope === undefined ? 'GLOBAL' : toScopeForm(scope.toUpperCase())}]</span>`
+  const roomNameText = roomName === undefined ? 'GLOBAL' : toRoomNameForm(roomName)
+  const roomNameWithColor = `<span style = "color: yellow">[${roomName}]</span>`
 
   const now = new Date()
   const utcNow = now.getTime() + (now.getTimezoneOffset() * 60 * 1000)
@@ -25,21 +27,25 @@ data.recordLog = function (text, scope) {
   const date = toTwoDigits(koreaDate.getDate())
   const minutes = toTwoDigits(koreaDate.getMinutes())
 
-  const koreaDateText = `<span style = "color: magenta">[${koreaDate.getFullYear()}.${month}.${date}. ${koreaDate.getHours()}:${minutes}]</span>`
+  const koreaDateText = `${koreaDate.getFullYear()}.${month}.${date}. ${koreaDate.getHours()}:${minutes}`
+  const koreaDateTextWithColor = `<span style = "color: magenta">[${koreaDateText}]</span>`
 
-  const tick = `<span style = "color: lime">[tick: ${Game.time}]</span>`
+  const tickWithColor = `<span style = "color: lime">[tick: ${Game.time}]</span>`
 
-  const content = `<span style = "color: cyan">${text}</span>`
-  const URL = scope ? `https://screeps.com/a/#!/history/${SHARD}/${scope}?t=${Game.time - 5}` : undefined
-  const hyperLink = URL ? `<A href = ${URL} target = "_blank" >[Link]</A>` : undefined
+  const contentWithColor = `<span style = "color: cyan">${text}</span>`
+  const URL = roomName ? `https://screeps.com/a/#!/history/${SHARD}/${roomName}?t=${Game.time - 5}` : undefined
+  const hyperLink = URL ? `<a href="${URL}" target="_blank">[Link]</a>` : undefined
 
-  const logContents = `<span style = "background-color: rgba(0, 0, 0, 0.68)">${koreaDateText} ${tick} ${scopeText} ${content} ${hyperLink || ``}</span>`
+  const logContents = `${koreaDateTextWithColor} ${tickWithColor} ${roomNameWithColor} ${contentWithColor} ${hyperLink || ``}`
+  const notifyContents = `[${koreaDateText}] [tick: ${Game.time}] [${roomNameText}] ${text}`
 
   Memory._log.push(logContents)
-  Game.notify(logContents, 180)
+  Game.notify(notifyContents, groupInterval)
+
   if (Memory._log.length > 100) {
     Memory._log.splice(0, Memory._log.length - 50)
   }
+
 }
 
 function toTwoDigits(string) {
@@ -50,7 +56,7 @@ function toTwoDigits(string) {
   return string
 }
 
-function toScopeForm(string) {
+function toRoomNameForm(string) {
   string = string.toString()
   while (string.length < 6) {
     string = ' ' + string

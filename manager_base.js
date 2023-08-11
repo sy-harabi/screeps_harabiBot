@@ -97,6 +97,11 @@ Room.prototype.constructByBasePlan = function (level) {
                 }
                 continue
             }
+            if (structure.structure === 'rampart') {
+                if (!this.storage || this.storage[RESOURCE_ENERGY] < 11000) {
+                    return false
+                }
+            }
             if (structure.pos.createConstructionSite(structure.structureType) === OK) {
                 numConstructionSites++
                 newConstructionSites++

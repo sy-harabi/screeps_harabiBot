@@ -421,3 +421,11 @@ global.resetMap = function (roomName) {
         return `reset map of ${roomName}`
     }
 }
+
+global.link = function () {
+    for (const roomName of OVERLORD.myRooms) {
+        const URL = `https://screeps.com/a/#!/${SHARD}/${roomName}`
+        const hyperLink = `<a href="${URL}" target="_blank">${roomName}</a>`
+        console.log(hyperLink)
+    }
+}
