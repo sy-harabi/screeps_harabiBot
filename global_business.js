@@ -144,11 +144,10 @@ business.buy = function (resourceType, amount, roomName = undefined) {
 
     let sellOrders = Game.market.getAllOrders({ resourceType: resourceType, type: ORDER_SELL })
     if (!isIntershard) { //전역 자원이 아니면
-        const terminals = OVERLORD.structures.terminal.sort((a, b) => Game.map.getRoomLinearDistance(a.room.name, roomName) - Game.map.getRoomLinearDistance(b.room.name, roomName))
+        const terminals = Overlord.structures.terminal.sort((a, b) => Game.map.getRoomLinearDistance(a.room.name, roomName) - Game.map.getRoomLinearDistance(b.room.name, roomName))
         for (const terminal of terminals) { // 일단 주변 방에서 받을 수 있으면 받기
-            if (terminal.store[resourceType] > 12000) {
+            if (terminal.store[resourceType] > 4000) {
                 terminal.send(resourceType, amount > 2000 ? amount : 2000, roomName)
-                data.recordLog(`RECEIVE: ${amount > 2000 ? amount : 2000} ${resourceType} from ${terminal.room.name}`, roomName)
                 return 'received'
             }
         }

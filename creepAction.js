@@ -104,8 +104,12 @@ function extractor(creep) { //스폰을 대입하는 함수 (이름 아님)
     const terminal = Game.getObjectById(creep.memory.terminal)
     const mineral = Game.getObjectById(creep.memory.mineral)
     const extractor = creep.room.structures.extractor[0]
+    if (!extractor) {
+        this.getRecycled()
+    }
     const container = extractor.pos.findInRange(creep.room.structures.container, 1)[0]
-    if (!terminal || !extractor || !container) {
+    if (!terminal || !container) {
+        data.recordLog(`FAIL: ${creep.name} can't harvest mineral`, creep.room.name)
         return
     }
 
@@ -130,11 +134,11 @@ function reserver(creep) {
     if (creep.memory.runAway) {
         const base = new RoomPosition(25, 25, creep.memory.base)
         if (creep.room.name !== creep.memory.base) {
-            creep.moveMy(base, { range: 22 })
+            creep.moveMy(base, { range: 20 })
             return
         }
-        if (creep.pos.getRangeTo(base) > 22) {
-            creep.moveTo(base, { range: 22, maxRooms: 1 })
+        if (creep.pos.getRangeTo(base) > 20) {
+            creep.moveTo(base, { range: 20, maxRooms: 1 })
             return
         }
         return
@@ -147,7 +151,8 @@ function reserver(creep) {
             if (result.incomplete) {
                 const base = Game.rooms[creep.memory.base]
 
-                if (base) {
+                if (base && !base.getAccessibleToController()) {
+                    data.recordLog(`COLONY: Abandon ${creep.memory.colony} since controller is blocked`, creep.memory.colony)
                     base.abandonColony(creep.memory.colony)
                     creep.suicide()
                 }
@@ -162,7 +167,8 @@ function reserver(creep) {
         const result = creep.moveMy(controller, { range: 1 })
         if (result.incomplete) {
             const base = Game.rooms[creep.memory.base]
-            if (base) {
+            if (base && !base.getAccessibleToController()) {
+                data.recordLog(`COLONY: Abandon ${creep.memory.colony} since controller is blocked`, creep.memory.colony)
                 base.abandonColony(creep.memory.colony)
                 creep.suicide()
             }
@@ -269,8 +275,8 @@ function colonyMiner(creep) {
             creep.moveTo(base)
             return
         }
-        if (creep.pos.getRangeTo(base) > 22) {
-            creep.moveTo(base, { range: 22, maxRooms: 1 })
+        if (creep.pos.getRangeTo(base) > 20) {
+            creep.moveTo(base, { range: 20, maxRooms: 1 })
             return
         }
         return
@@ -312,8 +318,8 @@ function colonyHauler(creep) {
             creep.moveTo(base)
             return
         }
-        if (creep.pos.getRangeTo(base) > 22) {
-            creep.moveTo(base, { range: 22, maxRooms: 1 })
+        if (creep.pos.getRangeTo(base) > 20) {
+            creep.moveTo(base, { range: 20, maxRooms: 1 })
             return
         }
         return
@@ -322,12 +328,33 @@ function colonyHauler(creep) {
     // 논리회로
     if (creep.memory.supplying && creep.store[RESOURCE_ENERGY] === 0) {
         if (creep.room.name === creep.memory.base && creep.ticksToLive < 2.2 * creep.memory.sourcePathLength) {
-            creep.getRecycled()
+            creep.memory.getRecycled = true
             return
         }
         creep.memory.supplying = false
     } else if (!creep.memory.supplying && creep.store.getFreeCapacity(RESOURCE_ENERGY) === 0) {
         creep.memory.supplying = true
+    }
+
+    if (creep.memory.getRecycled) {
+        if (creep.room.name === creep.memory.base) {
+            creep.getRecycled()
+            return
+        }
+        const room = Game.rooms[creep.memory.base]
+        if (!room) {
+            creep.suicide()
+            return
+        }
+        const storage = room.storage
+        if (!storage) {
+            data.recordLog(`COLONY: Abandon ${creep.memory.colony} since storage is gone`, creep.memory.colony)
+            room.abandonColony(creep.memory.colony)
+            creep.suicide()
+            return
+        }
+        creep.moveMy(storage, { range: 1 })
+        return
     }
 
     // 행동
@@ -338,6 +365,7 @@ function colonyHauler(creep) {
         }
         const storage = room.storage
         if (!storage) {
+            data.recordLog(`COLONY: Abandon ${creep.memory.colony} since storage is gone`, creep.memory.colony)
             room.abandonColony(creep.memory.colony)
             return
         }
@@ -356,6 +384,11 @@ function colonyHauler(creep) {
         if (creep.transfer(creep.room.storage, RESOURCE_ENERGY) === OK) {
             creep.room.addColonyProfit(creep.memory.colony, creep.store[RESOURCE_ENERGY])
         }
+        return
+    }
+
+    if (creep.ticksToLive < 1.1 * creep.memory.sourcePathLength) {
+        creep.suicide()
         return
     }
 
@@ -397,7 +430,8 @@ function colonyDefender(creep) {
 
     const hostileCreeps = creep.room.find(FIND_HOSTILE_CREEPS)
     const target = creep.pos.findClosestByPath(hostileCreeps)
-    if (hostileCreeps.length) {
+    if (hostileCreeps.length || (Game.time - creep.memory.lastEnemy) < 10) {
+        creep.memory.lastEnemy = Game.time
         creep.heal(creep)
         const range = creep.pos.getRangeTo(target)
         if (range <= 1) {
@@ -418,7 +452,7 @@ function colonyDefender(creep) {
         }
         return
     } else {
-        const roomInfo = OVERLORD.map[creep.room.name]
+        const roomInfo = Overlord.map[creep.room.name]
         if (roomInfo) {
             delete roomInfo.inaccessible
             delete roomInfo.threat

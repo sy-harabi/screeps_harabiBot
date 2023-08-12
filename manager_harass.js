@@ -5,8 +5,8 @@ Flag.prototype.harass = function (number = 2) {
         this.remove()
         return
     }
-    const defenders = getCreepsByRole(roomName, 'colonyDefender')
+    const defenders = Overlord.getCreepsByRole(roomName, 'colonyDefender')
     if (defenders.length < number) {
-        closestMyRoom.requestColonyDefender(roomName)
+        closestMyRoom.requestColonyDefender(roomName, false)
     }
 }

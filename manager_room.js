@@ -1,6 +1,6 @@
 Room.prototype.runRoomManager = function () {
-    if (this.abondon) {
-        this.abondonRoom()
+    if (this.abandon) {
+        this.abandonRoom()
     }
 
     if (!this.isMy) {
@@ -53,7 +53,7 @@ Room.prototype.checkTombstone = function () {
     if (myTombstones.length === 0) {
         return
     }
-    const map = OVERLORD.map
+    const map = Overlord.map
 
     map[this.name] = map[this.name] || {}
 
@@ -88,7 +88,9 @@ Room.prototype.checkTombstone = function () {
         const username = owner ? owner.username : undefined
 
         if (!checked[deadCreep.name]) {
-            data.recordLog(`KILLED: ${deadCreep.name} by ${username}`, this.name)
+            if (!Memory.creeps[deadCreep.name] || Memory.creeps[deadCreep.name].role !== 'scouter') {
+                data.recordLog(`KILLED: ${deadCreep.name} by ${username}`, this.name)
+            }
             checked[deadCreep.name] = true
         }
 
@@ -112,9 +114,10 @@ Room.prototype.checkTombstone = function () {
         // user한테 죽은 경우 colony 버리고 확인 멈추고 return.
         if (username !== 'Invader') {
             map[this.name].threat = true
-            if (OVERLORD.colonies.includes(this.name) && this.memory.host) {
+            if (Overlord.colonies.includes(this.name) && this.memory.host) {
                 const hostRoom = Game.rooms[this.memory.host]
                 if (hostRoom) {
+                    data.recordLog(`COLONY: Abandon ${this.name}. defender is killed.`, this.name)
                     hostRoom.abandonColony(this.name)
                 }
             }
@@ -165,7 +168,7 @@ Room.prototype.manageSource = function () {
         }
 
         if (haulerRatio === 0) {
-            this.requestHauler(source.info.maxCarry, { isUrgent: true, isManager: false, office: source })
+            this.requestHauler(source.info.maxCarry, { isUrgent: true, office: source })
             continue
         }
 
@@ -175,7 +178,7 @@ Room.prototype.manageSource = function () {
         }
 
         if (haulerRatio < 1 && source.info.numHauler < source.info.maxNumHauler) {
-            this.requestHauler(source.info.maxCarry - source.info.numCarry, { isUrgent: false, isManager: false, office: source })
+            this.requestHauler(source.info.maxCarry - source.info.numCarry, { isUrgent: false, office: source })
             continue
         }
 
@@ -199,7 +202,7 @@ Room.prototype.manageExtractor = function () {
     }
 }
 
-Room.prototype.abondonRoom = function () {
+Room.prototype.abandonRoom = function () {
     const terminal = this.terminal
     if (this.isMy) {
         if (terminal && terminal.cooldown < 1) {
@@ -223,19 +226,19 @@ Room.prototype.abondonRoom = function () {
             }
         }
     } else {
-        Memory.abondon = Memory.abondon.filter(roomName => roomName !== this.name)
+        Memory.abandon = Memory.abandon.filter(roomName => roomName !== this.name)
     }
 }
 
 Object.defineProperties(Room.prototype, {
-    abondon: {
+    abandon: {
         get() {
-            if (!Memory.abondon) {
-                Memory.abondon = []
+            if (!Memory.abandon) {
+                Memory.abandon = []
                 return false
             }
 
-            return Memory.abondon.includes(this.name)
+            return Memory.abandon.includes(this.name)
         }
     },
     totalProgress: {
@@ -374,7 +377,7 @@ Room.prototype.manageHighWay = function () {
 
 Room.prototype.manageVisual = function () {
     if (data.info) {
-        const i = OVERLORD.myRooms.indexOf(this)
+        const i = Overlord.myRooms.indexOf(this)
         this.visual.rect(X_ENTIRE.start, 1.75 + i, X_ENTIRE.end + 0.5, 1, { fill: 'transparent', opacity: 1, stroke: 'white' })
     }
 

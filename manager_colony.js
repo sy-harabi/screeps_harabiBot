@@ -1,5 +1,5 @@
 Room.prototype.ruleColony = function (colonyName) {
-    const map = OVERLORD.map
+    const map = Overlord.map
 
     const colony = Game.rooms[colonyName]
     if (colony) {
@@ -28,6 +28,9 @@ Room.prototype.ruleColony = function (colonyName) {
     new RoomVisual(colonyName).text(`🏭${efficiencyRate}e/tick`, visualPos.x + 1, visualPos.y + 2, { align: 'left' })
 
     // mapVisual
+    if (map[colonyName]) {
+        Game.map.visual.text(`⚡${map[colonyName].numSource}/2`, new RoomPosition(25 + 12, 25 - 15, colonyName), { fontSize: 7, })
+    }
     Game.map.visual.text(`🏭${efficiencyRate}e/tick`, visualPos, { fontSize: 7 })
 
     // reservation
@@ -46,20 +49,22 @@ Room.prototype.ruleColony = function (colonyName) {
 
     // 다른 사람이 claim한 방이면 포기하자
     if (colony && colony.controller.owner && !['Invader'].includes(colony.controller.owner.username)) {
+        data.recordLog(`COLONY: Abandon ${colonyName} room is claime by other user`, colonyName)
         return this.abandonColony(colonyName)
     }
 
     // invader 혹은 invaderCore 처리 (evacuate 일때는 예외)
     if (this.checkColonyInvader(colonyName) && status.state !== 'evacuate') {
         new RoomVisual(colonyName).text(`👿Invader`, visualPos.x + 1, visualPos.y - 1, { align: 'left' })
-        if (!getNumCreepsByRole(colonyName, 'colonyDefender')) {
-            return this.requestColonyDefender(colonyName)
+        if (!Overlord.getNumCreepsByRole(colonyName, 'colonyDefender')) {
+            this.requestColonyDefender(colonyName)
         }
+        return
     }
 
     if (this.checkColonyInvaderCore(colonyName) && status.state !== 'evacuate') {
         new RoomVisual(colonyName).text(`👿InvaderCore`, visualPos.x + 1, visualPos.y - 1, { align: 'left' })
-        if (!getNumCreepsByRole(colonyName, 'colonyCoreDefender')) {
+        if (!Overlord.getNumCreepsByRole(colonyName, 'colonyCoreDefender')) {
             return this.requestColonyCoreDefender(colonyName)
         }
     }
@@ -70,6 +75,7 @@ Room.prototype.ruleColony = function (colonyName) {
         if (colony && Game.time % 1000 === 0) {
             const infraPlan = this.getColonyInfraPlan(colonyName, status)
             if (!infraPlan) {
+                data.recordLog(`COLONY: Abandon ${colonyName}. cannot find infraPlan`, colonyName)
                 return this.abandonColony(colonyName)
             }
             let numNewConstructionSites = 0
@@ -86,7 +92,7 @@ Room.prototype.ruleColony = function (colonyName) {
 
         // reservation 잘 되고 있는지 확인. 필요하면 reserver 부르기
         if (!colony || !colony.controller.reservation || colony.controller.reservation.username === 'Invader' || colony.controller.reservation.ticksToEnd < 500) {
-            if (!getNumCreepsByRole(colonyName, 'reserver')) {
+            if (!Overlord.getNumCreepsByRole(colonyName, 'reserver')) {
                 this.requestReserver(colonyName)
             }
         }
@@ -98,8 +104,8 @@ Room.prototype.ruleColony = function (colonyName) {
 
         // 각 source마다 확인
         const sources = colony.sources
-        const colonyMiners = getCreepsByRole(colonyName, 'colonyMiner')
-        const colonyHaulers = getCreepsByRole(colonyName, 'colonyHauler')
+        const colonyMiners = Overlord.getCreepsByRole(colonyName, 'colonyMiner')
+        const colonyHaulers = Overlord.getCreepsByRole(colonyName, 'colonyHauler')
         const visualOption = { font: 0.5, align: 'left' }
         for (const source of sources) {
             // 문제있으면 전 단계로 돌아가기
@@ -172,6 +178,7 @@ Room.prototype.ruleColony = function (colonyName) {
         }
         const infraPlan = this.getColonyInfraPlan(colonyName, status)
         if (!infraPlan) {
+            data.recordLog(`COLONY: Abandon ${colonyName}. cannot find infraPlan`, colonyName)
             return this.abandonColony(colonyName)
         }
         let numConstructionSites = colony.constructionSites.length
@@ -193,9 +200,10 @@ Room.prototype.ruleColony = function (colonyName) {
         const sources = Object.keys(status.infraPlan).map(id => Game.getObjectById(id))
         for (const source of sources) {
             if (!source) {
+                data.recordLog(`COLONY: Abandon ${colonyName}. cannot find source`, colonyName)
                 this.abandonColony(colonyName)
             }
-            const laborers = getCreepsByRole(colonyName, 'colonyLaborer').filter(creep => creep.memory.sourceId === source.id)
+            const laborers = Overlord.getCreepsByRole(colonyName, 'colonyLaborer').filter(creep => creep.memory.sourceId === source.id)
             let numWork = 0;
             for (const laborer of laborers) {
                 numWork += laborer.getNumParts('work')
@@ -210,7 +218,7 @@ Room.prototype.ruleColony = function (colonyName) {
     if (status.state === 'reservation') {
         if (colony && colony.controller.reservation && colony.controller.reservation.username === MY_NAME) {
             status.state = 'build'
-        } else if (!getNumCreepsByRole(colonyName, 'reserver')) {
+        } else if (!Overlord.getNumCreepsByRole(colonyName, 'reserver')) {
             this.requestReserver(colonyName)
         }
         return
@@ -227,7 +235,7 @@ Room.prototype.ruleColony = function (colonyName) {
     }
 
     if (status.state === 'evacuate') {
-        for (const creep of getCreepsByRoomName(colonyName)) {
+        for (const creep of Overlord.getCreepsByAssignedRoom(colonyName)) {
             creep.getRecycled()
         }
         if (!map[colonyName] || !map[colonyName].threat || Game.time >= map[colonyName].threat) {
@@ -235,44 +243,13 @@ Room.prototype.ruleColony = function (colonyName) {
             status.isInvader = false
             if (Memory.rooms[colonyName]) {
                 Memory.rooms[colonyName].isInvader = false
+                Memory.rooms[colonyName].isKiller = false
             }
             data.recordLog(`COLONY: Reactivated.`, colonyName)
             return
         }
     }
 }
-
-Object.defineProperties(Flag.prototype, {
-    isInvader: {
-        get() {
-            if (!this.room) {
-                return this.memory.isInvader
-            }
-            const hostileCreeps = this.room.find(FIND_HOSTILE_CREEPS).filter(creep => creep.checkBodyParts(['work', 'attack', 'ranged_attack']))
-            if (!this.memory.isInvader && hostileCreeps.length) {
-                this.memory.isInvader = true
-                this.room.memory.isInvader = true
-            } else if (this.memory.isInvader && !hostileCreeps.length) {
-                this.memory.isInvader = false
-                this.room.memory.isInvader = false
-            }
-            return this.memory.isInvader
-        }
-    },
-    isInvaderCore: {
-        get() {
-            if (!this.room) {
-                return this.memory.isInvaderCore
-            }
-            if (!this.memory.isInvaderCore && this.room.find(FIND_HOSTILE_STRUCTURES).length) {
-                this.memory.isInvaderCore = true
-            } else if (this.memory.isInvaderCore && !this.room.find(FIND_HOSTILE_STRUCTURES).length) {
-                this.memory.isInvaderCore = false
-            }
-            return this.memory.isInvaderCore
-        }
-    },
-})
 
 Room.prototype.manageColony = function () {
     if (!this.memory.colony) {
@@ -303,6 +280,10 @@ Room.prototype.checkColonyInvader = function (colonyName) {
     const status = this.memory.colony[colonyName]
     if (!colony) {
         return status.isInvader
+    }
+
+    if (!status) {
+        return
     }
     const hostileCreeps = colony.find(FIND_HOSTILE_CREEPS).filter(creep => creep.checkBodyParts(['work', 'attack', 'ranged_attack', 'heal', 'claim']))
     const killerCreeps = hostileCreeps.filter(creep => creep.checkBodyParts(['attack', 'ranged_attack', 'heal']))
@@ -367,6 +348,11 @@ Room.prototype.resetColonyEfficiency = function (colonyName) {
         const numSource = Object.keys(status.infraPlan).length
         const efficiency = Math.floor(10 * (status.profit - status.cost) / (Game.time - status.tick) / numSource) / 100
         status.lastEfficiency = efficiency
+        if (efficiency < 0.3) {
+            this.abandonColony(colonyName)
+            data.recordLog(`COLONY: Abandon ${colonyName} for low efficiency ${efficiency * 100}%`, colonyName)
+            return
+        }
         if (efficiency < 0.5) {
             data.recordLog(`COLONY: Efficiency ${efficiency * 100}%`, colonyName)
         }
@@ -445,6 +431,7 @@ Room.prototype.getColonyInfraPlan = function (colonyName, status) {
                 continue outer
             }
             structures.push(pos.packInfraPos('road'))
+            new RoomVisual(pos.roomName).structure(pos.x, pos.y, 'road')
         }
         status.infraPlan[source.id] = { pathLength: pathLength, structures: structures }
     }

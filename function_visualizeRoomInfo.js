@@ -52,7 +52,7 @@ const rcl = new VisualItem('RCL', 3.5, (room) => {
 // Upgrade Rate
 const control = new VisualItem('Control', 3.5, (room) => {
     if (room.controller.level === 8) {
-        const content = '-'
+        const content = room.heap.upgrading ? '15e/t' : '-'
         const option = { color: 'lime' }
         return { content, option }
     }
@@ -162,9 +162,9 @@ const items = [
     rampart
 ]
 
-Overlord.prototype.visualizeRoomInfo = function () {
+Overlord.visualizeRoomInfo = function () {
     const startPos = { x: 0, y: 0.5 }
-    new RoomVisual().rect(startPos.x + X_ENTIRE.start, startPos.y - 1, startPos.x + X_ENTIRE.end + 0.5, OVERLORD.myRooms.length + 3, { fill: 'black', opacity: 0.3 }); // 틀 만들기
+    new RoomVisual().rect(startPos.x + X_ENTIRE.start, startPos.y - 1, startPos.x + X_ENTIRE.end + 0.5, this.myRooms.length + 3, { fill: 'black', opacity: 0.3 }); // 틀 만들기
 
     const option = { color: 'cyan', strokeWidth: 0.2, align: 'left', opacity: OPACITY }
     new RoomVisual().text("Time " + Game.time, 0.5, startPos.y, option)
@@ -172,13 +172,13 @@ Overlord.prototype.visualizeRoomInfo = function () {
     new RoomVisual().text("Bucket " + Game.cpu.bucket, 11, startPos.y, option);
     new RoomVisual().text("Avg " + Math.round(100 * (_.sum(CPU) / CPU.length)) / 100, 16.5, startPos.y, option);
     new RoomVisual().text("# ticks " + CPU.length, 20.5, startPos.y, option);
-    new RoomVisual().text(`Room: ${OVERLORD.myRooms.length}`, 25, startPos.y, option)
+    new RoomVisual().text(`Room: ${this.myRooms.length}`, 25, startPos.y, option)
     new RoomVisual().text(`Creep: ${Object.keys(Game.creeps).length}`, 29.5, startPos.y, option)
     new RoomVisual().text(`Remote: ${Memory.info ? Memory.info.numRemotes || 0 : '-'}`, 34.5, startPos.y, option)
 
     // 각 방마다 표시
-    for (let i = -1; i < OVERLORD.myRooms.length; i++) {
-        const room = i >= 0 ? OVERLORD.myRooms[i] : undefined
+    for (let i = -1; i < this.myRooms.length; i++) {
+        const room = i >= 0 ? this.myRooms[i] : undefined
         // 각 item마다 표시
         for (const item of items) {
             // 구분선 삽입

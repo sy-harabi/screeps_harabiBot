@@ -2,8 +2,8 @@ Flag.prototype.sendIntershardingCreeps = function () {
     const roomName = this.pos.roomName
     this.memory.state = this.memory.state || 'init'
     const myRoom = this.findClosestMyRoom(4)
-    const claimer = getCreepsByRole(roomName, 'claimer')[0]
-    const pioneers = getCreepsByRole(roomName, 'pioneer')
+    const claimer = Overlord.getCreepsByRole(roomName, 'claimer')[0]
+    const pioneers = Overlord.getCreepsByRole(roomName, 'pioneer')
 
     if (this.memory.state === 'init') {
         if (!claimer) {

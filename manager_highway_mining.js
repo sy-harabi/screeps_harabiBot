@@ -64,7 +64,7 @@ global.DepositRequest = function (room, deposit) {
 
 Room.prototype.runDepositWork = function (depositRequest) {
 
-    const depositWorkers = getCreepsByRole(depositRequest.depositId, 'depositWorker')
+    const depositWorkers = Overlord.getCreepsByRole(depositRequest.depositId, 'depositWorker')
     for (const worker of depositWorkers) {
         worker.depositWork(depositRequest)
     }

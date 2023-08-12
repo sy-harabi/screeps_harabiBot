@@ -7,6 +7,12 @@ Object.defineProperties(Creep.prototype, {
             const splitedName = this.name.split(' ')
             return splitedName[0]
         }
+    },
+    originalRole: {
+        get() {
+            const splitedName = this.name.split(' ')
+            return splitedName[1]
+        }
     }
 })
 
@@ -384,6 +390,18 @@ Creep.prototype.moveMy = function (target, option = {}) { //option = {range, avo
     // stuck이 5이상인 경우 (지난 5tick이 제자리였던 경우)
     if (this.heap.stuck > 4) {
         const result = this.searchPath(targetPos, range, maxRooms, { ignoreCreeps: false, avoidEnemy, avoidRampart, ignoreMap })
+
+        // 도착지까지 길이 안찾아지는 경우
+        if (result.incomplete || result === ERR_NO_PATH) {
+            this.heap.noPath = this.heap.noPath || 0
+            this.heap.noPath++
+            this.say(`❓${this.heap.noPath}`, true)
+            if (this.heap.noPath > 1) {
+                this.heap.stay = 20
+            }
+            return result
+        }
+
         this.heap.path = result.path
         this.heap.target = targetPos
     } else if (this.heap.stuck > 1) { // stuck이 2이상인 경우 (지난 2tick이 제자리였던 경우)
@@ -403,6 +421,18 @@ Creep.prototype.moveMy = function (target, option = {}) { //option = {range, avo
         }
 
         // 전부 아니면 우회하자
+
+        // 도착지까지 길이 안찾아지는 경우
+        if (result.incomplete || result === ERR_NO_PATH) {
+            this.heap.noPath = this.heap.noPath || 0
+            this.heap.noPath++
+            this.say(`❓${this.heap.noPath}`, true)
+            if (this.heap.noPath > 1) {
+                this.heap.stay = 20
+            }
+            return result
+        }
+
         this.heap.path = result.path
         this.heap.target = targetPos
     }
@@ -438,7 +468,7 @@ Creep.prototype.getRecycled = function () {
     if (!closestSpawn) {
         const anySpawn = this.room.structures.spawn[0]
         if (!anySpawn) {
-            return
+            this.suicide()
         }
         if (this.pos.getRangeTo(anySpawn) > 2) {
             this.moveMy(anySpawn, { range: 2 })

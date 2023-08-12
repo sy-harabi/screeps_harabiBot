@@ -81,15 +81,12 @@ Object.defineProperties(StructureTerminal.prototype, {
 
 
 StructureTerminal.prototype.run = function () {
-    if (Memory.abondon && Memory.abondon.includes(this.room.name)) {
+    if (Memory.abandon && Memory.abandon.includes(this.room.name)) {
         return
     }
 
     if (this.store[this.room.mineral.mineralType] > 100000) {
-        this.room.heap.extract = false
         business.sell(this.room.mineral.mineralType, this.store[this.room.mineral.mineralType] - 70000, this.room.name)
-    } else {
-        this.room.heap.extract = true
     }
 
     if (Memory.boostRCL && this.room.controller.level < 8) {

@@ -127,7 +127,7 @@ Flag.prototype.manageReconstruction = function () {
             if (!this.memory.lastSpawnId && !this.memory.storageId && !this.memory.lastTowerId) {
                 return this.memory.stage++
             }
-            const defenders = getCreepsByRole(this.room.name, 'colonyDefender')
+            const defenders = Overlord.getCreepsByRole(this.room.name, 'colonyDefender')
             if (defenders.length < 2) {
                 if (closestMyRoom) {
                     closestMyRoom.requestColonyDefender(roomName)
@@ -170,7 +170,7 @@ Room.prototype.requestRemoteLaborer = function (roomName, number = 1) {
         return false
     }
 
-    const creeps = getCreepsByRole(this.name, 'laborer')
+    const creeps = Overlord.getCreepsByRole(this.name, 'laborer')
 
     for (const creep of creeps) {
         if (creep.room.name !== this.name) {

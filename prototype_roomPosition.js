@@ -207,7 +207,7 @@ RoomPosition.prototype.getClosestByPath = function (array) {
     const goals = array.map(obj => obj.pos || obj)
     const search = PathFinder.search(this, goals)
     if (search.incomplete) {
-        return undefined
+        return Infinity
     }
     const path = search.path
     return path[path.length - 1]

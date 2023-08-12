@@ -1,7 +1,16 @@
 Room.prototype.manageClaim = function () {
     this.memory.claimRoom = this.memory.claimRoom || {}
-    if (Object.keys(this.memory.claimRoom).length === 0) {
+    const roomNames = Object.keys(this.memory.claimRoom)
+    if (roomNames.length === 0) {
         return
+    }
+    if (Overlord.myRooms.length >= Game.gcl.level) {
+        for (const roomName of roomNames) {
+            if (!Game.rooms[roomName].isMy) {
+                console.log('delete claim')
+                delete this.memory.claimRoom[roomName]
+            }
+        }
     }
     for (const roomName of Object.keys(this.memory.claimRoom)) {
         Game.map.visual.line(new RoomPosition(25, 25, this.name), new RoomPosition(25, 25, roomName), { color: '#001eff', width: '2', opacity: 1 })
@@ -25,7 +34,7 @@ Room.prototype.claimRoom = function (roomName) {
         status.isClaimed = true
     } else {
         status.isClaimed = false
-        const claimer = getCreepsByRole(roomName, 'claimer')[0]
+        const claimer = Overlord.getCreepsByRole(roomName, 'claimer')[0]
         if (!claimer) {
             this.requestClaimer(roomName)
         }
@@ -66,14 +75,14 @@ Room.prototype.claimRoom = function (roomName) {
     if (targetRoom) {
         targetRoom.checkTombstone()
     }
-    const map = OVERLORD.map
+    const map = Overlord.map
     if (map[roomName] && map[roomName].threat) {
         delete this.memory.claimRoom[roomName]
         // const centerPos = new RoomPosition(25, 25, roomName)
         // centerPos.createFlag(`clear ${roomName}`)
         return
     }
-    const defenders = getCreepsByRole(roomName, 'colonyDefender')
+    const defenders = Overlord.getCreepsByRole(roomName, 'colonyDefender')
     if (defenders.length === 0) {
         this.requestColonyDefender(roomName)
     }
@@ -98,7 +107,7 @@ Room.prototype.claimRoom = function (roomName) {
         return
     }
 
-    const pioneers = getCreepsByRole(roomName, 'pioneer')
+    const pioneers = Overlord.getCreepsByRole(roomName, 'pioneer')
     let numWork = 0
     for (const pioneer of pioneers) {
         numWork += pioneer.getNumParts('work')

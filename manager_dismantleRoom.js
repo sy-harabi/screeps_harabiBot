@@ -2,7 +2,7 @@ Flag.prototype.dismantleRoom = function () {
     const closestMyRoom = this.findClosestMyRoom()
     const targetRoomName = this.pos.roomName
     const targetRoom = Game.rooms[targetRoomName]
-    const dismantlers = getCreepsByRole(targetRoomName, 'dismantler').concat(getCreepsByRole(closestMyRoom.name, 'dismantler'))
+    const dismantlers = Overlord.getCreepsByRole(targetRoomName, 'dismantler').concat(Overlord.getCreepsByRole(closestMyRoom.name, 'dismantler'))
 
     if (this.memory.completeDismantle === true) {
         closestMyRoom.resetScout()

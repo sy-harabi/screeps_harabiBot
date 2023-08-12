@@ -4,6 +4,11 @@ Object.defineProperties(Room.prototype, {
             if (this._GRCL !== undefined) {
                 return this._GRCL
             }
+            if ((!this.memory.GRCL) || (this.memory.GRCL < this.controller.level)) {
+                this.memory.GRCLhistory = this.memory.GRCLhistory || {}
+                this.memory.GRCLhistory[this.controller.level] = Game.time
+                data.recordLog(`RCL: ${this.name} got RCL ${this.controller.level}`, this.name)
+            }
             this.memory.GRCL = Math.max((this.memory.GRCL || 0), this.controller.level)
             return this._GRCL = this.memory.GRCL
         }
@@ -82,7 +87,7 @@ Object.defineProperties(Room.prototype, {
             if (this._creeps) {
                 return this._creeps
             }
-            const creeps = classifyCreeps()
+            const creeps = Overlord.classifyCreeps()
             this._creeps = creeps[this.name]
             return this._creeps
         }
@@ -227,27 +232,31 @@ Object.defineProperties(Room.prototype, {
     },
     maxWork: {
         get() {
-            if (!this._maxWork) {
-                const level = this.controller.level
-                if (level === 8) {
-                    if (!this.savingMode && !this.structures.weakProtection.length) {
-                        this._maxWork = 15
-                    } else if (this.constructionSites.length) {
-                        this._maxWork = 15
-                    } else if (this.controller.ticksToDowngrade < 10000) {
-                        this._maxWork = 15
-                    } else {
-                        this._maxWork = 0
-                    }
-                } else {
-                    if (this.savingMode) {
-                        this._maxWork = WORK_BY_CONTROLLER_LEVEL[level].min
-                    } else {
-                        this._maxWork = WORK_BY_CONTROLLER_LEVEL[level].max
-                    }
-                }
+            if (this._maxWork !== undefined) {
+                return this._maxWork
             }
-            return this._maxWork
+            const level = this.controller.level
+            if (level === 8) {
+                if (!this.savingMode && this.structures.weakProtection.length === 0) {
+                    this.heap.upgrading = true
+                    return this._maxWork = 15
+                }
+                if (this.heap.constructing) {
+                    this.heap.upgrading = false
+                    return this._maxWork = 15
+                }
+                if (this.controller.ticksToDowngrade < 10000) {
+                    this.heap.upgrading = true
+                    return this._maxWork = 15
+                }
+                this.heap.upgrading = false
+                return this._maxWork = 0
+            }
+            if (this.savingMode) {
+                return this._maxWork = WORK_BY_CONTROLLER_LEVEL[level].min
+
+            }
+            return this._maxWork = WORK_BY_CONTROLLER_LEVEL[level].max
         }
     },
     closeHighways: {

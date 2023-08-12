@@ -48,7 +48,7 @@ Room.prototype.manageReinforce = function () {
 
 Room.prototype.manageBuild = function () {
     // laborer 찾기
-    let laborers = getCreepsByRole(this.name, 'laborer')
+    let laborers = Overlord.getCreepsByRole(this.name, 'laborer')
 
     // construction site 목록 작성
     let tasks = this.constructionSites
@@ -97,7 +97,7 @@ Room.prototype.manageBuild = function () {
 
 Room.prototype.manageUpgrade = function () {
     // laborer 동작 및 이용가능한 laborer 찾기
-    let laborers = getCreepsByRole(this.name, 'laborer')
+    let laborers = Overlord.getCreepsByRole(this.name, 'laborer')
     let controllerLink = undefined
     if (this.controller.link && this.controller.link.RCLActionable) {
         controllerLink = this.controller.link
@@ -140,7 +140,7 @@ Room.prototype.manageUpgrade = function () {
 }
 
 Room.prototype.repairStructure = function (rampart) {
-    let laborers = getCreepsByRole(this.name, 'laborer')
+    let laborers = Overlord.getCreepsByRole(this.name, 'laborer')
     const rampartLowest = rampart
     const costs = this.defenseCostMatrix
     const spawn = this.structures.spawn[0]

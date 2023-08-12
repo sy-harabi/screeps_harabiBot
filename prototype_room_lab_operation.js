@@ -1,11 +1,18 @@
+const emoji = {
+    produce: '🧪',
+    transfer: '🚚',
+    prepare: '📦'
+}
+
 Room.prototype.operateLab = function (resource0, resource1) {
     const researcher = this.creeps.researcher[0]
     const sourceLabs = this.labs.sourceLab.map(id => Game.getObjectById(id))
     const reactionLabs = this.labs.reactionLab.map(id => Game.getObjectById(id))
     const terminal = this.terminal
 
-    this.visual.text(`🧪${this.memory.labTarget} ${this.labState}`, sourceLabs[0].pos.x, sourceLabs[0].pos.y - 1, { align: 'left' })
-    if (this.labState === 'producing') {
+    this.visual.text(`${emoji[this.labState]}${this.memory.labTarget}`, sourceLabs[0].pos.x, sourceLabs[0].pos.y,)
+
+    if (this.labState === 'produce') {
         if (sourceLabs[0].store[resource0] && sourceLabs[1].store[resource1]) {
             for (const lab of reactionLabs) {
                 if (lab.runReaction(sourceLabs[0], sourceLabs[1]) === -10) { // reaction lab에 이상한 거 들어있으면 terminal에 반납해라
@@ -18,7 +25,7 @@ Room.prototype.operateLab = function (resource0, resource1) {
             }
             return
         }
-        this.memory.labState = 'transfering'
+        this.memory.labState = 'transfer'
         return
     }
 
@@ -27,9 +34,9 @@ Room.prototype.operateLab = function (resource0, resource1) {
         return
     }
 
-    if (this.labState === 'preparing') {
+    if (this.labState === 'prepare') {
         if ((sourceLabs[0].mineralType && sourceLabs[0].mineralType !== resource0) || (sourceLabs[1].mineralType && sourceLabs[1].mineralType !== resource1)) {
-            this.memory.labState = 'transfering'
+            this.memory.labState = 'transfer'
             return
         }
         if (sourceLabs[0].store[resource0] < 1000) {
@@ -44,11 +51,11 @@ Room.prototype.operateLab = function (resource0, resource1) {
             }
             return
         }
-        this.memory.labState = 'producing'
+        this.memory.labState = 'produce'
         return
     }
 
-    if (this.labState === 'transfering') {
+    if (this.labState === 'transfer') {
         if (researcher.store.getFreeCapacity() === 0) {
             researcher.returnAll()
             return
@@ -90,15 +97,15 @@ Room.prototype.operateBoost = function () {
     }
 
     if (!this.memory.boostState) {
-        this.memory.boostState = 'preparing'
+        this.memory.boostState = 'prepare'
     }
 
-    if (this.memory.boostState === 'preparing') {
+    if (this.memory.boostState === 'prepare') {
         for (let i = 0; i < Object.keys(ATTACK_BOOST_COMPOUNDS_TIER3).length; i++) {
             const mineralType = Object.keys(ATTACK_BOOST_COMPOUNDS_TIER3)[i]
             const reactionLab = reactionLabs[i]
             if (reactionLab.mineralType && reactionLab.mineralType !== mineralType) {
-                this.memory.boostState = 'retrieving'
+                this.memory.boostState = 'retrieve'
                 return
             }
         }
@@ -114,13 +121,13 @@ Room.prototype.operateBoost = function () {
                 return
             }
         }
-        this.memory.boostState = 'boosting'
+        this.memory.boostState = 'boost'
         return
     } else {
         researcher.moveTo(terminal, { range: 1 })
     }
 
-    if (this.memory.boostState === 'boosting') {
+    if (this.memory.boostState === 'boost') {
         if (attacker && !attacker.spawning) {
             for (let i = 0; i < Object.keys(ATTACK_BOOST_COMPOUNDS_TIER3).length; i++) {
                 const reactionLab = reactionLabs[i]
@@ -174,10 +181,10 @@ Room.prototype.operateBoost = function () {
         } else {
             return
         }
-        this.memory.boostState = 'retrieving'
+        this.memory.boostState = 'retrieve'
         return
     }
-    if (this.memory.boostState === 'retrieving') {
+    if (this.memory.boostState === 'retrieve') {
         if (researcher.store.getFreeCapacity() === 0) {
             researcher.returnAll()
             return
@@ -375,7 +382,7 @@ Room.prototype.getLabTarget = function () {
     for (const target of targetCompounds) {
 
         // 충분히 있으면 넘어가자
-        if (terminal.store[targetCompounds] >= 3000) {
+        if (terminal.store[target] >= 3000) {
             continue
         }
 
@@ -467,10 +474,10 @@ Room.prototype.getLabState = function () {
     }
 
     if (this.sourceLabAmount > 0) {
-        return 'producing'
+        return 'produce'
     }
     if (this.reactionLabAmount > 0) {
-        return 'transfering'
+        return 'transfer'
     }
-    return 'preparing'
+    return 'prepare'
 }
