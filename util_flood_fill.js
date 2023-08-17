@@ -4,19 +4,19 @@ const START_COST = 150
  * create flood-fill of a room for given sources
  * 
  * @param {Array} sources - array of RoomPositions to start flood-fill.
- * @param {Object} option - Object of options. described below.
- * @returns {Object} - positions is Object with level as key and array of positions as value.
- * allPositions is array of all positions such that flood-fill founds.
- * costs is CostMatrix. cost is shortest travel distance from source.
+ * @param {Object} option - An Object containing options
+ * @param {number} option.maxLevel - if given, stop flood-fill at this level.
+ * @param {CostMatrix} option.costMatrix - if given, any tiles with cost greater than START_COST is treated like a wall.
+ * @param {number} option.costThreshod - change START_COST to given number
+ * @param {Array} option.adjacents - define adjacents by array of vectors like {x:1, y:0}. default is adjacents by Chebyshev distance.
+ * @param {boolean} option.visual - if true, show levels by RoomVisual.text
+ * @returns {Object} An object containing belows.
+ * @returns {Object} returns.positions - An object with level as key and array of positions as value.
+ * @returns {Array} returns.allPositions - An array of all positions such that flood-fill founds.
+ * @returns {CostMatrix} returns.costs - CostMatrix in which the cost represents the shortest travel distance from the source.
  */
 Room.prototype.floodFill = function (sources, option = {}) {
-  /**
-   * @property {number} maxLevel - if given, stop flood-fill at this level.
-   * @property {CostMatrix} costMatrix - if given, any tiles with cost greater than START_COST is treated like a wall.
-   * @property {number} costThreshod - change START_COST to given number
-   * @property {Array} adjacents - define adjacents by array of vectors like {x:1, y:0}. default is adjacents by Chebyshev distance.
-   * @property {boolean} visual - if true, show levels by RoomVisual.text
-   */
+
   let { maxLevel, costMatrix, costThreshod, adjacents, visual } = option
 
   if (maxLevel === undefined) {

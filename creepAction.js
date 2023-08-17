@@ -430,7 +430,7 @@ function colonyDefender(creep) {
 
     const hostileCreeps = creep.room.find(FIND_HOSTILE_CREEPS)
     const target = creep.pos.findClosestByPath(hostileCreeps)
-    if (hostileCreeps.length || (Game.time - creep.memory.lastEnemy) < 10) {
+    if (hostileCreeps.length) {
         creep.memory.lastEnemy = Game.time
         creep.heal(creep)
         const range = creep.pos.getRangeTo(target)
@@ -451,7 +451,7 @@ function colonyDefender(creep) {
             creep.fleeFrom(target)
         }
         return
-    } else {
+    } else if ((Game.time - creep.memory.lastEnemy) >= 10) {
         const roomInfo = Overlord.map[creep.room.name]
         if (roomInfo) {
             delete roomInfo.inaccessible
