@@ -19,10 +19,9 @@ Room.prototype.runRoomManager = function () {
     this.manageInfo()
     this.manageLink()
 
-    this.manageLab()
-
     this.manageDefense()
     this.defenseNuke()
+
     if (!this.memory.defenseNuke || this.memory.defenseNuke.state !== 'repair' || this.memory.militaryThreat) {
         this.manageWork()
     }
@@ -40,6 +39,8 @@ Room.prototype.runRoomManager = function () {
     }
 
     this.manageEnergy()
+    this.manageLab() // boosting이 우선이라 밑에 둠
+
     this.manageSpawn()
     this.manageVisual()
     // this.getDefenseCostMatrix(254, { checkResult: true })
@@ -95,7 +96,7 @@ Room.prototype.checkTombstone = function () {
         }
 
         // 일단 죽은 건 맞으니 inaccessible 붙이자
-        const TTL = attacker.ticksToLive
+        const TTL = attacker ? attacker.ticksToLive : 0
         map[this.name].inaccessible = map[this.name].inaccessible || Game.time
         map[this.name].inaccessible = Math.max(map[this.name].inaccessible, Game.time + TTL)
         map[this.name].lastScout = Game.time
@@ -295,7 +296,13 @@ Room.prototype.manageLink = function () {
 }
 
 Room.prototype.manageLab = function () {
-    if (this.structures.lab.length < 3) {
+    const boostRequests = Object.values(this.boostQueue)
+    if (boostRequests.length > 0) {
+        const targetRequest = getMinObject(boostRequests, (request) => request.time)
+        return this.operateBoost(targetRequest)
+    }
+
+    if (!data.okCPU) {
         return
     }
 
@@ -304,20 +311,12 @@ Room.prototype.manageLab = function () {
         return
     }
 
-    if (this.controller.level < 8 && this.operateBoostLaborer() !== ERR_NOT_ENOUGH_RESOURCES && !this.heap.constructing) {
-        return
-    }
-
-    if (!data.okCPU) {
-        return
-    }
-
     if (!this.labs) {
         return
     }
 
-    if (this.memory.boost) {
-        return this.operateBoost()
+    if (this.structures.lab.length < 3) {
+        return
     }
 
     const labTarget = this.getLabTarget()
