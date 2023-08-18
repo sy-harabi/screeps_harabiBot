@@ -78,6 +78,9 @@ Room.prototype.getEnergyRequests = function (numApplicants) {
     }
 
     for (const creep of this.creeps.laborer) {
+        if (creep.spawning) {
+            continue
+        }
         if (creep.needDelivery && creep.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
             requests[creep.id] = new Request(creep)
         }
@@ -287,6 +290,8 @@ Room.prototype.manageEnergyFetch = function (arrayOfCreeps) {
                 }
                 if (requests[id]) {
                     requests[id].amount -= creep.store.getFreeCapacity()
+                } else {
+                    delete creep.heap.reserved
                 }
                 continue
             }
@@ -369,7 +374,7 @@ Room.prototype.manageEnergyFetch = function (arrayOfCreeps) {
                     creep.moveMy(creep.heap.waitingPos)
                     continue
                 }
-                const waitingPos = creep.pos.findClosestByRange(source.waitingArea.filter(pos => { return pos.walkable && creep.checkEmpty(pos) }))
+                const waitingPos = creep.pos.findClosestByRange(source.waitingArea.filter(pos => { return pos.walkable && (creep.checkEmpty(pos) === OK) }))
                 if (waitingPos) {
                     creep.heap.waitingPos = waitingPos
                     creep.moveMy(waitingPos)

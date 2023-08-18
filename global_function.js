@@ -39,7 +39,7 @@ global.basePlan = function (roomName, numIteration = 10) {
     return `observe room and get basePlan ${roomName.toUpperCase()} start`
 }
 
-global.getMaximumPoint = function (array, func) {
+global.getMaxObject = function (array, func) {
     if (!array.length) {
         return undefined
     }
@@ -52,7 +52,7 @@ global.getMaximumPoint = function (array, func) {
     return maximumPoint
 }
 
-global.getMinimumPoint = function (array, func) {
+global.getMinObject = function (array, func) {
     if (!array.length) {
         return undefined
     }
@@ -109,7 +109,7 @@ global.colonize = function (colonyName, baseName) {
 
     const distance = Game.map.getRoomLinearDistance(baseName, colonyName)
 
-    if (distance > 1) {
+    if (distance > 2) {
         console.log(`Colony ${colonyName} is too far from your base ${baseName}. distance is ${distance}`)
         return
     }

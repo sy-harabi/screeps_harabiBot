@@ -1,4 +1,15 @@
 const SCOUT_INTERVAL = 20000 // scout 완료 후 얼마나 기다렸다가 다시 시작할 것인지
+const NUM_REMOTE_SOURCES = {
+  1: 0,
+  2: 0,
+  3: 0,
+  4: 0,
+  5: 0,
+  6: 4,
+  7: 7,
+  8: 10
+}
+
 
 Room.prototype.manageScout = function () {
   const MAX_DISTANCE = 12 // 최대 거리
@@ -50,7 +61,6 @@ Room.prototype.manageScout = function () {
         continue
       }
       if (map[node].distance >= MAX_DISTANCE) {
-        data.recordLog(`SCOUT: Searched everything`, this.name)
         status.nextScoutTime = Game.time + SCOUT_INTERVAL
         status.state = 'wait'
         return
@@ -110,7 +120,6 @@ Room.prototype.manageScout = function () {
         return
       }
     }
-    data.recordLog(`SCOUT: Queue is empty`, this.name)
     status.nextScoutTime = Game.time + SCOUT_INTERVAL
     status.state = 'wait'
     return
@@ -235,7 +244,7 @@ Room.prototype.scoutRoom = function (roomName, distance) {
 
     if (scouter.room.name !== roomName) {
       const result = scouter.moveToRoom(roomName, 1)
-      if (result.incomplete || result === ERR_NO_PATH) {
+      if (result === ERR_NO_PATH) {
         return ERR_NO_PATH
       }
       return ERR_NOT_FOUND
@@ -264,8 +273,26 @@ Room.prototype.scoutRoom = function (roomName, distance) {
   const isRemoteCandidate = isAccessibleToContorller && !inaccessible && !isClaimed && !isReserved && (numSource > 0) && !Overlord.colonies.includes(roomName)
   const isClaimCandidate = isAccessibleToContorller && !inaccessible && !isClaimed && !isReserved && (distance > 2) && (numSource > 1) && !Overlord.colonies.includes(roomName)
 
-  if (isRemoteCandidate && distance <= 1) {
-    colonize(roomName, this.name)
+  if (isRemoteCandidate && distance <= 2 && this.memory.numRemoteSource <= NUM_REMOTE_SOURCES[this.controller.level]) {
+    const search = PathFinder.search(room.controller.pos, { pos: this.controller.pos, range: 1 }, {
+      roomCallback: (roomName) => {
+        if (roomName === room.name) {
+          return true
+        }
+        if (roomName = host) {
+          return true
+        }
+        if (Memory.rooms[host] && Memory.rooms[host].colony && Object.keys(Memory.rooms[host].colony).includes(roomName)) {
+          return true
+        }
+        return false
+      },
+      maxRooms: 3
+    })
+    if (!search.incomplete) {
+      data.recordLog(`COLONY: Colonize ${roomName} with distance ${distance}`, this.name)
+      colonize(roomName, this.name)
+    }
   }
 
   if (Memory.autoClaim && isClaimCandidate && Overlord.myRooms.length < Game.gcl.level) {

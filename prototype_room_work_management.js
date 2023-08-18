@@ -25,25 +25,52 @@ Room.prototype.manageWork = function () {
 
 Room.prototype.manageReinforce = function () {
     const REPAIR_RANGE = 4
-    if (this.heap.reinforceTargetId && Game.time % 5 !== 0) {
-        const reinforceTarget = Game.getObjectById(this.heap.reinforceTargetId)
-        if (reinforceTarget) {
-            return this.repairStructure(reinforceTarget)
+    const costs = this.defenseCostMatrix
+    const spawn = this.structures.spawn[0]
+    const rampartAnchorsStatus = this.getRampartAnchorsStatus()
+    for (const laborer of this.creeps.laborer) {
+        // 위험한 곳에 있으면 즉시 탈출해라
+        if (costs.get(laborer.pos.x, laborer.pos.y) >= 254 && spawn) {
+            laborer.moveMy(spawn, { range: 1, avoidRampart: false })
         }
-    }
+        const status = rampartAnchorsStatus[laborer.memory.assign]
+        if (!status) {
+            continue
+        }
+        const target = status.closestIntruder
+        if (!target) {
+            continue
+        }
 
-    const targets = this.find(FIND_HOSTILE_CREEPS)
-    if (!targets.length) {
-        return
+        laborer.needDelivery = true
+        if (!laborer.working) {
+            //storage가 가까우면 storage에서 energy 받자
+            if (this.storage) {
+                laborer.getEnergyFrom(this.storage.id)
+                continue
+            }
+        }
+
+        // 한번 repair 시작하면 10 tick 동안은 그거 수리하자
+        const rampartBefore = Game.getObjectById(laborer.memory.rampartLowestId)
+        if (rampartBefore && laborer.memory.rampartLowestTime && (Game.time - laborer.memory.rampartLowestTime) < 10) {
+            laborer.repairMy(rampartBefore)
+            continue
+        }
+
+
+        let rampartsInRange = this.structures.rampart.filter(rampart => rampart.pos.getRangeTo(target) <= REPAIR_RANGE)
+        if (rampartsInRange.length === 0) {
+            rampartsInRange = this.structures.rampart.filter(rampart => rampart.pos.getRangeTo(status.pos) <= REPAIR_RANGE)
+        }
+        const rampartLowest = rampartsInRange.sort((a, b) => a.hits - b.hits)[0]
+        if (!rampartLowest) {
+            continue
+        }
+        laborer.memory.rampartLowestId = rampartLowest.id
+        laborer.memory.rampartLowestTime = Game.time
+        laborer.repairMy(rampartLowest)
     }
-    const aggressiveTargets = targets.filter(creep => creep.checkBodyParts(INVADER_BODY_PARTS))
-    const rampartsNear = this.structures.rampart.filter(rampart => rampart.pos.getClosestRange(aggressiveTargets) <= REPAIR_RANGE)
-    const rampartLowest =
-        rampartsNear.length > 0
-            ? rampartsNear.sort((a, b) => { return a.hits - b.hits })[0]
-            : targets[0].pos.findClosestByRange(this.structures.rampart)
-    this.heap.reinforceTargetId = rampartLowest.id
-    this.repairStructure(rampartLowest)
 }
 
 Room.prototype.manageBuild = function () {
@@ -97,7 +124,7 @@ Room.prototype.manageBuild = function () {
 
 Room.prototype.manageUpgrade = function () {
     // laborer 동작 및 이용가능한 laborer 찾기
-    let laborers = Overlord.getCreepsByRole(this.name, 'laborer')
+    let laborers = this.creeps.laborer
     let controllerLink = undefined
     if (this.controller.link && this.controller.link.RCLActionable) {
         controllerLink = this.controller.link
@@ -109,7 +136,7 @@ Room.prototype.manageUpgrade = function () {
     const droppedEnergy = droppedEnergies[0]
 
     for (const laborer of laborers) {
-        if (laborer.memory.boosting) {
+        if (laborer.memory.boosted === false && laborer.ticksToLive > 0.8 * CREEP_LIFE_TIME) { // boost 예약이 안되어있으면 undefined. boost 되었으면 true
             continue
         }
         if (!laborer.working) {
@@ -136,30 +163,6 @@ Room.prototype.manageUpgrade = function () {
             laborer.needDelivery = true
         }
         laborer.upgradeRCL()
-    }
-}
-
-Room.prototype.repairStructure = function (rampart) {
-    let laborers = Overlord.getCreepsByRole(this.name, 'laborer')
-    const rampartLowest = rampart
-    const costs = this.defenseCostMatrix
-    const spawn = this.structures.spawn[0]
-    for (const laborer of laborers) {
-        // 위험한 곳에 있으면 즉시 탈출해라
-        if (costs.get(laborer.pos.x, laborer.pos.y) >= 254 && spawn) {
-            laborer.moveMy(spawn, { range: 1, avoidRampart: false })
-        }
-        laborer.needDelivery = true
-        // energy 없으면 energy 받아라
-        if (!laborer.working) {
-            //storage가 가까우면 storage에서 energy 받자
-            if (this.storage) {
-                laborer.getEnergyFrom(this.storage.id)
-                continue
-            }
-        }
-        // energy 있으면 일해라
-        laborer.repairMy(rampartLowest)
     }
 }
 
@@ -196,13 +199,11 @@ Object.defineProperties(RoomPosition.prototype, {
         }
     },
     creep: {
+        // don't cache this like this._creep since roomPosition Object can be stored at heap.
         get() {
-            if (this._creep) {
-                return this._creep
-            }
             const creeps = this.lookFor(LOOK_CREEPS)
             const powerCreeps = this.lookFor(LOOK_POWER_CREEPS)
-            return this._creep = creeps[0] || powerCreeps[0]
+            return creeps[0] || powerCreeps[0]
         }
     }
 })
@@ -232,16 +233,18 @@ Room.prototype.parsePos = function (packedPos) {
 }
 
 Creep.prototype.repairMy = function (target) {
-    const costs = this.room.defenseCostMatrix
-    if (costs.get(this.pos.x, this.pos.y) >= 254) {
+    const costs = this.room.memory.militaryThreat ? this.room.defenseCostMatrix : this.room.basicCostmatrix
+    if (costs.get(this.pos.x, this.pos.y) >= 255) {
         this.heap.run = 3
+    } else {
+        delete this.heap.run
     }
 
     if (this.heap.run > 0) {
         const spawn = this.room.structures.spawn[0]
         this.heap.run--
-        if (spawn) {
-            return this.moveMy(spawn, { range: 1, ignoreCreeps: true })
+        if (spawn && costs.get(this.pos.x, this.pos.y) >= 255) {
+            return this.moveMy(spawn, { range: 1 })
         }
     }
 
@@ -254,7 +257,7 @@ Creep.prototype.repairMy = function (target) {
     }
 
     if (this.pos.getRangeTo(target) > 3) {
-        const workingSpot = this.pos.findClosestByRange(target.pos.getInRange(3).filter(pos => !pos.isWall && costs.get(pos.x, pos.y) < 254 && this.checkEmpty(pos)))
+        const workingSpot = this.pos.findClosestByRange(target.pos.getInRange(3).filter(pos => !pos.isWall && costs.get(pos.x, pos.y) < 255 && (this.checkEmpty(pos) === OK)))
         if (workingSpot) {
             this.heap.workingSpot = {}
             this.heap.workingSpot.targetId = target.id
@@ -290,7 +293,7 @@ Creep.prototype.upgradeRCL = function () {
 
     if (!this.isWorkable(this.pos)) {
         const workingSpot = this.pos.getClosestByPath(this.getWorkingSpots(controller.pos))
-        if (workingSpot) {
+        if (workingSpot !== undefined) {
             this.heap.workingSpot = { id: controller.id, pos: workingSpot }
             this.moveMy(workingSpot)
         }

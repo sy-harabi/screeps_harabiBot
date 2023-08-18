@@ -6,6 +6,13 @@ global.MILLION = 1000000
 
 global.KILO = 1000
 
+global.barrierCosts = new PathFinder.CostMatrix
+for (let x = 0; x < 50; x++) {
+    for (let y = 0; y < 50; y++) {
+        barrierCosts.set(x, y, 255)
+    }
+}
+
 global.STRUCTURE_TYPES = [
     STRUCTURE_SPAWN,
     STRUCTURE_EXTENSION,
@@ -258,15 +265,50 @@ global.COMPOUNDS_FORMULA = {
     XGHO2: { ratio: 2, resourceType0: 'GHO2', resourceType1: 'X' },
 }
 
-global.USEFULL_COMPOUNDS = {
-    XGH2O: { ratio: 2, resourceType0: 'GH2O', resourceType1: 'X' },
-    XUH2O: { ratio: 2, resourceType0: 'UH2O', resourceType1: 'X' },
-    XKHO2: { ratio: 2, resourceType0: 'KHO2', resourceType1: 'X' },
-    XLHO2: { ratio: 2, resourceType0: 'LHO2', resourceType1: 'X' },
-    XZH2O: { ratio: 2, resourceType0: 'ZH2O', resourceType1: 'X' },
-    XZHO2: { ratio: 2, resourceType0: 'ZHO2', resourceType1: 'X' },
-    XGHO2: { ratio: 2, resourceType0: 'GHO2', resourceType1: 'X' },
+global.BOOSTS_EFFECT = {
+    UH: { type: ATTACK },
+    UO: { type: WORK },
+    KH: { type: CARRY },
+    KO: { type: RANGED_ATTACK },
+    LH: { type: WORK },
+    LO: { type: HEAL },
+    ZH: { type: WORK },
+    ZO: { type: MOVE },
+    GH: { type: WORK },
+    GO: { type: TOUGH },
+
+    UH2O: { type: ATTACK },
+    UHO2: { type: WORK },
+    KH2O: { type: CARRY },
+    KHO2: { type: RANGED_ATTACK },
+    LH2O: { type: WORK },
+    LHO2: { type: HEAL },
+    ZH2O: { type: WORK },
+    ZHO2: { type: MOVE },
+    GH2O: { type: WORK },
+    GHO2: { type: TOUGH },
+
+    XUH2O: { type: ATTACK },
+    XUHO2: { type: WORK },
+    XKH2O: { type: CARRY },
+    XKHO2: { type: RANGED_ATTACK },
+    XLH2O: { type: WORK },
+    XLHO2: { type: HEAL },
+    XZH2O: { type: WORK },
+    XZHO2: { type: MOVE },
+    XGH2O: { type: WORK },
+    XGHO2: { type: TOUGH },
 }
+
+global.USEFULL_COMPOUNDS = [
+    'XUH2O',
+    'XGH2O',
+    'XKHO2',
+    'XLHO2',
+    'XZH2O',
+    'XZHO2',
+    'XGHO2',
+]
 
 global.COMPOUNDS_MANUFACTURING_TIME = {
     ZO: 10,

@@ -217,8 +217,7 @@ Overlord.classifyCreeps = function () {
       result[creep.assignedRoom][creep.memory.role].push(creep)
     }
   }
-  Game._classifiedCreeps = result
-  return Game._classifiedCreeps
+  return Game._classifiedCreeps = result
 }
 
 Overlord.getNumCreepsByRole = function (roomName, role) {

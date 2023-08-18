@@ -33,11 +33,12 @@ Creep.prototype.getDeliveryRequest = function (from, to, resourceType) {
     if (this.spawning) {
         return
     }
-    const deliveryRequest = new DeliveryRequest(from, to, resourceType)
 
-    if (this.heap.deliveryRequest !== undefined || this.spawning) {
+    if (!this.isFree || this.spawning) {
         return
     }
+
+    const deliveryRequest = new DeliveryRequest(from, to, resourceType)
 
     this.memory.delivering = false
     this.heap.deliveryRequest = deliveryRequest

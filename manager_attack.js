@@ -1,157 +1,151 @@
-function run(flag) { //플래그를 대입하는 함수 (이름 아님)
-    const roomName = flag.pos.roomName
-    const closestMyRoom = flag.findClosestMyRoom(7)
-    const attacker = Game.creeps[`${flag.name} attacker`]
-    const healer = Game.creeps[`${flag.name} healer`]
-    const spawns = closestMyRoom.structures.spawn.filter(s => !s.spawning)
+Room.prototype.requestAttacker = function (flagName, boost = false) {
 
-    if (flag.memory.end) {
-        if (!attacker || !healer) {
-            delete flag.memory
-            flag.remove()
+    let body = []
+
+    if (boost) {
+        for (let i = 0; i < 12; i++) {
+            body.push(TOUGH)
+        }
+        for (let i = 0; i < 28; i++) {
+            body.push(ATTACK)
+        }
+        for (let i = 0; i < 10; i++) {
+            body.push(MOVE)
+        }
+    } else {
+        for (let i = 0; i < 25; i++) {
+            body.push(ATTACK)
+        }
+        for (let i = 0; i < 25; i++) {
+            body.push(MOVE)
         }
     }
 
-    if (flag.name.toLowerCase().includes('boost') && !flag.memory.boosted) {
-        if (!closestMyRoom.memory.boost) {
-            closestMyRoom.memory.boost = {}
+    const name = `${flagName} attacker`
+
+    const memory = {
+        role: 'attacker',
+        healer: `${flagName} healer`,
+        base: this.name
+    }
+
+    const options = { priority: SPAWN_PRIORITY['attacker'] }
+    if (boost) {
+        options.boostResources = ['XZHO2', 'XGHO2', 'XUH2O']
+        memory.boosted = false
+    }
+
+    const request = new RequestSpawn(body, name, memory, options)
+    this.spawnQueue.push(request)
+}
+Room.prototype.requestHealer = function (flagName, boost = false) {
+
+    let body = []
+
+    if (boost) {
+        for (let i = 0; i < 15; i++) {
+            body.push(TOUGH)
+        }
+        for (let i = 0; i < 25; i++) {
+            body.push(HEAL)
+        }
+        for (let i = 0; i < 10; i++) {
+            body.push(MOVE)
+        }
+    } else {
+        for (let i = 0; i < 15; i++) {
+            body.push(HEAL)
+        }
+        for (let i = 0; i < 15; i++) {
+            body.push(MOVE)
+        }
+        for (let i = 0; i < 5; i++) {
+            body.push(HEAL)
+        }
+        for (let i = 0; i < 5; i++) {
+            body.push(MOVE)
+        }
+    }
+
+    const name = `${flagName} healer`
+
+    const memory = {
+        role: 'healer',
+        healer: `${flagName} attacker`,
+        base: this.name
+    }
+
+    if (boost) {
+        boostResources = ['XZHO2', 'XGHO2', 'XLHO2']
+        memory.boosted = false
+    }
+
+    const request = new RequestSpawn(body, name, memory, { priority: SPAWN_PRIORITY['healer'], boostResources })
+    this.spawnQueue.push(request)
+}
+
+Flag.prototype.attackRoom = function () {
+    const roomName = this.pos.roomName
+    const boost = this.name.toLowerCase().includes('boost')
+    const closestMyRoom = boost ? this.findClosestMyRoom(8) : this.findClosestMyRoom(7)
+    const attacker = Game.creeps[`${this.name} attacker`]
+    const healer = Game.creeps[`${this.name} healer`]
+
+    if (!closestMyRoom) {
+        delete this.memory
+        this.remove()
+    }
+
+    if (this.memory.end && !Game.flags[`harass ${roomName}`]) {
+        this.pos.createFlag(`harass ${roomName}`)
+    }
+
+    if (this.memory.startAttack && (!attacker || !healer)) {
+        if (this.memory.end) {
+            delete this.memory
+            this.remove()
             return
         }
-        if (attacker && healer) {
-            if (attacker.id !== closestMyRoom.memory.boost.attacker) {
-                closestMyRoom.memory.boost.attacker = attacker.id
-                return
-            }
-            if (healer.id !== closestMyRoom.memory.boost.healer) {
-                closestMyRoom.memory.boost.healer = healer.id
-                return
-            }
-            for (const part of attacker.body) {
-                if (!part.boost) {
-                    flag.memory.boosted = false
-                    return
-                }
-            }
-            for (const part of healer.body) {
-                if (!part.boost) {
-                    flag.memory.boosted = false
-                    return
-                }
-            }
-            delete closestMyRoom.memory.boost
-            flag.memory.boosted = true
-        } else {
-            if (closestMyRoom.memory.boostState !== 'boosting') {
-                return
-            }
-        }
-    }
 
-    if (flag.memory.boosted) {
-        for (const part of attacker.body) {
-            if (!part.boost) {
-                flag.memory.boosted = false
-                return
-            }
+        const thisRoom = this.room
+        if (!thisRoom) {
+            delete this.memory
+            this.remove()
+            return
         }
-        for (const part of healer.body) {
-            if (!part.boost) {
-                flag.memory.boosted = false
-                return
-            }
+        const agentNames = [`${this.name} attacker`, `${this.name} healer`]
+        const myTombstones = thisRoom.find(FIND_TOMBSTONES).filter(tombstone => tombstone.creep.my && tombstone.creep.ticksToLive > 1)
+        const agentTombstone = myTombstones.find(tombstone => agentNames.includes(tombstone.creep.name))
+        if (agentTombstone) {
+            delete this.memory
+            this.remove()
+            return
         }
-        flag.memory.end = true
+        delete this.memory
+        this.remove()
+        this.pos.createFlag(this.name + '`')
+        return
     }
 
     if (!attacker) {
-        const spawn = spawns[0]
-        if (spawn) {
-            let body = []
-            if (flag.name.includes('boost')) {
-                if (!closestMyRoom.memory.boostState) {
-                    return
-                }
-                for (let i = 0; i < 12; i++) {
-                    body.push(TOUGH)
-                }
-                for (let i = 0; i < 20; i++) {
-                    body.push(ATTACK)
-                }
-                for (let i = 0; i < 8; i++) {
-                    body.push(RANGED_ATTACK)
-                }
-                for (let i = 0; i < 10; i++) {
-                    body.push(MOVE)
-                }
-            } else {
-                for (let i = 0; i < 15; i++) {
-                    body.push(ATTACK)
-                }
-                for (let i = 0; i < 10; i++) {
-                    body.push(RANGED_ATTACK)
-                }
-                for (let i = 0; i < 25; i++) {
-                    body.push(MOVE)
-                }
-            }
-
-            if (spawn.spawnCreep(body, `${flag.name} attacker`, {
-                memory: {
-                    role: 'attacker',
-                    healer: `${flag.name} healer`,
-                    base: spawn.room.name
-                }
-            }) === OK) {
-                spawns.shift()
-            }
-        }
-    } else {
-        attacker.attackRoom(roomName)
+        closestMyRoom.requestAttacker(this.name, boost)
     }
 
     if (!healer) {
-        const spawn = spawns[0]
-        if (spawn) {
-            let body = []
-            if (flag.name.includes('boost')) {
-                if (!closestMyRoom.memory.boostState) {
-                    return
-                }
-                for (let i = 0; i < 15; i++) {
-                    body.push(TOUGH)
-                }
-                for (let i = 0; i < 25; i++) {
-                    body.push(HEAL)
-                }
-                for (let i = 0; i < 10; i++) {
-                    body.push(MOVE)
-                }
-            } else {
-                for (let i = 0; i < 10; i++) {
-                    body.push(HEAL)
-                }
-                for (let i = 0; i < 10; i++) {
-                    body.push(MOVE)
-                }
-                for (let i = 0; i < 5; i++) {
-                    body.push(HEAL)
-                }
-                for (let i = 0; i < 5; i++) {
-                    body.push(MOVE)
-                }
-            }
-            if (spawn.spawnCreep(body, `${flag.name} healer`, {
-                memory: {
-                    role: 'healer',
-                    attacker: `${flag.name} attacker`
-                }
-            }) === OK) {
-
-                spawns.shift()
-            }
-        }
-    } else {
-        healer.care(attacker)
+        closestMyRoom.requestHealer(this.name, boost)
     }
+
+    if (!attacker || !healer) {
+        return
+    }
+
+    if (boost && !this.memory.boosted) {
+        this.memory.boosted = (attacker.memory.boosted !== false) && (healer.memory.boosted !== false)
+        return
+    }
+
+    this.memory.startAttack = true
+
+    attacker.attackRoom(roomName)
+    healer.care(attacker)
 }
-module.exports = { run }

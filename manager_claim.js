@@ -6,16 +6,17 @@ Room.prototype.manageClaim = function () {
     }
     if (Overlord.myRooms.length >= Game.gcl.level) {
         for (const roomName of roomNames) {
-            if (!Game.rooms[roomName].isMy) {
+            if (!Game.rooms[roomName] || !Game.rooms[roomName].isMy) {
                 console.log('delete claim')
                 delete this.memory.claimRoom[roomName]
             }
         }
     }
+
     for (const roomName of Object.keys(this.memory.claimRoom)) {
         Game.map.visual.line(new RoomPosition(25, 25, this.name), new RoomPosition(25, 25, roomName), { color: '#001eff', width: '2', opacity: 1 })
         Game.map.visual.circle(new RoomPosition(25, 25, roomName), { fill: '#001eff' })
-        this.claimRoom(roomName)
+        return this.claimRoom(roomName)
     }
 }
 

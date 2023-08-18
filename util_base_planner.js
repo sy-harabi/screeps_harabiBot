@@ -6,7 +6,7 @@ const COSTS_VISUAL = false
 const CANDIDATE_VISUAL = false
 const BASE_PLAN_VISUAL = true
 
-const FAST_OPTIMIZE = false
+const FAST_OPTIMIZE = true
 
 const REGION_SIZE_MIN = 1
 const REGION_SIZE_MAX = 10
@@ -85,9 +85,9 @@ Room.prototype.optimizeBasePlan = function () {
     this.heap.region = this.heap.region || this.heap.regions.shift()
     const region = this.heap.region
     if (region.length > 1) {
-      this.visual.softShell(region, { fill: 'magenta', strokeWidth: 0.1, opacity: 1 })
+      this.visual.softShell(region, { fill: 'magenta', strokeWidth: 0.1, opacity: 0.6 })
     } else {
-      this.visual.circle(region[0], { fill: 'magenta', radius: 0.5, opacity: 1 })
+      this.visual.circle(region[0], { fill: 'magenta', radius: 0.5, opacity: 0.6 })
     }
 
     if (this.heap.regions.length) {
@@ -156,7 +156,7 @@ Room.prototype.getBasePlanBySpawn = function () {
 Room.prototype.getBasePlanByPos = function (pos) {
   const costs = this.getCostsForMincut(ENOUGH_DISTANCE_TO_EXIT)
 
-  const mincut = this.mincutWithSufficientInside([pos], costs, NUM_INSIDE, DOUBLE_LAYER)
+  const mincut = this.mincutWithSufficientInside([pos], costs, NUM_INSIDE)
   delete this.heap.mincut
   delete this.heap.region
 
@@ -192,7 +192,7 @@ Room.prototype.getBasePlanByRegion = function (region) {
   const costs = this.getCostsForMincut(ENOUGH_DISTANCE_TO_EXIT)
 
   if (!this.heap.mincut) {
-    const mincut = this.mincutWithSufficientInside(region, costs, NUM_INSIDE, DOUBLE_LAYER)
+    const mincut = this.mincutWithSufficientInside(region, costs, NUM_INSIDE)
     if (!mincut) {
       delete this.heap.region
       return ERR_NOT_FOUND
@@ -299,7 +299,7 @@ Room.prototype.getCostsForMincut = function (maxLevel) {
   return this.heap._costsForMincut = costs
 }
 
-Room.prototype.mincutWithSufficientInside = function (sources, costs, numPositions, doubleLayer = false) {
+Room.prototype.mincutWithSufficientInside = function (sources, costs, numPositions) {
   const weightedFloodFill = this.getWeightedFloodFill(sources, costs)
 
   const positionsByLevel = weightedFloodFill.positions
@@ -375,13 +375,11 @@ Room.prototype.mincutWithSufficientInside = function (sources, costs, numPositio
         const range = near.getRangeTo(cut)
 
         // second layer
-        if (doubleLayer) {
-          if (range === 1) {
-            secondLayer.push(near)
-            regionCosts.set(near.x, near.y, CUT_COST)
-            costsForBasePlan.set(near.x, near.y, CUT_COST)
-            continue
-          }
+        if (range === 1) {
+          secondLayer.push(near)
+          regionCosts.set(near.x, near.y, CUT_COST)
+          costsForBasePlan.set(near.x, near.y, CUT_COST)
+          continue
         }
 
         if (cost >= DANGER_POS_COST) {
@@ -396,7 +394,6 @@ Room.prototype.mincutWithSufficientInside = function (sources, costs, numPositio
         costsForBasePlan.set(near.x, near.y, REPAIR_POS_COST)
       }
     }
-    cuts.push(...secondLayer)
 
     mincut.insides.forEach(pos => {
       if ([REPAIR_POS_COST, DANGER_POS_COST, CUT_COST].includes(regionCosts.get(pos.x, pos.y))) {
@@ -433,7 +430,7 @@ Room.prototype.mincutWithSufficientInside = function (sources, costs, numPositio
         }
       }
 
-      return { cuts, outsides, insides, costsForBasePlan }
+      return { cuts, secondLayer, outsides, insides, costsForBasePlan }
     }
 
     mincutSources = this.floodFill(mincutSources, { maxLevel: 3, costMatrix: costsForFloodFill }).allPositions
@@ -706,6 +703,8 @@ Room.prototype.getBasePlanAfterMincut = function (pos, inputCosts, mincut, costs
 
   //mincut
   const outsides = mincut.outsides
+
+  const secondLayer = mincut.secondLayer
 
   const cuts = mincut.cuts
 
@@ -1119,7 +1118,7 @@ Room.prototype.getBasePlanAfterMincut = function (pos, inputCosts, mincut, costs
 
   // get rampart clusters
   const rampartClusters = []
-  const CLUSTER_SIZE = DOUBLE_LAYER ? 20 : 10
+  const CLUSTER_SIZE = 10
 
   for (const rampartPos of rampartPositions) {
     const cluster = []
@@ -1186,19 +1185,50 @@ Room.prototype.getBasePlanAfterMincut = function (pos, inputCosts, mincut, costs
     }
 
     for (const pathPos of rampartPath) {
-      // if (costs.get(pathPos.x, pathPos.y) !== ROAD_COST) {
-      //   basePlan[`lv5`].push(pathPos.packStructurePlan('road'))
-      //   costs.set(pathPos.x, pathPos.y, ROAD_COST)
-      //   costsForRoad.set(pathPos.x, pathPos.y, ROAD_COST)
-      //   costsForRampartRoad.set(pathPos.x, pathPos.y, ROAD_COST)
-      // }
+
       if (checkRampart.get(pathPos.x, pathPos.y) > 0) {
         continue
       }
+
+      if (costs.get(pathPos.x, pathPos.y) !== ROAD_COST) {
+        basePlan[`lv5`].push(pathPos.packStructurePlan('road'))
+        costs.set(pathPos.x, pathPos.y, ROAD_COST)
+        costsForRoad.set(pathPos.x, pathPos.y, ROAD_COST)
+        costsForRampartRoad.set(pathPos.x, pathPos.y, ROAD_COST)
+      }
+
       if (inputCosts.get(pathPos.x, pathPos.y) >= DANGER_POS_COST) {
         structures.rampart.push(pathPos)
         checkRampart.set(pathPos.x, pathPos.y, 1)
         costsForRampartRoad.set(pathPos.x, pathPos.y, ROAD_COST)
+      }
+
+    }
+  }
+
+  if (DOUBLE_LAYER) {
+    for (const pos of secondLayer) {
+
+      if (checkRampart.get(pos.x, pos.y) > 0) {
+        continue
+      }
+
+      structures.rampart.push(pos)
+      checkRampart.set(pos.x, pos.y, 1)
+    }
+
+    for (const pos of secondLayer) {
+      if (costs.get(pos.x, pos.y) === ROAD_COST) {
+        continue
+      }
+
+      for (const vector of CROSS) {
+        if (checkRampart.get(pos.x + vector.x, pos.y + vector.y) === 0) {
+          basePlan[`lv5`].push(pos.packStructurePlan('road'))
+          costs.set(pos.x, pos.y, ROAD_COST)
+          costsForRoad.set(pos.x, pos.y, ROAD_COST)
+          break
+        }
       }
     }
   }

@@ -1,5 +1,7 @@
 global.SPAWN_PRIORITY = {
     'roomDefender': 1,
+    'attacker': 2,
+    'healer': 2,
     'hauler': 3,
     'manager': 4,
     'laborer': 5,
@@ -47,7 +49,7 @@ Room.prototype.manageSpawn = function () {
     const EMERGENCY_WORK_MAX = 60
 
     let maxWork = 0
-    if ((this.memory.militaryThreat || this.memory.defenseNuke) && this.storage && this.storage.store['energy'] > 20000) {
+    if (this.memory.defenseNuke && this.memory.defenseNuke.state === 'repair' && this.storage && this.storage.store['energy'] > 20000) {
         maxWork = EMERGENCY_WORK_MAX
     } else {
         maxWork = Math.ceil((this.heap.sourceUtilizationRate || 0) * this.maxWork)
@@ -56,6 +58,8 @@ Room.prototype.manageSpawn = function () {
     if (this.laborer.numWork < maxWork && this.creeps.laborer.filter(creep => (creep.ticksToLive || 1500) > 3 * creep.body.length).length < maxLaborer) {
         this.requestLaborer(Math.min((maxWork - this.laborer.numWork), this.laborer.numWorkEach))
     }
+
+    this.visual.text(`🛠️${this.laborer.numWork}/${maxWork}`, this.controller.pos.x + 0.75, this.controller.pos.y - 0.5, { align: 'left' })
 
     // 여기서부터는 전시에는 생산 안함
     if (!this.memory.militaryThreat) {
@@ -136,22 +140,57 @@ Object.defineProperties(Room.prototype, {
     }
 })
 
-global.RequestSpawn = function (body, name, memory, option = { priority: 0, cost: 0 }) {
+global.RequestSpawn = function (body, name, memory, options = {}) {
+    const defaultOptions = { priority: Infinity, cost: 0 }
+    const mergedOptions = { ...defaultOptions, ...options }
+    const { priority, cost, boostResources } = mergedOptions
     this.body = body
     this.name = name
     this.memory = memory
-    this.priority = option.priority
-    this.cost = option.cost
+    this.priority = priority
+    this.cost = cost
+    if (boostResources !== undefined) {
+        const boostRequest = new BoostRequest(this.name, this.body, boostResources)
+        this.boostRequest = boostRequest
+    }
+}
+
+/**
+ * boost request to be handled by room
+ * @param {Creep} creepName - The target creep name
+ * @param {Array} resourceTypes - The array of resourceTypes
+ * @param {Object} options 
+ */
+function BoostRequest(creepName, body, resourceTypes) {
+    this.time = Game.time
+    this.creepName = creepName
+    this.requiredResources = {}
+    for (resourceType of resourceTypes) {
+        const bodyType = BOOSTS_EFFECT[resourceType].type
+        const numBodyType = body.filter(part => part === bodyType).length
+        const mineralAmount = 30 * numBodyType
+        const energyAmount = 20 * numBodyType
+        this.requiredResources[resourceType] = { mineralAmount, energyAmount }
+    }
 }
 
 Spawn.prototype.spawnRequest = function (request) {
     const result = this.spawnCreep(request.body, request.name, { memory: request.memory })
-    if (request.cost && result === OK) {
+    if (result !== OK) {
+        return result
+    }
+
+    if (request.cost) {
         const colonyName = request.memory.colony
         if (colonyName) {
             this.room.addColonyCost(colonyName, request.cost)
         }
     }
+
+    if (request.boostRequest) {
+        this.room.boostQueue[request.name] = request.boostRequest
+    }
+
     return result
 }
 
@@ -244,7 +283,15 @@ Room.prototype.requestLaborer = function (numWork) {
         controller: this.controller.id,
         working: false
     }
-    const request = new RequestSpawn(body, name, memory, { priority: SPAWN_PRIORITY['laborer'] })
+
+    let boostResources = undefined
+
+    if (this.controller.level < 8 && !this.heap.constructing && this.getResourceTotalAmount('XGH2O') >= LAB_BOOST_MINERAL * numWork) {
+        boostResources = ['XGH2O']
+        memory.boosted = false
+    }
+
+    const request = new RequestSpawn(body, name, memory, { priority: SPAWN_PRIORITY['laborer'], boostResources })
     this.spawnQueue.push(request)
 }
 
@@ -312,7 +359,8 @@ Room.prototype.requestReserver = function (colonyName) {
     const memory = {
         role: 'reserver',
         base: this.name,
-        colony: colonyName
+        colony: colonyName,
+        ignoreMap: 1
     }
 
     const request = new RequestSpawn(body, name, memory, { priority: SPAWN_PRIORITY['reserver'] })
@@ -332,7 +380,8 @@ Room.prototype.requestColonyLaborer = function (colonyName, sourceId) {
         role: 'colonyLaborer',
         base: this.name,
         colony: colonyName,
-        sourceId: sourceId
+        sourceId: sourceId,
+        ignoreMap: 1
     }
 
     const request = new RequestSpawn(body, name, memory, { priority: SPAWN_PRIORITY['colonyLaborer'], cost: cost })
@@ -352,7 +401,8 @@ Room.prototype.requestColonyMiner = function (colonyName, sourceId) {
         role: 'colonyMiner',
         base: this.name,
         colony: colonyName,
-        sourceId: sourceId
+        sourceId: sourceId,
+        ignoreMap: 1
     }
 
     const request = new RequestSpawn(body, name, memory, { priority: SPAWN_PRIORITY['colonyMiner'], cost: cost })
@@ -436,7 +486,8 @@ Room.prototype.requestColonyHauler = function (colonyName, sourceId, maxCarry, s
         base: this.name,
         colony: colonyName,
         sourceId: sourceId,
-        sourcePathLength: sourcePathLength
+        sourcePathLength: sourcePathLength,
+        ignoreMap: 1
     }
 
     const request = new RequestSpawn(body, name, memory, { priority: SPAWN_PRIORITY['colonyHauler'], cost: cost })

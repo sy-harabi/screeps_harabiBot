@@ -31,29 +31,30 @@ Object.defineProperties(RoomPosition.prototype, {
     },
     workable: {
         get() {
-            if (!this._workable) {
-                this._workable = true
-                for (const lookObject of this.look()) {
-                    if (lookObject.type === LOOK_TERRAIN && lookObject[LOOK_TERRAIN] === 'wall') {
-                        this._workable = false
-                        break
-                    }
-                    if (!isValidCoord(this.x, this.y)) {
-                        this._workable = false
-                        break
-                    }
-                    if (lookObject.type === LOOK_STRUCTURES && OBSTACLE_OBJECT_TYPES.includes(lookObject[LOOK_STRUCTURES].structureType)) {
-                        this._workable = false
-                        break
-                    }
-                    if (lookObject.type === LOOK_STRUCTURES && lookObject[LOOK_STRUCTURES].structureType === STRUCTURE_ROAD) {
-                        this._workable = false
-                        break
-                    }
-                    if (lookObject.type === LOOK_CONSTRUCTION_SITES) {
-                        this._workable = false
-                        break
-                    }
+            if (this._workable !== undefined) {
+                return this._workable
+            }
+            this._workable = true
+            for (const lookObject of this.look()) {
+                if (lookObject.type === 'terrain' && lookObject.terrain === 'wall') {
+                    this._workable = false
+                    break
+                }
+                if (!isValidCoord(this.x, this.y)) {
+                    this._workable = false
+                    break
+                }
+                if (lookObject.type === LOOK_STRUCTURES && OBSTACLE_OBJECT_TYPES.includes(lookObject[LOOK_STRUCTURES].structureType)) {
+                    this._workable = false
+                    break
+                }
+                if (lookObject.type === LOOK_STRUCTURES && lookObject[LOOK_STRUCTURES].structureType === STRUCTURE_ROAD) {
+                    this._workable = false
+                    break
+                }
+                if (lookObject.type === LOOK_CONSTRUCTION_SITES) {
+                    this._workable = false
+                    break
                 }
             }
             return this._workable
@@ -194,11 +195,16 @@ RoomPosition.prototype.getAverageRange = function (array) {
     return result / (array.length)
 }
 
-RoomPosition.prototype.getClosestPathLength = function (array) {
+RoomPosition.prototype.getClosestPathLength = function (array, costs) {
+    if (costs === undefined) {
+        costs = new PathFinder.CostMatrix
+    }
     const goals = array.map(obj => obj.pos || obj)
-    const search = PathFinder.search(this, goals)
+    const search = PathFinder.search(this, goals, {
+        roomCallback: roomName => costs
+    })
     if (search.incomplete) {
-        return undefined
+        return 255
     }
     return search.path.length
 }
@@ -207,7 +213,7 @@ RoomPosition.prototype.getClosestByPath = function (array) {
     const goals = array.map(obj => obj.pos || obj)
     const search = PathFinder.search(this, goals)
     if (search.incomplete) {
-        return Infinity
+        return undefined
     }
     const path = search.path
     return path[path.length - 1]

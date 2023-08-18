@@ -9,7 +9,6 @@ global.business = {
                 this._profitableCompounds.push(resourceType)
             }
         }
-        data.recordLog('CALC: profitable compounds.')
         this.lastCalc = Game.time
         return this._profitableCompounds
     }
@@ -165,7 +164,6 @@ business.buy = function (resourceType, amount, roomName = undefined) {
     if (minSellPrice <= 1.1 * buyPrice || minSellPrice <= 1) {
         const result = isIntershard ? Game.market.deal(cheapestSellOrder.id, amount) : Game.market.deal(cheapestSellOrder.id, amount, roomName)
         if (result === OK) {
-            data.recordLog(`BUY: ${amount} ${resourceType}`, roomName)
             return 'deal from market'
         }
     }
@@ -201,7 +199,6 @@ business.buy = function (resourceType, amount, roomName = undefined) {
         totalAmount: amount,
         roomName: roomName
     }) === OK) {
-        data.recordLog(`ORDER: Buy ${amount} ${resourceType} `, roomName)
     }
     return 'new order'
 }
@@ -222,7 +219,7 @@ business.sell = function (resourceType, amount, roomName = undefined) {
     if (!isIntershard) { //전역 자원이 아니면
         buyOrders = buyOrders.filter(order => Game.market.calcTransactionCost(100, roomName, order.roomName) * energyPrice < 5 * sellPrice) //구매 주문중에 가까운것만 고려하기
     }
-    const mostExpensiveBuyOrder = getMaximumPoint(buyOrders, order => order.price)
+    const mostExpensiveBuyOrder = getMaxObject(buyOrders, order => order.price)
     const maxBuyPrice = mostExpensiveBuyOrder ? mostExpensiveBuyOrder.price : 0
 
     //구매주문 가격이 충분히 비싸면 바로 팔자
@@ -230,7 +227,6 @@ business.sell = function (resourceType, amount, roomName = undefined) {
         const finalAmount = Math.min(mostExpensiveBuyOrder.amount, amount)
         const result = Game.market.deal(mostExpensiveBuyOrder.id, finalAmount, roomName)
         if (result === OK) {
-            data.recordLog(`SELL: ${finalAmount} ${resourceType}`, roomName)
             return true
         }
     }
@@ -263,7 +259,6 @@ business.sell = function (resourceType, amount, roomName = undefined) {
         totalAmount: amount,
         roomName: roomName
     })
-    data.recordLog(`ORDER: Sell ${amount} ${resourceType}`, roomName)
     return false
 }
 
@@ -274,14 +269,13 @@ business.dump = function (resourceType, amount, roomName) {
     let buyOrders = Game.market.getAllOrders({ resourceType: resourceType, type: ORDER_BUY }).filter(order => !myOrdersId.includes(order.id))
     buyOrders = buyOrders.filter(order => Game.market.calcTransactionCost(Math.min(order.amount, amount), roomName, order.roomName) < Game.rooms[roomName].terminal.store[RESOURCE_ENERGY]) //구매 주문중에 가까운것만 고려하기
 
-    const mostExpensiveBuyOrder = getMaximumPoint(buyOrders, order => order.price)
+    const mostExpensiveBuyOrder = getMaxObject(buyOrders, order => order.price)
     if (!mostExpensiveBuyOrder) {
         return false
     }
     const sellAmount = Math.min(mostExpensiveBuyOrder.amount, amount)
     const result = Game.market.deal(mostExpensiveBuyOrder.id, sellAmount, roomName)
     if (result === OK) {
-        data.recordLog(`DUMP: ${sellAmount} ${resourceType}`, roomName)
         return true
     }
 }

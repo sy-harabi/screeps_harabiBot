@@ -31,6 +31,9 @@ const roomName = new VisualItem('Name', 5, (room) => {
         emoji = '🔼'
         color = 'cyan'
     }
+    if (room.memory.defenseNuke) {
+        emoji = '☢️' + emoji
+    }
     const content = `${emoji}${room.name}(${room.mineral.mineralType})`
     const option = { color }
     return { content, option }
@@ -104,6 +107,8 @@ const remoteIncome = new VisualItem('Remote', 5, (room) => {
         return result
     })()
 
+    room.memory.numRemoteSource = num
+
     if (num === 0) {
         const content = '-'
         const option = { color: 'magenta' }
@@ -123,8 +128,8 @@ const remoteIncome = new VisualItem('Remote', 5, (room) => {
 
 // Lab
 const lab = new VisualItem('Lab', 3, (room) => {
-    if (room.memory.boost) {
-        const content = this.memory.boostState
+    if (room.memory.boostState) {
+        const content = room.memory.boostState
         const option = { color: 'lime' }
         return { content, option }
     } else {

@@ -42,8 +42,8 @@ data.recordLog = function (text, roomName, groupInterval = 180) {
   Memory._log.push(logContents)
   Game.notify(notifyContents, groupInterval)
 
-  if (Memory._log.length > 100) {
-    Memory._log.splice(0, Memory._log.length - 50)
+  while (Memory._log.length > 50) {
+    Memory._log.shift()
   }
 
 }

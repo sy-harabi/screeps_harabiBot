@@ -4,7 +4,7 @@ require('data')
 require('function_visualizeRoomInfo')
 require('global_business')
 require('global_function')
-const manager_attack = require('manager_attack')
+require('manager_attack')
 require('manager_base')
 require('manager_claim')
 require('manager_colony')
@@ -31,6 +31,7 @@ require('prototype_structures_terminal')
 require('prototype_creep')
 require('prototype_flag_intersharding')
 require('prototype_flag')
+require('prototype_room_boost_management')
 require('prototype_room_energy_management')
 require('prototype_room_factory_operation')
 require('prototype_room_lab_operation')
@@ -52,6 +53,7 @@ const profiler = require('screeps-profiler');
 profiler.enable();
 global.CPU = new Array
 console.log('reset')
+data.recordLog(`GLOBAL RESET`)
 
 module.exports.loop = () => {
     profiler.wrap(function () {
@@ -100,7 +102,7 @@ module.exports.loop = () => {
                 continue
             }
             if (name.includes('attack')) {
-                manager_attack.run(flag)
+                flag.attackRoom()
                 continue
             }
             if (name.includes('clear')) {
@@ -142,12 +144,6 @@ module.exports.loop = () => {
                 Overlord.observeRoom(flag.pos.roomName)
                 if (flag.room) {
                     flag.room.getBasePlanByPos(flag.pos)
-                }
-                continue
-            }
-            if (name.includes('training')) {
-                if (flag.room) {
-                    flag.room.defenseTraining()
                 }
                 continue
             }

@@ -79,6 +79,32 @@ Object.defineProperties(StructureTerminal.prototype, {
     }
 })
 
+StructureTerminal.prototype.gatherResource = function (resourceType, amount) {
+    if (this.store[resourceType] >= amount) {
+        return OK
+    }
+    const terminals = Overlord.structures.terminal
+    for (const terminal of terminals) {
+        if (terminal.room.name === this.room.name) {
+            continue
+        }
+        if (terminal.cooldown) {
+            continue
+        }
+        if (terminal.store[resourceType] < 1000) {
+            continue
+        }
+        const amountToSend = Math.min(terminal.store[resourceType], amount - this.store[resourceType])
+        if (terminal.send(resourceType, amountToSend, this.room.name) === OK) {
+            Overlord.structures.terminal.filter(element => element.id !== terminal.id)
+            if (amountToSend + this.store[resourceType] >= amount) {
+                return OK
+            }
+        }
+    }
+    return ERR_NOT_ENOUGH_RESOURCES
+}
+
 
 StructureTerminal.prototype.run = function () {
     if (Memory.abandon && Memory.abandon.includes(this.room.name)) {
@@ -107,7 +133,6 @@ StructureTerminal.prototype.run = function () {
                 }
                 if (room.terminal.send('XGH2O', 1000, this.room.name) === OK) {
                     received = true
-                    data.recordLog(`SEND: 1000 XGH2O to ${this.room.name}`, room.name)
                     break
                 }
             }
@@ -134,7 +159,6 @@ StructureTerminal.prototype.run = function () {
             }
             const amount = Math.floor(room.terminal.store[RESOURCE_ENERGY] / 2)
             if (room.terminal.send(RESOURCE_ENERGY, amount, this.room.name) === OK) {
-                data.recordLog(`SEND: ${amount} energy to ${this.room.name}`, room.name)
             }
         }
     } else if (this.room.storage && this.room.storage.store[RESOURCE_ENERGY] < 300000) {
@@ -153,7 +177,6 @@ StructureTerminal.prototype.run = function () {
             }
             const amount = Math.floor(room.terminal.store[RESOURCE_ENERGY] / 2)
             if (room.terminal.send(RESOURCE_ENERGY, amount, this.room.name) === OK) {
-                data.recordLog(`SEND: ${amount} energy to ${this.room.name}`, room.name)
             }
         }
     }
