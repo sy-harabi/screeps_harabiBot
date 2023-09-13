@@ -52,6 +52,14 @@ const rcl = new VisualItem('RCL', 3.5, (room) => {
     return { content, option }
 })
 
+// Spawn
+const spawnCapacity = new VisualItem('Spawn', 3, (room) => {
+    const spawnCapacityRatio = room.memory.spawnCapacity / room.memory.spawnCapacityAvailable
+    const content = `${Math.round(100 * spawnCapacityRatio)}%`
+    const option = { color: spawnCapacityRatio < 0.8 ? 'lime' : spawnCapacityRatio < 0.9 ? 'yellow' : 'magenta' }
+    return { content, option }
+})
+
 // Upgrade Rate
 const control = new VisualItem('Control', 3.5, (room) => {
     if (room.controller.level === 8) {
@@ -93,14 +101,14 @@ const harvest = new VisualItem('Harvest', 3, (room) => {
 // Remote
 const remoteIncome = new VisualItem('Remote', 5, (room) => {
     const num = (() => {
-        if (!room.memory.colony) {
+        if (!room.memory.remotes) {
             return 0
         }
         let result = 0
-        for (const colonyStatus of Object.values(room.memory.colony)) {
+        for (const remoteStatus of Object.values(room.memory.remotes)) {
             const numSource =
-                colonyStatus.infraPlan
-                    ? Object.keys(colonyStatus.infraPlan).length
+                remoteStatus.infraPlan
+                    ? Object.keys(remoteStatus.infraPlan).length
                     : 0
             result += numSource
         }
@@ -116,11 +124,15 @@ const remoteIncome = new VisualItem('Remote', 5, (room) => {
     }
 
     let income = 0
-    for (const colonyName in room.memory.colony) {
-        const status = room.memory.colony[colonyName]
+    for (const remoteName in room.memory.remotes) {
+        const status = room.memory.remotes[remoteName]
+        if (status.state !== 'extract') {
+            continue
+        }
         income += ((status.lastProfit || 0) + status.profit - (status.lastCost || 0) - status.cost) / (Game.time - (status.lastTick || status.tick))
     }
 
+    room.heap.remoteIncome = Math.floor(income)
     const content = `${income.toFixed(1)}e/t (S:${num})`
     const option = { color: income / num >= 5 ? 'lime' : 'magenta' }
     return { content, option }
@@ -157,6 +169,7 @@ const rampart = new VisualItem('Rampart', 4, (room) => {
 const items = [
     roomName,
     rcl,
+    spawnCapacity,
     control,
     nextRCL,
     storedEnergy,
@@ -178,8 +191,8 @@ Overlord.visualizeRoomInfo = function () {
     new RoomVisual().text("Avg " + Math.round(100 * (_.sum(CPU) / CPU.length)) / 100, 16.5, startPos.y, option);
     new RoomVisual().text("# ticks " + CPU.length, 20.5, startPos.y, option);
     new RoomVisual().text(`Room: ${this.myRooms.length}`, 25, startPos.y, option)
-    new RoomVisual().text(`Creep: ${Object.keys(Game.creeps).length}`, 29.5, startPos.y, option)
-    new RoomVisual().text(`Remote: ${Memory.info ? Memory.info.numRemotes || 0 : '-'}`, 34.5, startPos.y, option)
+    new RoomVisual().text(`Remote: ${Memory.info ? Memory.info.numRemotes || 0 : '-'}(sources)`, 29.5, startPos.y, option)
+    new RoomVisual().text(`Creep: ${Object.keys(Game.creeps).length}`, 37.5, startPos.y, option)
 
     // 각 방마다 표시
     for (let i = -1; i < this.myRooms.length; i++) {

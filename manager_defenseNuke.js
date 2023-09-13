@@ -16,7 +16,7 @@ Room.prototype.defenseNuke = function () {
   const status = this.memory.defenseNuke
 
   status.state = status.state || 'init'
-  this.visual.text(`☢️${status.state}`, this.controller.pos.x + 0.75, this.controller.pos.y - 1.5, { align: 'left' })
+  this.visual.text(`☢️${status.state}`, this.controller.pos.x + 0.75, this.controller.pos.y + 1.5, { align: 'left' })
 
   const structureTypeToDefend = ['storage', 'terminal', 'powerSpawn', 'nuker', 'factory', 'spawn', 'tower']
 

@@ -21,7 +21,7 @@ StructureObserver.prototype.depositCheck = function (roomName) {
         const workSize = 15
         const returnRatio = 2.5
         const workerEnergyCost = 3250
-        const maxCooldown = workSize * (1500 - depositRequest.distance * 2.4) * business.getSellPrice(deposit.depositType) / (returnRatio * workerEnergyCost * business.getSellPrice(RESOURCE_ENERGY)) - 10
+        const maxCooldown = workSize * (1500 - depositRequest.distance * 2.4) * Business.getPriceRange(deposit.depositType).avgPrice / (returnRatio * workerEnergyCost * Business.energyPrice) - 10
         if (depositRequest.lastCooldown < maxCooldown) {
             depositRequest.maxCooldown = maxCooldown
             this.room.memory.depositRequests[depositRequest.depositId] = depositRequest

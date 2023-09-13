@@ -15,7 +15,11 @@ Room.prototype.manageDefense = function () {
     const strong = []
     const weak = []
 
+    let attackPowerTotal = 0
     for (const target of aggressiveTargets) {
+        attackPowerTotal += target.attackPower
+        attackPowerTotal += target.dismantlePower
+
         if ((!this.controller.safeMode) && (target.totalHealPower - this.getTowersDamageFor(target) >= 0)) {
             strong.push(target)
             continue
@@ -23,7 +27,7 @@ Room.prototype.manageDefense = function () {
         weak.push(target)
     }
 
-    if (strong.length > 0 && status.state === 'normal' && this.isWalledUp) {
+    if (strong.length > 0 && status.state === 'normal' && this.isWalledUp && attackPowerTotal > 0) {
         const invaderName = strong[0].owner.username
         status.state = 'emergency'
         data.recordLog(`WAR: Emergency occured by ${invaderName}`, this.name)
@@ -31,11 +35,11 @@ Room.prototype.manageDefense = function () {
         for (const hauler of this.creeps.hauler) {
             hauler.memory.role = 'manager'
         }
-    } else if (status.state === 'emergency' && strong.length === 0) {
+    } else if (status.state === 'emergency' && (attackPowerTotal === 0 || this.controller.safeMode)) {
         data.recordLog('WAR: Emergency ended', this.name)
         status.state = 'normal'
         this.memory.militaryThreat = false
-
+        this.memory.level = 0
         for (const creep of this.find(FIND_MY_CREEPS)) {
             if (creep.memory.assignedRoom) {
                 delete creep.memory.assignedRoom
@@ -47,14 +51,12 @@ Room.prototype.manageDefense = function () {
         }
     }
 
+    if (strong.length > 0 && !this.isWalledUp && this.controller.level >= 4 && !this.controller.safeMode) {
+        this.controller.activateSafeMode()
+        return
+    }
+
     if (status.state === 'emergency') {
-        if (!this.isWalledUp) {
-            if (this.controller.level >= 7) {
-                this.controller.activateSafeMode()
-                return
-            }
-            return
-        }
         const spawn = this.structures.spawn[0]
         for (const creep of this.find(FIND_MY_CREEPS)) {
             if (creep.memory.role === 'recycle') {
@@ -149,7 +151,7 @@ Room.prototype.manageTower = function (targets) {
     this.heap.rampartOK = false
 
     // wallMaker 없으면 spawn
-    if (!this.creeps.wallMaker.length && this.storage && this.storage.store[RESOURCE_ENERGY] > 10000) {
+    if (this.creeps.wallMaker.length === 0 && this.storage && this.storage.store[RESOURCE_ENERGY] > 10000) {
         this.requestWallMaker()
     }
 
@@ -325,6 +327,7 @@ Room.prototype.assignDefenders = function () {
         }
         if (status.requiredDamageMax > 0) {
             status.requiredDamageMax -= defender.attackPower
+            status.numAssignedDefender++
             return false
         }
         return true
@@ -342,22 +345,19 @@ Room.prototype.assignDefenders = function () {
             const bValue = b.spawning ? 100 : b.pos.getRangeTo(status.pos)
             return aValue - bValue
         })
-        while (status.requiredDamageMax > 0) {
+        while (status.requiredDamageMax > 0 && status.numAssignedDefender < 3) {
             const defender = freeDefenders.shift()
             if (defender) {
                 defender.memory.assign = packed
                 status.requiredDamageMax -= defender.attackPower
-                if (DEFENSE_TEST) {
-                    status.requiredDamageMax -= 20
-                }
                 continue
             }
 
             // check if we need boost  defender
 
             if (!this._requestedRoomDefender) {
-                const boost = (status.requiredDamageMax / this.meleeDefenderMaxAttackPower) > 1
-                if (boost) {
+                const boost = Math.ceil(status.requiredDamageMax / this.meleeDefenderMaxAttackPower)
+                if (boost > 1) {
                     data.recordLog(`${this.name} need boosted attacker`, this.name)
                 }
                 this.requestRoomDefender(boost)
@@ -511,7 +511,7 @@ Room.prototype.getRampartAnchorsStatus = function () {
 
             requiredDamageMax = Math.max(requiredDamageMax, requiredDamage)
 
-            totalAttackPower += intruder.attackPower
+            totalAttackPower += (intruder.attackPower + intruder.dismantlePower)
 
             const range = intruder.pos.getClosestRange(ramparts)
             if (range < closestRange) {
@@ -523,19 +523,20 @@ Room.prototype.getRampartAnchorsStatus = function () {
         status.pos = rampartAnchor
         status.requiredDamageMax = requiredDamageMax
         if (DEFENSE_TEST) {
-            status.requiredDamageMax = 300
+            status.requiredDamageMax = 200
         }
         status.closestRange = closestRange
         status.threatValue = Math.ceil(requiredDamageMax / closestRange)
         status.totalAttackPower = totalAttackPower
+        status.numAssignedDefender = 0
 
         if (DEFENSE_TEST) {
-            status.totalAttackPower = 3000
+            status.totalAttackPower = 1000
         }
 
-        this.visual.text(`👿🗡️${status.totalAttackPower}`, rampartAnchor.x, rampartAnchor.y + 0.5, { color: 'magenta', font: 0.5 })
-        this.visual.text(`👿🛡️${status.requiredDamageMax}`, rampartAnchor.x, rampartAnchor.y - 0.5, { color: 'lime', font: 0.5 })
-        this.visual.text(`🚶${status.closestRange}`, rampartAnchor.x, rampartAnchor.y, { color: 'cyan', font: 0.5 })
+        this.visual.text(`👿🗡️${status.totalAttackPower}`, rampartAnchor.x, rampartAnchor.y - 0.5, { color: 'magenta', font: 0.5 })
+        this.visual.text(`👿🛡️${status.requiredDamageMax}`, rampartAnchor.x, rampartAnchor.y, { color: 'lime', font: 0.5 })
+        this.visual.text(`🚶${status.closestRange}`, rampartAnchor.x, rampartAnchor.y + 0.5, { color: 'cyan', font: 0.5 })
     }
     return this._rampartAnchorsStatus = result
 }
@@ -691,7 +692,7 @@ Room.prototype.getRequiredDamageFor = function (target, options = {}) {
         goal -= hits
     }
     if (visualize) {
-        this.visual.text(result, target.pos, { color: 'cyan' })
+        this.visual.text(result, target.pos, { font: 0.5, align: 'left', color: 'cyan' })
     }
     return result
 }
@@ -699,7 +700,7 @@ Room.prototype.getRequiredDamageFor = function (target, options = {}) {
 Room.prototype.getTowersDamageFor = function (target) {//target은 hostile creep
     let damage = target.pos.getTowerDamageAt()
     let netDamage = target.getNetDamage(damage)
-    this.visual.text(netDamage, target.pos.x, target.pos.y + 1, { color: 'magenta' })
+    this.visual.text(netDamage, target.pos.x, target.pos.y + 1, { font: 0.5, align: 'left', color: 'magenta' })
     return netDamage
 }
 
@@ -853,13 +854,13 @@ Object.defineProperties(Room.prototype, {
     meleeDefenderMaxAttackPower: {
         get() {
             if (DEFENSE_TEST) {
-                return 30
+                return 60
             }
             if (this._roomDefenderMaxAttackPower) {
                 return this._roomDefenderMaxAttackPower
             }
-            const blockLength = Math.min(Math.floor((this.energyCapacityAvailable) / 130), 25)
-            return this._roomDefenderMaxAttackPower = blockLength * 30
+            const blockLength = Math.min(Math.floor((this.energyCapacityAvailable) / 210), 16)
+            return this._roomDefenderMaxAttackPower = blockLength * 60
         }
     }
 })
@@ -1021,6 +1022,14 @@ Object.defineProperties(Creep.prototype, {
             }
             return this._repairPower = this.getRepairPower()
         }
+    },
+    dismantlePower: {
+        get() {
+            if (this._dismantlePower) {
+                return this._dismantlePower
+            }
+            return this._dismantlePower = this.getDismantlePower()
+        }
     }
 })
 
@@ -1078,6 +1087,36 @@ Creep.prototype.getRepairPower = function () {
         }
         if (part.boost === 'XLH2O') {
             result += 200 // +100%
+            continue
+        }
+    }
+    return result
+}
+
+Creep.prototype.getDismantlePower = function () {
+    const body = this.body
+    let result = 0
+    for (const part of body) {
+        if (part.type !== 'work') {
+            continue
+        }
+        if (part.hits <= 0) {
+            continue
+        }
+        if (!part.boost) {
+            result += 50
+            continue
+        }
+        if (part.boost === 'ZH') {
+            result += 100 // +100%
+            continue
+        }
+        if (part.boost === 'ZH2O') {
+            result += 150 // +200%
+            continue
+        }
+        if (part.boost === 'XZH2O') {
+            result += 200 // +300%
             continue
         }
     }
@@ -1187,16 +1226,16 @@ Creep.prototype.getAttackPower = function () {
 
 Room.prototype.requestRoomDefender = function (boost) {
     let body = []
-    const bodyLength = Math.min(Math.floor((this.energyCapacityAvailable) / 130), 25)
+    const bodyLength = Math.min(Math.floor((this.energyCapacityAvailable) / 210), 16)
     for (let i = 0; i < bodyLength; i++) {
         body.push(MOVE)
     }
     for (let i = 0; i < bodyLength; i++) {
-        body.push(ATTACK)
+        body.push(ATTACK, ATTACK)
     }
 
     if (DEFENSE_TEST) {
-        body = [ATTACK, MOVE]
+        body = [ATTACK, ATTACK, MOVE]
     }
 
     const name = `${this.name} roomDefender ${Game.time}_${this.spawnQueue.length}`
@@ -1205,9 +1244,35 @@ Room.prototype.requestRoomDefender = function (boost) {
     }
 
     const options = { priority: SPAWN_PRIORITY['attacker'] }
-    if (boost) {
-        options.boostResources = ['XUH2O']
-        memory.boosted = false
+    const terminal = (this.terminal && this.terminal.RCLActionable) ? this.terminal : undefined
+    const amount = bodyLength * 60
+    if (boost > 3 && terminal) {
+        const boosts = ['XUH2O', 'UH2O', 'UH']
+        for (const resourceType of boosts) {
+            if (terminal.gatherResource(resourceType, amount) === OK) {
+                options.boostResources = [resourceType]
+                memory.boosted = false
+                break
+            }
+        }
+    } else if (boost > 2 && terminal) {
+        const boosts = ['UH2O', 'XUH2O', 'UH']
+        for (const resourceType of boosts) {
+            if (terminal.gatherResource(resourceType, amount) === OK) {
+                options.boostResources = [resourceType]
+                memory.boosted = false
+                break
+            }
+        }
+    } else if (boost > 1 && terminal) {
+        const boosts = ['UH', 'UH2O', 'XUH2O']
+        for (const resourceType of boosts) {
+            if (terminal.gatherResource(resourceType, amount) === OK) {
+                options.boostResources = [resourceType]
+                memory.boosted = false
+                break
+            }
+        }
     }
     const request = new RequestSpawn(body, name, memory, options)
     this.spawnQueue.push(request)
@@ -1225,7 +1290,6 @@ Creep.prototype.holdBunker = function () {
     const rangedTargets = this.pos.findInRange(FIND_HOSTILE_CREEPS, 3).sort((a, b) => a.hits - b.hits)
     if (rangedTargets.length > 0) {
         if (this.rangedAttack(rangedTargets[0]) === OK) {
-            this.room.towerAttack(rangedTargets[0])
             this.say('⚔️', true)
             return OK
         }
@@ -1246,6 +1310,6 @@ Room.prototype.getTotalHealPower = function (target) { //target은 hostile creep
         }
         result += (creep.healPower / 3) // short range 아니면 효율 1/3 됨
     }
-    this.visual.text(result, target.pos.x, target.pos.y + 2, { color: 'lime' })
+    this.visual.text(result, target.pos.x, target.pos.y + 2, { font: 0.5, align: 'left', color: 'lime' })
     return result
 }

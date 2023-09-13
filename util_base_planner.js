@@ -331,6 +331,11 @@ Room.prototype.mincutWithSufficientInside = function (sources, costs, numPositio
   while (true) {
 
     const mincut = this.mincutToExit(mincutSources, costs)
+
+    if (mincut === ERR_NOT_FOUND) {
+      return false
+    }
+
     i++
 
     if (i > 10) {

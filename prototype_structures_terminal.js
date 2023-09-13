@@ -1,97 +1,30 @@
-Object.defineProperties(StructureTerminal.prototype, {
-    notEnoughBasicMinerals: {
-        get() {
-            const notEnoughBasicMinerals = []
-            for (const resourceType of Object.keys(BASIC_MINERALS)) {
-                if ((this.store[resourceType] / BASIC_MINERALS[resourceType]['ratio']) < 1000) {
-                    notEnoughBasicMinerals.push({ resourceType: resourceType, amount: this.store[resourceType] })
-                }
-            }
-            return notEnoughBasicMinerals
-        }
-    },
-    lowestBaseCompound: {
-        get() {
-            this._lowestBaseCompound = {}
-            for (const resourceType of Object.keys(BASE_COMPOUNDS)) {
-                if (!this._lowestBaseCompound.resourceType || (this._lowestBaseCompound.amount / BASE_COMPOUNDS[this._lowestBaseCompound.resourceType]['ratio']) > (this.store[resourceType] / BASE_COMPOUNDS[resourceType]['ratio'])) {
-                    this._lowestBaseCompound = { resourceType: resourceType, amount: this.store[resourceType] }
-                }
-            }
-            return this._lowestBaseCompound
-        }
-    },
-    hasNotEnoughBaseCompounds: {
-        get() {
-            if ((this.lowestBaseCompound.amount / BASE_COMPOUNDS[this.lowestBaseCompound.resourceType]['ratio']) < 1000) {
-                return true
-            }
-            return false
-        }
-    },
-    lowestTier2Compound: {
-        get() {
-            this._lowestTier2Compound = {}
-            for (const resourceType of Object.keys(TIER2_COMPOUNDS)) {
-                if (!this._lowestTier2Compound.resourceType || (this._lowestTier2Compound.amount / TIER2_COMPOUNDS[this._lowestTier2Compound.resourceType]['ratio']) > (this.store[resourceType] / TIER2_COMPOUNDS[resourceType]['ratio'])) {
-                    this._lowestTier2Compound = { resourceType: resourceType, amount: this.store[resourceType] }
-                }
-            }
-            return this._lowestTier2Compound
-        }
-    },
-    hasNotEnoughTier2Compounds: {
-        get() {
-            if ((this.lowestTier2Compound.amount / TIER2_COMPOUNDS[this.lowestTier2Compound.resourceType]['ratio']) < 1000) {
-                return true
-            }
-            return false
-        }
-    },
-    lowestTier3Compound: {
-        get() {
-            this._lowestTier3Compound = {}
-            for (const resourceType of Object.keys(TIER3_COMPOUNDS)) {
-                if (!this._lowestTier3Compound.resourceType || (this._lowestTier3Compound.amount / TIER3_COMPOUNDS[this._lowestTier3Compound.resourceType]['ratio']) > (this.store[resourceType] / TIER3_COMPOUNDS[resourceType]['ratio'])) {
-                    this._lowestTier3Compound = { resourceType: resourceType, amount: this.store[resourceType] }
-                }
-            }
-            return this._lowestTier3Compound
-        }
-    },
-    hasNotEnoughTier3Compounds: {
-        get() {
-            if ((this.lowestTier3Compound.amount / TIER3_COMPOUNDS[this.lowestTier3Compound.resourceType]['ratio']) < 1000) {
-                return true
-            }
-            return false
-        }
-    },
-    RegionalCommodity: {
-        get() {
-            for (const resourceType of Object.keys(BASIC_REGIONAL_COMMODITIES)) {
-                if (this.store[resourceType] >= 500) {
-                    return resourceType
-                }
-            }
-            return false
-        }
-    }
-})
+const MINERAL_AMOUNT_TO_KEEP = 2000
+const MINERAL_AMOUNT_TO_SELL = 100000
+const MINERAL_AMOUNT_BUFFER = 30000
 
-StructureTerminal.prototype.gatherResource = function (resourceType, amount) {
+StructureTerminal.prototype.gatherResource = function (resourceType, amount, options = {}) {
+    const defaultOptions = { threshold: 1000, RCLthreshold: 6 }
+    const { threshold, RCLthreshold } = { ...defaultOptions, ...options }
+
     if (this.store[resourceType] >= amount) {
         return OK
     }
+
     const terminals = Overlord.structures.terminal
+
     for (const terminal of terminals) {
         if (terminal.room.name === this.room.name) {
             continue
         }
+
+        if (terminal.room.controller.level < RCLthreshold) {
+            continue
+        }
+
         if (terminal.cooldown) {
             continue
         }
-        if (terminal.store[resourceType] < 1000) {
+        if (terminal.store[resourceType] < threshold) {
             continue
         }
         const amountToSend = Math.min(terminal.store[resourceType], amount - this.store[resourceType])
@@ -105,40 +38,57 @@ StructureTerminal.prototype.gatherResource = function (resourceType, amount) {
     return ERR_NOT_ENOUGH_RESOURCES
 }
 
+StructureTerminal.prototype.manageMinerals = function () {
+    for (const resourceType of BASIC_MINERALS) {
+        const roomName = this.room.name
+        const storeAmount = this.store[resourceType]
+        // sell if amount excess threshold
+
+        if (!this.room.memory[`sell${resourceType}`] && storeAmount > MINERAL_AMOUNT_TO_SELL) {
+            this.room.memory[`sell${resourceType}`] = true
+        } else if (this.room.memory[`sell${resourceType}`] && storeAmount <= MINERAL_AMOUNT_TO_SELL - MINERAL_AMOUNT_BUFFER) {
+            this.room.memory[`sell${resourceType}`] = false
+        }
+
+        if (this.room.memory[`sell${resourceType}`]) {
+            const amount = storeAmount - MINERAL_AMOUNT_TO_SELL + MINERAL_AMOUNT_BUFFER
+            Business.sell(resourceType, amount, roomName)
+            continue
+        }
+
+        // continue if sufficient
+        if (storeAmount >= MINERAL_AMOUNT_TO_KEEP) {
+            Business.cancelAllOrder(resourceType, roomName, ORDER_BUY)
+            continue
+        }
+
+        const amountNeeded = MINERAL_AMOUNT_TO_KEEP - storeAmount
+
+        //try gather. continue if success
+        if (this.gatherResource(resourceType, MINERAL_AMOUNT_TO_KEEP, { threshold: MINERAL_AMOUNT_TO_KEEP + amountNeeded }) === OK) {
+            Business.cancelAllOrder(resourceType, roomName, ORDER_BUY)
+            continue
+        }
+
+        //try buy
+        Business.buy(resourceType, amountNeeded, roomName)
+    }
+}
 
 StructureTerminal.prototype.run = function () {
     if (Memory.abandon && Memory.abandon.includes(this.room.name)) {
         return
     }
 
-    if (this.store[this.room.mineral.mineralType] > 100000) {
-        business.sell(this.room.mineral.mineralType, this.store[this.room.mineral.mineralType] - 70000, this.room.name)
-    }
+    this.manageMinerals()
+
+    // if (data.isEnoughCredit && this.room.structures.powerSpawn.length && this.store[RESOURCE_POWER] < 500) {
+    //     Business.buy('power', 1000, this.room.name)
+    // }
 
     if (Memory.boostRCL && this.room.controller.level < 8) {
-        let received = false
         if (this.store['XGH2O'] < 1000) {
-            for (const room of Object.values(Game.rooms)) {
-                if (room.name === this.room.name) {
-                    continue
-                }
-                if (!room.isMy || room.controller.level < 8) {
-                    continue
-                }
-                if (!room.terminal || room.terminal.cooldown) {
-                    continue
-                }
-                if (room.terminal.store['XGH2O'] < 1000) {
-                    continue
-                }
-                if (room.terminal.send('XGH2O', 1000, this.room.name) === OK) {
-                    received = true
-                    break
-                }
-            }
-            if (!received) {
-                business.buy('XGH2O', 1000, this.room.name)
-            }
+            this.gatherResource('XGH2O', 1000, { threshold: 1000, RCLthreshold: 8 })
         }
 
         if (this.room.storage && this.room.storage.store.getUsedCapacity(RESOURCE_ENERGY) >= 500000) {
@@ -181,26 +131,13 @@ StructureTerminal.prototype.run = function () {
         }
     }
 
-    const notEnoughBasicMinerals = this.notEnoughBasicMinerals
-    if (notEnoughBasicMinerals.length) {
-        for (const notEnoughBasicMineral of notEnoughBasicMinerals) {
-            business.buy(notEnoughBasicMineral.resourceType, BASIC_MINERALS[notEnoughBasicMineral.resourceType].ratio * 1000 - notEnoughBasicMineral.amount, this.room.name)
-        }
-    }
-
-    if (data.isEnoughCredit && this.room.structures.powerSpawn.length && this.store[RESOURCE_POWER] < 500) {
-        business.buy('power', 1000, this.room.name)
-    }
-
-    if (!this.hasNotEnoughTier3Compounds) {
-        for (const resourceType of business.profitableCompounds) {
-            business.sell(resourceType, this.store[resourceType] / 2, this.room.name)
-        }
-    }
-
     for (const resourceType of Object.keys(this.store)) {
         if (COMMODITIES_TO_SELL.includes(resourceType)) {
-            business.sell(resourceType, this.store[resourceType], this.room.name)
+            Business.sell(resourceType, this.store[resourceType], this.room.name)
         }
+    }
+
+    if (this.room.storage && this.room.storage.store[RESOURCE_ENERGY] > 600000) {
+        console.log(`${this.room.name} wanna sell energy`)
     }
 }

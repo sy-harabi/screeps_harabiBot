@@ -84,39 +84,29 @@ global.checkCPU = function (name) {
     data.cpu = cpu
 }
 
-global.colonize = function (colonyName, baseName) {
-    colonyName = colonyName.toUpperCase()
-    const base = baseName ? Game.rooms[baseName.toUpperCase()] : Overlord.findClosestMyRoom(colonyName)
+global.colonize = function (remoteName, baseName) {
+    remoteName = remoteName.toUpperCase()
+    const base = baseName ? Game.rooms[baseName.toUpperCase()] : Overlord.findClosestMyRoom(colonyName, 4)
     if (!base || !base.isMy) {
         console.log('invalid base')
         return
     }
-    baseName = base.name
-    if (base.memory.colony && base.memory.colony[colonyName]) {
-        return
-    }
 
-    if (Memory.rooms[colonyName]) {
-        if (Memory.rooms[colonyName].host && Memory.rooms[colonyName].host !== baseName) {
-            return
-        }
-    }
-
-    if (!(base && base.isMy)) {
-        console.log(`Base ${baseName} is not your room`)
-        return
-    }
-
-    const distance = Game.map.getRoomLinearDistance(baseName, colonyName)
+    const distance = Game.map.getRoomLinearDistance(baseName, remoteName)
 
     if (distance > 2) {
-        console.log(`Colony ${colonyName} is too far from your base ${baseName}. distance is ${distance}`)
+        console.log(`Remote ${remoteName} is too far from your base ${baseName}. distance is ${distance}`)
         return
     }
 
-    base.memory.colony = base.memory.colony || {}
-    base.memory.colony[colonyName] = {}
-    return
+    base.memory.remotes = base.memory.remotes || {}
+    base.memory.remotes[remoteName] = base.memory.remotes[remoteName] || {}
+
+    Memory.rooms[remoteName] = Memory.rooms[remoteName] || {}
+    Memory.rooms[remoteName].host = base.name
+
+    console.log(`${baseName} colonize ${remoteName}. distance is ${distance}`)
+    return OK
 }
 
 global.claim = function (targetRoomName, baseName) {
@@ -174,9 +164,7 @@ global.resetMap = function (roomName) {
 }
 
 global.link = function () {
-    for (const roomName of Overlord.myRooms) {
-        const URL = `https://screeps.com/a/#!/${SHARD}/${roomName}`
-        const hyperLink = `<a href="${URL}" target="_blank">${roomName}</a>`
-        console.log(hyperLink)
+    for (const myRoom of Overlord.myRooms) {
+        console.log(myRoom.hyperLink)
     }
 }

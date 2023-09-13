@@ -1,4 +1,6 @@
-const MAX_DISTANCE = 140
+const MAX_DISTANCE = 130
+const TICKS_TO_CHECK_EFFICIENCY = 14000
+const HAULER_RATIO = 0.45 // 0.4 is ideal.
 
 Room.prototype.ruleColony = function (colonyName) {
     const map = Overlord.map
@@ -14,26 +16,34 @@ Room.prototype.ruleColony = function (colonyName) {
     const visualPos = new RoomPosition(25, 25, colonyName)
 
     // status 나타내기
-    new RoomVisual(colonyName).text(`📶${status.state.toUpperCase()}`, visualPos.x + 1, visualPos.y, { align: 'left' })
+    new RoomVisual(colonyName).text(`📶${status.state.toUpperCase()}`, visualPos.x, visualPos.y)
 
-    // efficiency 나타내기
-    if (!status.tick || (Game.time - status.tick > 10000)) {
-        status.lastProfit = status.profit
-        status.lastCost = status.cost
-        status.lastTick = status.tick
-        this.checkColonyEfficiency(colonyName)
-    }
-
-    const efficiencyRate = Math.floor(100 * (status.profit - status.cost) / (Game.time - status.tick)) / 100
-
-    // roomVisual
-    new RoomVisual(colonyName).text(`🏭${efficiencyRate}e/tick`, visualPos.x + 1, visualPos.y + 2, { align: 'left' })
-
-    // mapVisual
+    // visual 및 check efficiency
     if (map[colonyName]) {
         Game.map.visual.text(`⚡${map[colonyName].numSource}/2`, new RoomPosition(25 + 12, 25 - 15, colonyName), { fontSize: 7, })
     }
-    Game.map.visual.text(`🏭${efficiencyRate}e/tick`, visualPos, { fontSize: 7 })
+
+    if (status.state === 'extraction') {
+        if (!status.tick || (Game.time - status.tick > TICKS_TO_CHECK_EFFICIENCY)) {
+            status.lastProfit = status.profit
+            status.lastCost = status.cost
+            status.lastTick = status.tick
+            this.checkColonyEfficiency(colonyName)
+            if (!status) {
+                return
+            }
+        }
+
+        const efficiencyRate = Math.floor(100 * (status.profit - status.cost) / (Game.time - status.tick)) / 100
+
+        // roomVisual
+        new RoomVisual(colonyName).text(`🏭${efficiencyRate}e/tick for ${Game.time - status.tick} ticks`, visualPos.x, visualPos.y + 2)
+
+        // mapVisual
+        Game.map.visual.text(`🏭${efficiencyRate}e/tick`, visualPos, { fontSize: 7 })
+    } else {
+        Game.map.visual.text(`📶${status.state}`, visualPos, { fontSize: 10 })
+    }
 
     // reservation
     if (colony && colony.controller.reservation) {
@@ -44,7 +54,7 @@ Room.prototype.ruleColony = function (colonyName) {
     if (map[colonyName] && map[colonyName].threat && Game.time < map[colonyName].threat) {
         if (status.state !== 'evacuate') {
             status.state = 'evacuate'
-            data.recordLog(`COLONY: Evacuate.`, colonyName)
+            data.recordLog(`COLONY: Evacuate from ${colony ? colony.hyperLink : colonyName}.`, colonyName)
         }
         new RoomVisual(colonyName).text(`⏱️${map[colonyName].threat - Game.time}`, visualPos.x + 6, visualPos.y, { align: 'left' })
     }
@@ -55,21 +65,21 @@ Room.prototype.ruleColony = function (colonyName) {
 
     // 다른 사람이 claim한 방이면 포기하자
     if (colony && colony.controller.owner && !['Invader'].includes(colony.controller.owner.username)) {
-        data.recordLog(`COLONY: Abandon ${colonyName} room is claime by other user`, colonyName)
+        data.recordLog(`COLONY: Abandon ${colony ? colony.hyperLink : colonyName} room is claimed by other user`, colonyName)
         return this.abandonColony(colonyName)
     }
 
     // invader 혹은 invaderCore 처리 (evacuate 일때는 예외)
     if (this.checkColonyInvader(colonyName) && status.state !== 'evacuate') {
-        new RoomVisual(colonyName).text(`👿Invader`, visualPos.x + 1, visualPos.y - 1, { align: 'left' })
+        new RoomVisual(colonyName).text(`👿Invader`, visualPos.x + 1, visualPos.y - 1)
         if (!Overlord.getNumCreepsByRole(colonyName, 'colonyDefender')) {
             this.requestColonyDefender(colonyName)
         }
         return
     }
 
-    if (this.checkColonyInvaderCore(colonyName) && status.state !== 'evacuate') {
-        new RoomVisual(colonyName).text(`👿InvaderCore`, visualPos.x + 1, visualPos.y - 1, { align: 'left' })
+    if (this.checkRemoteInvaderCore(colonyName) && status.state !== 'evacuate') {
+        new RoomVisual(colonyName).text(`👿InvaderCore`, visualPos.x + 1, visualPos.y - 1)
         if (!Overlord.getNumCreepsByRole(colonyName, 'colonyCoreDefender')) {
             return this.requestColonyCoreDefender(colonyName)
         }
@@ -80,6 +90,14 @@ Room.prototype.ruleColony = function (colonyName) {
     if (status.state === 'init') {
         if (!(this.storage && this.energyCapacityAvailable >= 1300)) {
             return
+        }
+        for (const roomName of Object.keys(this.memory.colony)) {
+            if (roomName === colonyName) {
+                continue
+            }
+            if (!['extraction', 'init'].includes(this.memory.colony[roomName].state)) {
+                return
+            }
         }
         status.state = 'reservation'
         status.profit = status.profit || 0
@@ -102,8 +120,8 @@ Room.prototype.ruleColony = function (colonyName) {
             return ERR_NOT_FOUND
         }
         const infraPlan = this.getColonyInfraPlan(colonyName)
-        if (!infraPlan) {
-            data.recordLog(`COLONY: Abandon ${colonyName}. cannot find infraPlan`, colonyName)
+        if (infraPlan === ERR_NOT_FOUND) {
+            data.recordLog(`COLONY: Abandon ${colony ? colony.hyperLink : colonyName}. cannot find infraPlan`, colonyName)
             return this.abandonColony(colonyName)
         }
 
@@ -153,14 +171,16 @@ Room.prototype.ruleColony = function (colonyName) {
         const sources = Object.keys(status.infraPlan).map(id => Game.getObjectById(id))
         for (const source of sources) {
             if (!source) {
-                data.recordLog(`COLONY: Abandon ${colonyName}. cannot find source`, colonyName)
+                data.recordLog(`COLONY: Abandon ${colony ? colony.hyperLink : colonyName}. cannot find source`, colonyName)
                 this.abandonColony(colonyName)
+                return
             }
             const laborers = Overlord.getCreepsByRole(colonyName, 'colonyLaborer').filter(creep => creep.memory.sourceId === source.id)
             let numWork = 0;
             for (const laborer of laborers) {
                 numWork += laborer.getNumParts('work')
             }
+            this.spawnCapacity += 20 * 3
             if (laborers.length < source.available && numWork < 20) {
                 this.requestColonyLaborer(colonyName, source.id)
             }
@@ -173,18 +193,21 @@ Room.prototype.ruleColony = function (colonyName) {
         if (colony && Game.time % 1000 === 0) {
             const infraPlan = this.getColonyInfraPlan(colonyName)
             if (!infraPlan) {
-                data.recordLog(`COLONY: Abandon ${colonyName}. cannot find infraPlan`, colonyName)
+                data.recordLog(`COLONY: Abandon ${colony ? colony.hyperLink : colonyName}. cannot find infraPlan`, colonyName)
                 return this.abandonColony(colonyName)
             }
             let numNewConstructionSites = 0
             for (const infraPos of infraPlan) {
+                if (!Game.rooms[infraPos.pos.roomName]) {
+                    continue
+                }
                 if (infraPos.pos.createConstructionSite(infraPos.structureType) === OK && infraPos.pos.roomName === colonyName) {
                     numNewConstructionSites++
                 }
             }
         }
 
-        if (colony.constructionSites.length) {
+        if (colony && colony.constructionSites.length) {
             status.state = 'build'
             return
         }
@@ -232,6 +255,8 @@ Room.prototype.ruleColony = function (colonyName) {
                 numWork += miner.getActiveBodyparts(WORK)
             }
 
+            this.spawnCapacity += 13
+
 
             // numCarry 및 maxCarry 계산 및 visual
             let numCarry = 0;
@@ -241,8 +266,10 @@ Room.prototype.ruleColony = function (colonyName) {
                 numCarry += haluer.getActiveBodyparts(CARRY)
             }
 
-            const maxCarry = Math.floor(status.infraPlan[source.id].pathLength * 0.5)
+            const maxCarry = Math.ceil(status.infraPlan[source.id].pathLength * HAULER_RATIO)
             const maxNumHauler = Math.ceil(maxCarry / (2 * Math.min(Math.floor(this.energyCapacityAvailable / 150), 16)))
+
+            this.spawnCapacity += Math.ceil(maxCarry * 1.5)
 
             colony.visual.text(`⛏️${numWork} / 6`, source.pos.x + 0.5, source.pos.y - 0.25, visualOption)
             colony.visual.text(`🚚${numCarry} / ${maxCarry}`, source.pos.x + 0.5, source.pos.y + 0.5, visualOption)
@@ -266,8 +293,11 @@ Room.prototype.ruleColony = function (colonyName) {
                 continue;
             }
 
+
+            const spawnCarry = Math.min(2 * Math.ceil(maxCarry / 2 / maxNumHauler), maxCarry - numCarry)
+
             if (numCarry < maxCarry && haulers.length < maxNumHauler && source.container.hits >= 180000) {
-                this.requestColonyHauler(colonyName, source.id, maxCarry - numCarry, status.infraPlan[source.id].pathLength)
+                this.requestColonyHauler(colonyName, source.id, spawnCarry, status.infraPlan[source.id].pathLength)
                 continue;
             }
         }
@@ -279,7 +309,9 @@ Room.prototype.ruleColony = function (colonyName) {
             creep.getRecycled()
         }
 
-        if (colony.memory.intermediate && this.memory.colony[colony.memory.intermediate] && this.memory.colony[roomName].state === 'evacuate') {
+        const intermediate = Memory.rooms[colonyName] ? Memory.rooms[colonyName].intermediate : undefined
+
+        if (intermediate && this.memory.colony[intermediate] && this.memory.colony[intermediate].state === 'evacuate') {
             return
         }
 
@@ -290,7 +322,7 @@ Room.prototype.ruleColony = function (colonyName) {
                 Memory.rooms[colonyName].isInvader = false
                 Memory.rooms[colonyName].isKiller = false
             }
-            data.recordLog(`COLONY: Reactivated.`, colonyName)
+            data.recordLog(`COLONY: ${colony ? colony.hyperLink : colonyName} Reactivated.`, colonyName)
             return
         }
     }
@@ -324,7 +356,7 @@ Room.prototype.checkColonyInvader = function (colonyName) {
     const colony = Game.rooms[colonyName]
     const status = this.memory.colony[colonyName]
     if (!status) {
-        return
+        return false
     }
 
     if (!colony) {
@@ -334,19 +366,18 @@ Room.prototype.checkColonyInvader = function (colonyName) {
     const hostileCreeps = colony.find(FIND_HOSTILE_CREEPS).filter(creep => creep.checkBodyParts(['work', 'attack', 'ranged_attack', 'heal', 'claim']))
     const killerCreeps = hostileCreeps.filter(creep => creep.checkBodyParts(['attack', 'ranged_attack', 'heal']))
 
-    if (!status.isInvader && hostileCreeps.length) {
+    if (!status.isInvader && hostileCreeps.length > 0) {
         status.isInvader = true
         colony.memory.isInvader = true
 
-    } else if (status.isInvader && !hostileCreeps.length) {
+    } else if (status.isInvader && hostileCreeps.length === 0) {
         status.isInvader = false
         colony.memory.isInvader = false
     }
 
-    if (!colony.memory.isKiller && killerCreeps.length) {
+    if (!colony.memory.isKiller && killerCreeps.length > 0) {
         colony.memory.isKiller = true
-
-    } else if (colony.memory.isKiller && !killerCreeps.length) {
+    } else if (colony.memory.isKiller && killerCreeps.length === 0) {
         colony.memory.isKiller = false
         const roomInfo = Overlord.map[colonyName]
         if (roomInfo) {
@@ -360,10 +391,15 @@ Room.prototype.checkColonyInvader = function (colonyName) {
 Room.prototype.checkColonyInvaderCore = function (colonyName) {
     const colony = Game.rooms[colonyName]
     const status = this.memory.colony[colonyName]
+
+    if (!status) {
+        return false
+    }
+
     if (!colony) {
         return status.isInvaderCore
     }
-    const hostileStructures = colony.find(FIND_HOSTILE_STRUCTURES)
+    const hostileStructures = colony.find(FIND_HOSTILE_STRUCTURES).filter(structure => structure.structureType === STRUCTURE_INVADER_CORE)
     if (!status.isInvaderCore && hostileStructures.length) {
         status.isInvaderCore = true
     } else if (status.isInvaderCore && !hostileStructures.length) {
@@ -402,6 +438,7 @@ Room.prototype.resetColonyEfficiency = function (colonyName) {
 
 Room.prototype.checkColonyEfficiency = function (colonyName) {
     const status = this.memory.colony ? this.memory.colony[colonyName] : undefined
+    const colony = Game.rooms[colonyName]
     if (!status) {
         return
     }
@@ -411,11 +448,8 @@ Room.prototype.checkColonyEfficiency = function (colonyName) {
         status.lastEfficiency = efficiency
         if (efficiency < 0.3) {
             this.abandonColony(colonyName)
-            data.recordLog(`COLONY: Abandon ${colonyName} for low efficiency ${efficiency * 100}%`, colonyName)
+            data.recordLog(`COLONY: Abandon ${colony ? colony.hyperLink : colonyName} for low efficiency ${efficiency * 100}%`, colonyName)
             return
-        }
-        if (efficiency < 0.5) {
-            data.recordLog(`COLONY: Efficiency ${efficiency * 100}%`, colonyName)
         }
     }
 
@@ -424,20 +458,37 @@ Room.prototype.checkColonyEfficiency = function (colonyName) {
     status.cost = 0
 }
 
+/**
+ * get positions for containers and roads for remotes
+ * @param {String} colonyName - roomName of colony
+ * @param {Boolean} reconstruction - if true, ignore past plan and make a new one
+ * @returns {Object} infraPlan - 
+ */
 Room.prototype.getColonyInfraPlan = function (colonyName, reconstruction = false) {
+    // set status in memory of base room
     this.memory.colony = this.memory.colony || {}
     this.memory.colony[colonyName] = this.memory.colony[colonyName] || {}
     const status = this.memory.colony[colonyName]
+
+    // if there is infra plan already, unpack and use that
     if (!reconstruction && status.infraPlan && Object.keys(status.infraPlan).length) {
         return this.unpackInfraPlan(status.infraPlan)
     }
+
+    // if we cannot see remote, wait until it has vision
     const colony = Game.rooms[colonyName]
     if (!colony) {
         return ERR_NOT_FOUND
     }
+
+    // set host
     colony.memory.host = this.name
     console.log(`Get infraPlan for ${colonyName}`)
+
+    // set a place to store plan
     status.infraPlan = {}
+
+    // set roadPositions. it's used to find a path preferring road or future road.
     const roadPositions = []
     const basePlan = this.basePlan
     if (basePlan) {
@@ -451,13 +502,26 @@ Room.prototype.getColonyInfraPlan = function (colonyName, reconstruction = false
     }
 
     const thisRoom = this
-    outer:
+
+    let spawnCapacity = this.memory.spawnCapacity
+    spawnCapacity += 4 //claimer
+
+    const anchor = this.storage || this.structures.spawn[0]
+
+    if (!anchor) {
+        data.recordLog(`FAIL: Cannot colonize ${colony.hyperLink}. cannot find storage or spawn.`, this.name)
+        console.log(`no infra. this room is not adequate for colonize`)
+        return ERR_NOT_FOUND
+    }
+
+    // find path from source to storage of base
     for (const source of colony.sources) {
-        const search = PathFinder.search(source.pos, { pos: this.storage.pos, range: 1 }, {
+        const search = PathFinder.search(source.pos, { pos: anchor.pos, range: 1 }, {
             plainCost: 2,
             swampCost: 2,
             roomCallback: function (roomName) {
                 const colonies = thisRoom.memory.colony ? Object.keys(thisRoom.memory.colony) : []
+                // if room is not target room and not base room and not one of my remote, do not use that room.
                 if (roomName !== colonyName && roomName !== thisRoom.name && !colonies.includes(roomName)) {
                     return false
                 }
@@ -505,6 +569,14 @@ Room.prototype.getColonyInfraPlan = function (colonyName, reconstruction = false
             continue
         }
 
+        spawnCapacity += Math.ceil(MAX_DISTANCE * HAULER_RATIO * 1.5) // hauler
+        spawnCapacity += 13 // miner
+
+        if ((spawnCapacity / this.memory.spawnCapacityAvailable) > 0.8) {
+            data.recordLog(`FAIL: Cannot colonize source ${source.id} in ${colony.hyperLink}. spawn capacity is full.`, this.name)
+            continue
+        }
+
         const structures = []
         structures.push(path.shift().packInfraPos('container'))
         for (const pos of path) {
@@ -520,6 +592,7 @@ Room.prototype.getColonyInfraPlan = function (colonyName, reconstruction = false
     }
 
     if (!Object.keys(status.infraPlan).length) {
+        data.recordLog(`FAIL: Cannot colonize ${colony.hyperLink}. cannot find infra plan.`, this.name)
         console.log(`no infra. this room is not adequate for colonize`)
         return ERR_NOT_FOUND
     }

@@ -68,7 +68,7 @@ Room.prototype.mincutToExit = function (sources, costMap) { //soucres : array of
     const vertice = packPosToVertice(pos.x, pos.y)
     if (exit[vertice]) {
       console.log(`Invalid source ${pos.x}, ${pos.y}`)
-      return ERR_INVALID_ARGS
+      return ERR_NOT_FOUND
     }
     if (costMap.get(pos.x, pos.y) === 255) {
       continue
@@ -123,6 +123,7 @@ Room.prototype.mincutToExit = function (sources, costMap) { //soucres : array of
     getBlockingFlow(sourceVertices, exit, capacityMap, levels)
     i++
   }
+  console.log('iteration ends.')
   return ERR_NOT_FOUND
 }
 

@@ -127,34 +127,36 @@ function extractor(creep) { //스폰을 대입하는 함수 (이름 아님)
 function reserver(creep) {
     if (!creep.memory.runAway && creep.room.memory.isKiller) {
         creep.memory.runAway = true
-    } else if (creep.memory.runAway && Game.rooms[creep.memory.colony] && !Game.rooms[creep.memory.colony].memory.isKiller) {
+        creep.memory.killerRoom = creep.room.name
+    } else if (creep.memory.runAway && Game.rooms[creep.memory.killerRoom] && !Game.rooms[creep.memory.killerRoom].memory.isKiller) {
         creep.memory.runAway = false
     }
 
     if (creep.memory.runAway) {
-        const base = new RoomPosition(25, 25, creep.memory.base)
-        if (creep.room.name !== creep.memory.base) {
-            creep.moveMy(base, { range: 20 })
+        if (creep.room.memory.isKiller) {
+            creep.moveToRoom(creep.memory.base, 2)
             return
         }
-        if (creep.pos.getRangeTo(base) > 20) {
-            creep.moveTo(base, { range: 20, maxRooms: 1 })
+        const center = new RoomPosition(25, 25, creep.room.name)
+        if (creep.pos.getRangeTo(center) > 20) {
+            creep.moveMy(center, { range: 20, maxRooms: 1 })
             return
         }
         return
     }
 
-    const controller = Game.rooms[creep.memory.colony] ? Game.rooms[creep.memory.colony].controller : undefined
+    const colony = Game.rooms[creep.memory.colony]
+    const controller = colony ? colony.controller : undefined
+    const base = Game.rooms[creep.memory.base]
     if (creep.room.name !== creep.memory.colony) {
         if (controller) {
-            if (creep.moveMy(controller, { range: 1 }) === ERR_NO_PATH) {
-                const base = Game.rooms[creep.memory.base]
-
-                if (base && !base.getAccessibleToController()) {
-                    data.recordLog(`COLONY: Abandon ${creep.memory.colony} since controller is blocked`, creep.memory.colony)
-                    base.abandonColony(creep.memory.colony)
-                    creep.suicide()
-                }
+            if (creep.moveMy(controller, { range: 1 }) !== ERR_NO_PATH) {
+                return
+            }
+            if (colony && !colony.getAccessibleToController()) {
+                data.recordLog(`COLONY: Abandon ${colony.hyperLink} since controller is blocked`, creep.memory.colony)
+                base.abandonColony(creep.memory.colony)
+                creep.suicide()
             }
             return
         }
@@ -164,9 +166,8 @@ function reserver(creep) {
 
     if (creep.pos.getRangeTo(controller.pos) > 1) {
         if (creep.moveMy(controller, { range: 1 }) === ERR_NO_PATH) {
-            const base = Game.rooms[creep.memory.base]
-            if (base && !base.getAccessibleToController()) {
-                data.recordLog(`COLONY: Abandon ${creep.memory.colony} since controller is blocked`, creep.memory.colony)
+            if (colony && !colony.getAccessibleToController()) {
+                data.recordLog(`COLONY: Abandon ${colony.hyperLink} since controller is blocked`, creep.memory.colony)
                 base.abandonColony(creep.memory.colony)
                 creep.suicide()
             }
@@ -191,20 +192,21 @@ function reserver(creep) {
 }
 
 function colonyLaborer(creep) {
-    const base = new RoomPosition(25, 25, creep.memory.base)
     if (!creep.memory.runAway && creep.room.memory.isKiller) {
         creep.memory.runAway = true
-    } else if (creep.memory.runAway && Game.rooms[creep.memory.colony] && !Game.rooms[creep.memory.colony].memory.isKiller) {
+        creep.memory.killerRoom = creep.room.name
+    } else if (creep.memory.runAway && Game.rooms[creep.memory.killerRoom] && !Game.rooms[creep.memory.killerRoom].memory.isKiller) {
         creep.memory.runAway = false
     }
 
     if (creep.memory.runAway) {
-        if (creep.room.name !== creep.memory.base) {
-            creep.moveMy(base, { range: 20 })
+        if (creep.room.memory.isKiller) {
+            creep.moveToRoom(creep.memory.base, 2)
             return
         }
-        if (creep.pos.getRangeTo(base) > 20) {
-            creep.moveMy(base, { range: 20 })
+        const center = new RoomPosition(25, 25, creep.room.name)
+        if (creep.pos.getRangeTo(center) > 20) {
+            creep.moveMy(center, { range: 20, maxRooms: 1 })
             return
         }
         return
@@ -263,18 +265,19 @@ function colonyLaborer(creep) {
 function colonyMiner(creep) {
     if (!creep.memory.runAway && creep.room.memory.isKiller) {
         creep.memory.runAway = true
-    } else if (creep.memory.runAway && Game.rooms[creep.memory.colony] && !Game.rooms[creep.memory.colony].memory.isKiller) {
+        creep.memory.killerRoom = creep.room.name
+    } else if (creep.memory.runAway && Game.rooms[creep.memory.killerRoom] && !Game.rooms[creep.memory.killerRoom].memory.isKiller) {
         creep.memory.runAway = false
     }
 
     if (creep.memory.runAway) {
-        const base = new RoomPosition(25, 25, creep.memory.base)
-        if (creep.room.name !== creep.memory.base) {
-            creep.moveTo(base)
+        if (creep.room.memory.isKiller) {
+            creep.moveToRoom(creep.memory.base, 2)
             return
         }
-        if (creep.pos.getRangeTo(base) > 20) {
-            creep.moveTo(base, { range: 20, maxRooms: 1 })
+        const center = new RoomPosition(25, 25, creep.room.name)
+        if (creep.pos.getRangeTo(center) > 20) {
+            creep.moveMy(center, { range: 20, maxRooms: 1 })
             return
         }
         return
@@ -306,18 +309,19 @@ function colonyMiner(creep) {
 function colonyHauler(creep) {
     if (!creep.memory.runAway && creep.room.memory.isKiller) {
         creep.memory.runAway = true
-    } else if (creep.memory.runAway && Game.rooms[creep.memory.colony] && !Game.rooms[creep.memory.colony].memory.isKiller) {
+        creep.memory.killerRoom = creep.room.name
+    } else if (creep.memory.runAway && Game.rooms[creep.memory.killerRoom] && !Game.rooms[creep.memory.killerRoom].memory.isKiller) {
         creep.memory.runAway = false
     }
 
     if (creep.memory.runAway) {
-        const base = new RoomPosition(25, 25, creep.memory.base)
-        if (creep.room.name !== creep.memory.base) {
-            creep.moveTo(base)
+        if (creep.room.memory.isKiller) {
+            creep.moveToRoom(creep.memory.base, 2)
             return
         }
-        if (creep.pos.getRangeTo(base) > 20) {
-            creep.moveTo(base, { range: 20, maxRooms: 1 })
+        const center = new RoomPosition(25, 25, creep.room.name)
+        if (creep.pos.getRangeTo(center) > 20) {
+            creep.moveMy(center, { range: 20, maxRooms: 1 })
             return
         }
         return
@@ -346,7 +350,7 @@ function colonyHauler(creep) {
         }
         const storage = room.storage
         if (!storage) {
-            data.recordLog(`COLONY: Abandon ${creep.memory.colony} since storage is gone`, creep.memory.colony)
+            data.recordLog(`COLONY: Abandon ${creep.memory.colony} since storage is gone`, creep.memory.base)
             room.abandonColony(creep.memory.colony)
             creep.suicide()
             return
@@ -363,8 +367,9 @@ function colonyHauler(creep) {
         }
         const storage = room.storage
         if (!storage) {
-            data.recordLog(`COLONY: Abandon ${creep.memory.colony} since storage is gone`, creep.memory.colony)
+            data.recordLog(`COLONY: Abandon ${creep.memory.colony} since storage is gone`, creep.memory.base)
             room.abandonColony(creep.memory.colony)
+            creep.suicide()
             return
         }
 
@@ -380,7 +385,7 @@ function colonyHauler(creep) {
             return creep.moveMy(storage, { range: 1 })
         }
         if (creep.transfer(creep.room.storage, RESOURCE_ENERGY) === OK) {
-            creep.room.addColonyProfit(creep.memory.colony, creep.store[RESOURCE_ENERGY])
+            creep.room.addRemoteProfit(creep.memory.colony, creep.store[RESOURCE_ENERGY])
         }
         return
     }
@@ -540,32 +545,45 @@ function claimer(creep) { //스폰을 대입하는 함수 (이름 아님)
         }
         return creep.moveMy(flag.pos)
     }
-    if (creep.room.name === creep.memory.targetRoom) {
-        const controller = creep.room.controller
-        if (!controller) {
-            return
-        }
-        if (controller.reservation && controller.reservation.username !== MY_NAME) {
-            if (creep.attackController(controller) === -9) {
-                creep.moveMy(controller, { range: 1 });
-            }
-        } else if (creep.claimController(controller) === -9) {
-            creep.moveMy(controller.pos, { range: 1 });
-        }
 
-        if (!controller.sign || controller.sign.username !== creep.owner.username) {
-            if (creep.signController(controller, "A creep can do what he wants, but not want what he wants.") === -9) {
-                creep.moveMy(controller, { range: 1 })
-                return
-            }
-        }
-    } else {
+    if (creep.room.name !== creep.memory.targetRoom) {
         const controller = Game.rooms[creep.memory.targetRoom] ? Game.rooms[creep.memory.targetRoom].controller : false
         if (controller) {
             return creep.moveMy(controller, { range: 1 })
         }
         creep.moveToRoom(creep.memory.targetRoom)
         return
+    }
+
+    const controller = creep.room.controller
+
+    if (!controller) {
+        return
+    }
+
+    // approach
+    if (creep.pos.getRangeTo(controller.pos) > 1) {
+        return creep.moveMy(controller, { range: 1 });
+    }
+
+    // if reserved, attack controller
+    if (controller.reservation && controller.reservation.username !== MY_NAME) {
+        // spawn core defender
+        if (!Overlord.getNumCreepsByRole(creep.memory.targetRoom, 'colonyCoreDefender')) {
+            const room = Game.rooms[creep.memory.base]
+            if (room) {
+                room.requestColonyCoreDefender(creep.memory.targetRoom)
+            }
+        }
+        return creep.attackController(controller)
+    }
+
+    // claim
+    creep.claimController(controller)
+
+    // sign
+    if (!controller.sign || controller.sign.username !== creep.owner.username) {
+        creep.signController(controller, "A creep can do what he wants, but not want what he wants.")
     }
 }
 

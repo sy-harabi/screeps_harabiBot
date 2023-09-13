@@ -7,7 +7,6 @@ require('global_function')
 require('manager_attack')
 require('manager_base')
 require('manager_claim')
-require('manager_colony')
 require('manager_defense')
 require('manager_defenseNuke')
 require('manager_dismantleRoom')
@@ -17,6 +16,7 @@ require('manager_highway_mining')
 require('manager_lootRoom')
 require('manager_reconstruction')
 require('manager_room')
+require('manager_remote')
 require('manager_scout')
 require('prototype_creep_attacker')
 require('prototype_creep_hauler')
@@ -53,9 +53,13 @@ const profiler = require('screeps-profiler');
 profiler.enable();
 global.CPU = new Array
 console.log('reset')
-data.recordLog(`GLOBAL RESET`)
+
+// when global reset happens, clean room memory
+Overlord.cleanRoomMemory()
 
 module.exports.loop = () => {
+    Overlord.memHack.pretick()
+
     profiler.wrap(function () {
         // bucket check. 8000 5000 2000
         if (data.enoughCPU && Game.cpu.bucket < 5000) { // stop market, highwaymining
@@ -202,10 +206,9 @@ module.exports.loop = () => {
             for (const order of finishedOrders) {
                 Game.market.cancelOrder(order.id)
             }
-            Overlord.cleanRoomMemory()
 
             // if (Game.market.credits > 20000000) {
-            //     business.buy('pixel', 100)
+            //     Business.buy('pixel', 100)
             // }
         }
 
@@ -213,7 +216,7 @@ module.exports.loop = () => {
             Overlord.observeRoom(data.observe.roomName, data.observe.tick)
         }
 
-        if (Game.time % 10 === 0 && data.enoughCPU) {
+        if (Game.time % 1 === 0 && data.enoughCPU) {
             const terminal = Overlord.structures.terminal.sort()[data.terminalOrder]
             data.terminalOrder = (data.terminalOrder + 1) % (Overlord.structures.terminal.length)
             if (terminal && (!Memory.abandon || !Memory.abandon.includes(terminal.room.name))) {
@@ -225,7 +228,7 @@ module.exports.loop = () => {
             Overlord.visualizeRoomInfo()
             Overlord.mapInfo()
         } else {
-            Overlord.purgeMapInfo
+            Overlord.purgeMapInfo()
             new RoomVisual().text('time: ' + Game.time, 0, 46, { align: 'left' })
             new RoomVisual().text('CPU: ' + Game.cpu.getUsed().toFixed(1), 0, 47, { align: 'left' })
             new RoomVisual().text("AvgCPU: " + Math.round(100 * (_.sum(CPU) / CPU.length)) / 100 + `(for ${CPU.length} ticks)`, 0, 48, { align: 'left' })

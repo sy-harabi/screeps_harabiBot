@@ -6,11 +6,8 @@ Flag.prototype.manageClearAll = function () {
     if (targetRoom && targetRoom.isMy) {
         const structures = targetRoom.find(FIND_STRUCTURES)
 
-        if (structures.length > 1) {
-            for (const structure of structures) {
-                structure.destroy()
-            }
-            return
+        for (const structure of structures) {
+            structure.destroy()
         }
 
         for (const constructionSite of targetRoom.constructionSites) {

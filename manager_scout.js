@@ -249,6 +249,8 @@ Room.prototype.scoutRoom = function (roomName, distance) {
       }
       return ERR_NOT_FOUND
     }
+
+    return
   }
 
   let host = this.name
@@ -262,7 +264,7 @@ Room.prototype.scoutRoom = function (roomName, distance) {
   const isController = room.controller ? true : false
 
   const isClaimed = isController && room.controller.owner && (room.controller.owner.username !== MY_NAME)
-  const isReserved = isController && room.controller.reservation && !['Invader'].includes(room.controller.reservation.username)
+  const isReserved = isController && room.controller.reservation && !['Invader', MY_NAME].includes(room.controller.reservation.username)
 
   const numTower = room.structures.tower.filter(tower => tower.RCLActionable).length
   const defense = numTower > 0 ? { numTower: numTower } : undefined
@@ -270,36 +272,113 @@ Room.prototype.scoutRoom = function (roomName, distance) {
   const isAccessibleToContorller = room.getAccessibleToController()
   const inaccessible = ((defense && (!room.isMy)) || (isController && !isAccessibleToContorller)) ? (Game.time + SCOUT_INTERVAL) : false
 
-  const isRemoteCandidate = isAccessibleToContorller && !inaccessible && !isClaimed && !isReserved && (numSource > 0) && !Overlord.colonies.includes(roomName)
-  const isClaimCandidate = isAccessibleToContorller && !inaccessible && !isClaimed && !isReserved && (distance > 2) && (numSource > 1) && !Overlord.colonies.includes(roomName)
+  const isRemoteCandidate = isAccessibleToContorller && !inaccessible && !isClaimed && !isReserved && (numSource > 0)
+  const isClaimCandidate = isAccessibleToContorller && !inaccessible && !isClaimed && !isReserved && (distance > 2) && (numSource > 1) && !Overlord.remotes.includes(roomName)
 
-  if (isRemoteCandidate && distance <= 2 && this.memory.numRemoteSource <= NUM_REMOTE_SOURCES[this.controller.level]) {
-    const search = PathFinder.search(room.controller.pos, { pos: this.controller.pos, range: 1 }, {
-      roomCallback: (roomName) => {
-        if (roomName === room.name) {
-          return true
-        }
-        if (roomName = host) {
-          return true
-        }
-        if (Memory.rooms[host] && Memory.rooms[host].colony && Object.keys(Memory.rooms[host].colony).includes(roomName)) {
-          return true
-        }
-        return false
-      },
-      maxRooms: 3
-    })
-    if (!search.incomplete) {
-      data.recordLog(`COLONY: Colonize ${roomName} with distance ${distance}`, this.name)
-      colonize(roomName, this.name)
+  remote: {
+    // not adequate
+    if (!isRemoteCandidate) {
+      break remote
     }
+
+    // too far
+    if (distance > 2) {
+      break remote
+    }
+
+    const infraPlan = this.getRemoteInfraPlan(roomName)
+
+    // cannot find infraPlan
+    if (infraPlan === ERR_NOT_FOUND) {
+      this.abandonRemote(roomName)
+      break remote
+    }
+
+
+    // no competition
+    if (!Memory.rooms[roomName] || !Memory.rooms[roomName].host) {
+      data.recordLog(`REMOTE: No host. Colonize ${room.name} with distance ${distance}`, this.name)
+      colonize(roomName, this.name)
+      break remote
+    }
+
+    // already my remote
+    if (Memory.rooms[roomName].host === this.name) {
+      break remote
+    }
+
+    // competition
+    console.log(`competition for ${roomName}`)
+
+    const roomBefore = Game.rooms[Memory.rooms[roomName].host]
+    const statusBefore = roomBefore ? roomBefore.memory.remotes ? roomBefore.memory.remotes[roomName] : undefined : undefined
+
+    if (!statusBefore) {
+      console.log(`no status before`)
+
+      data.recordLog(`REMOTE: No competition. Abandon remote ${roomName}`, roomBefore.name)
+      roomBefore.abandonRemote(roomName)
+
+      data.recordLog(`REMOTE: Colonize ${room.name} with distance ${distance}`, this.name)
+      colonize(roomName, this.name)
+      break remote
+    }
+
+    // calcaulate total path length
+
+    const statusNow = this.memory.remotes ? this.memory.remotes[roomName] : undefined
+    if (!statusNow) {
+      console.log(`no status now`)
+      this.abandonRemote(roomName)
+      break remote
+    }
+
+    if (!statusBefore.infraPlan) {
+      console.log(`no infraPlan before`)
+
+      data.recordLog(`REMOTE: Abandon remote ${roomName}`, roomBefore.name)
+      roomBefore.abandonRemote(roomName)
+
+      data.recordLog(`REMOTE: Colonize ${room.name} with distance ${distance}`, this.name)
+      colonize(roomName, this.name)
+      break remote
+    }
+
+    if (Object.keys(statusNow.infraPlan).length < Object.keys(statusBefore.infraPlan).length) {
+      console.log(`infraPlan before has more source`)
+      this.abandonRemote(roomName)
+      break remote
+    }
+
+    const totalPathLengthBefore = Object.values(statusBefore.infraPlan).map(value => value.pathLength).reduce((acc, curr) => acc + curr, 0)
+    const totalPathLengthNow = Object.values(statusNow.infraPlan).map(value => value.pathLength).reduce((acc, curr) => acc + curr, 0)
+
+    // compare
+    if (totalPathLengthBefore <= totalPathLengthNow) {
+      console.log(`infraPlan before has better plan`)
+      this.abandonRemote(roomName)
+      break remote
+    }
+
+    console.log(`infraPlan now has better plan`)
+
+    data.recordLog(`REMOTE: Abandon remote ${roomName}`, roomBefore.name)
+    roomBefore.abandonRemote(roomName)
+
+    data.recordLog(`REMOTE: Colonize ${room.name} with distance ${distance}`, this.name)
+    colonize(roomName, this.name)
+
+    break remote
   }
+
+
 
   if (Memory.autoClaim && isClaimCandidate && Overlord.myRooms.length < Game.gcl.level) {
     claim(roomName, this.name)
   }
 
-  map[roomName] = {
+  // save info
+  const info = {
     lastScout,
     numSource,
     mineralType,
@@ -314,6 +393,9 @@ Room.prototype.scoutRoom = function (roomName, distance) {
     isClaimCandidate,
     inaccessible
   }
+
+  map[roomName] = map[roomName] || {}
+  map[roomName] = { ...map[roomName], ...info }
 
   return OK
 }

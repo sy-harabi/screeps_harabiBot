@@ -72,7 +72,6 @@ Room.prototype.operateBoost = function (boostRequest) {
 
             if (result !== OK) {
                 if (!targetCreep.spawning) {
-                    data.recordLog(`ERROR: boosting ${targetCreep.name} failed. cannot gather resource ${resourceType}.`, this.name)
                     delete targetCreep.memory.boosted
                     delete this.memory.boostState
                     delete this.boostQueue[boostRequest.creepName]

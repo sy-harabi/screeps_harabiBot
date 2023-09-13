@@ -96,7 +96,7 @@ Flag.prototype.attackRoom = function () {
         this.remove()
     }
 
-    if (this.memory.end && !Game.flags[`harass ${roomName}`]) {
+    if (this.room && this.memory.end && !Game.flags[`harass ${roomName}`]) {
         this.pos.createFlag(`harass ${roomName}`)
     }
 

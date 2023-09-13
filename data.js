@@ -15,8 +15,10 @@ data.recordLog = function (text, roomName, groupInterval = 180) {
     Memory._log = []
   }
 
-  const roomNameText = roomName === undefined ? 'GLOBAL' : toRoomNameForm(roomName)
-  const roomNameWithColor = `<span style = "color: yellow">[${roomName}]</span>`
+  const roomURL = `https://screeps.com/a/#!/room/${SHARD}/${roomName}`
+  const roomHyperLink = `<a href="${roomURL}" target="_blank">${roomName}</a>`
+
+  const roomNameWithColor = `<span style = "color: yellow">[${roomHyperLink}]</span>`
 
   const now = new Date()
   const utcNow = now.getTime() + (now.getTimezoneOffset() * 60 * 1000)
@@ -37,7 +39,7 @@ data.recordLog = function (text, roomName, groupInterval = 180) {
   const hyperLink = URL ? `<a href="${URL}" target="_blank">[Link]</a>` : undefined
 
   const logContents = `${koreaDateTextWithColor} ${tickWithColor} ${roomNameWithColor} ${contentWithColor} ${hyperLink || ``}`
-  const notifyContents = `[${koreaDateText}] [tick: ${Game.time}] [${roomNameText}] ${text}`
+  const notifyContents = `[${koreaDateText}] [tick: ${Game.time}] [${roomName}] ${text}`
 
   Memory._log.push(logContents)
   Game.notify(notifyContents, groupInterval)
@@ -52,14 +54,6 @@ function toTwoDigits(string) {
   string = string.toString()
   while (string.length < 2) {
     string = '0' + string
-  }
-  return string
-}
-
-function toRoomNameForm(string) {
-  string = string.toString()
-  while (string.length < 6) {
-    string = ' ' + string
   }
   return string
 }

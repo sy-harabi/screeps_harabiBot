@@ -133,35 +133,27 @@ global.BUFFER = {
     3: 10000,
     4: 10000,
     5: 10000,
-    6: 10000,
-    7: 50000,
-    8: 50000,
+    6: 20000,
+    7: 20000,
+    8: 30000,
 }
 
 global.WORK_BY_CONTROLLER_LEVEL = [
     { min: 0, max: 0 },
     { min: 4, max: 4 },
     { min: 4, max: 16 },
-    { min: 6, max: 20 },
-    { min: 8, max: 24 },
-    { min: 9, max: 24 },
-    { min: 10, max: 30 },
-    { min: 10, max: 30 },
+    { min: 4, max: 20 },
+    { min: 6, max: 24 },
+    { min: 9, max: 27 },
+    { min: 10, max: 33 },
+    { min: 10, max: 32 },
 ]
 
 global.ROOMNAMES_TO_AVOID = [
 
 ]
 
-global.BASIC_MINERALS = {
-    H: { ratio: 2 },
-    O: { ratio: 2 },
-    Z: { ratio: 2 },
-    K: { ratio: 2 },
-    U: { ratio: 2 },
-    L: { ratio: 2 },
-    X: { ratio: 2 }
-}
+global.BASIC_MINERALS = ['H', 'O', 'Z', 'K', 'U', 'L', 'X']
 
 global.ATTACK_BOOST_COMPOUNDS_TIER2 = {
     UH2O: { ratio: 2, resourceType0: 'UH', resourceType1: 'OH' },
@@ -302,6 +294,8 @@ global.BOOSTS_EFFECT = {
 
 global.USEFULL_COMPOUNDS = [
     'XUH2O',
+    'UH2O',
+    'UH',
     'XGH2O',
     'XKHO2',
     'XLHO2',

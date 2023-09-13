@@ -1,4 +1,15 @@
 Object.defineProperties(Room.prototype, {
+    spawnCapacity: {
+        get() {
+            if (this._spawnCapacity !== undefined) {
+                return this._spawnCapacity
+            }
+            return this._spawnCapacity = 0
+        },
+        set(value) {
+            this._spawnCapacity = value
+        }
+    },
     GRCL: {
         get() {
             if (this._GRCL !== undefined) {
@@ -232,31 +243,43 @@ Object.defineProperties(Room.prototype, {
     },
     maxWork: {
         get() {
-            if (this._maxWork !== undefined) {
-                return this._maxWork
+            if (Game.time % 100 === 0) {
+                delete this.heap.maxWork
+            }
+
+            if (this.heap.maxWork !== undefined) {
+                return this.heap.maxWork
+            }
+
+            const numWorkEach = this.laborer.numWorkEach
+            if (!this.storage) {
+                if (this.constructionSites.length) {
+                    return this.heap.maxWork = Math.max(numWorkEach, 4)
+                }
+                // former is spawn limit. latter is income limit
+                return this.heap.maxWork = Math.min(numWorkEach * 9, 16 + (this.heap.remoteIncome || 0))
             }
             const level = this.controller.level
             if (level === 8) {
                 if (!this.savingMode && this.structures.weakProtection.length === 0) {
                     this.heap.upgrading = true
-                    return this._maxWork = 15
+                    return this.heap.maxWork = 15
                 }
                 if (this.heap.constructing) {
                     this.heap.upgrading = false
-                    return this._maxWork = 15
+                    return this.heap.maxWork = 15
                 }
                 if (this.controller.ticksToDowngrade < 10000) {
                     this.heap.upgrading = true
-                    return this._maxWork = 15
+                    return this.heap.maxWork = 15
                 }
                 this.heap.upgrading = false
-                return this._maxWork = 0
+                return this.heap.maxWork = 0
             }
-            if (this.savingMode) {
-                return this._maxWork = WORK_BY_CONTROLLER_LEVEL[level].min
-
-            }
-            return this._maxWork = WORK_BY_CONTROLLER_LEVEL[level].max
+            const economyStandard = ECONOMY_STANDARD[level]
+            const buffer = BUFFER[level]
+            const extra = Math.min(7, Math.max(0, Math.floor((this.energy - economyStandard) / buffer)))
+            return this.heap.maxWork = Math.min(numWorkEach * (1 + extra))
         }
     },
     closeHighways: {
@@ -406,6 +429,12 @@ Object.defineProperties(Room.prototype, {
                 this._weakestRampart = ramparts.sort((a, b) => a.hits - b.hits)[0]
             }
             return this._weakestRampart
+        }
+    },
+    hyperLink: {
+        get() {
+            const URL = `https://screeps.com/a/#!/room/${SHARD}/${this.name}`
+            return `<a href="${URL}" target="_blank">${this.name}</a>`
         }
     }
 })

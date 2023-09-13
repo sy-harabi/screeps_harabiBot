@@ -353,13 +353,18 @@ Creep.prototype.moveMy = function (target, options = {}) { //option = {range, av
             return ERR_BUSY
         } else {
             delete this.heap.stay
-            data.recordLog(`ERROR: ${this.name} got stucked`, this.room.name)
+            if (this.memory.role !== 'scouter' && !this.memory.notifiedStuck) {
+                data.recordLog(`ERROR: ${this.name} got stucked`, this.room.name)
+                this.memory.notifiedStuck = true
+            }
         }
     }
 
     //같은 방에 있으면 목적지 표시
     if (this.pos.roomName === targetPos.roomName) {
         this.room.visual.line(this.pos, targetPos, { color: 'yellow', lineStyle: 'dashed' })
+    } else if (this.heap.path && this.heap.path.length > 0) {
+        Game.map.visual.poly(this.heap.path, { stroke: '#ffe700', strokeWidth: 1, opacity: 0.75 })
     }
 
     //fatigue 있으면 return
@@ -369,6 +374,7 @@ Creep.prototype.moveMy = function (target, options = {}) { //option = {range, av
 
     //같은 방에 있으면 maxRooms 1로 하자. (같은 방에 있는 목적지 가려고 다른 방으로 나갔다 들어오는 거 방지)
     const maxRooms = (this.room.name === targetPos.roomName) ? 1 : 16
+
     //원래 target이 있었는데 지금 target이랑 다르거나, heap에 path가 없거나, heap에 있는 path가 비어있으면 새롭게 길 찾자
     if ((this.heap.targetPos && !targetPos.isEqualTo(this.heap.targetPos)) || !this.heap.path || this.heap.path.length === 0 || avoidEnemy) {
         this.resetPath() //일단 지금 기억하고 있는 거 다 지우고 시작
@@ -386,6 +392,7 @@ Creep.prototype.moveMy = function (target, options = {}) { //option = {range, av
             return ERR_NO_PATH
         }
         // 찾아진 경우
+        this.say('🗺️', true)
         delete this.heap.noPath
         this.heap.path = result.path
         this.heap.targetPos = targetPos
@@ -428,7 +435,7 @@ Creep.prototype.moveMy = function (target, options = {}) { //option = {range, av
         this.heap.range = range
     } else if (this.heap.stuck > 0) { // stuck이 1이상인 경우 (지난 1tick이 제자리였던 경우)
         const obstacleCreep = Game.rooms[this.heap.path[0].roomName] ? this.heap.path[0].creep : undefined
-        if (obstacleCreep) {
+        if (obstacleCreep && !obstacleCreep._moved && !obstacleCreep._swaped) {
             if (this.heap.path.length >= 5) { // 아직 갈 길이 멀면 무조건 swapPos
                 return this.swapPos(obstacleCreep)
             }
@@ -445,7 +452,6 @@ Creep.prototype.moveMy = function (target, options = {}) { //option = {range, av
             }
 
             // 전부 아니면 우회하자
-
             this.heap.path = result.path
             this.heap.targetPos = targetPos
             this.heap.range = range
@@ -463,11 +469,13 @@ Creep.prototype.moveMy = function (target, options = {}) { //option = {range, av
     // 다음꺼 없거나 다음꺼가 멀면 뭔가 잘못된거니까 리셋
     if (!nextPos) {
         this.resetPath()
+        this.say('🆑', true)
         return ERR_NOT_FOUND
     }
 
-    if (this.pos.roomName === nextPos.roomName && this.pos.getRangeTo(nextPos) > 1) {
+    if (this.pos.roomName !== nextPos.roomName || this.pos.getRangeTo(nextPos) > 1) {
         this.resetPath()
+        this.say('🆑', true)
         return ERR_NOT_FOUND
     }
 
@@ -507,19 +515,25 @@ Creep.prototype.checkStuck = function () {
 
 Creep.prototype.getRecycled = function () {
     const closestSpawn = this.pos.findClosestByRange(this.room.structures.spawn.filter(s => !s.spawning))
-    if (!closestSpawn) {
-        const anySpawn = this.room.structures.spawn[0]
-        if (!anySpawn) {
-            this.suicide()
+
+    if (closestSpawn) {
+        if (this.pos.getRangeTo(closestSpawn) > 1) {
+            this.moveMy(closestSpawn, { range: 1 })
+            return
         }
+        closestSpawn.recycleCreep(this)
+        return
+    }
+
+    const anySpawn = this.room.structures.spawn[0]
+    if (anySpawn) {
         if (this.pos.getRangeTo(anySpawn) > 2) {
             this.moveMy(anySpawn, { range: 2 })
         }
-        return false
+        return
     }
-    if (closestSpawn.recycleCreep(this) === -9) {
-        this.moveMy(closestSpawn, { range: 1 })
-    }
+    this.suicide()
+    return
 }
 
 Creep.prototype.getNumParts = function (partsName) {

@@ -48,10 +48,6 @@ Object.defineProperties(RoomPosition.prototype, {
                     this._workable = false
                     break
                 }
-                if (lookObject.type === LOOK_STRUCTURES && lookObject[LOOK_STRUCTURES].structureType === STRUCTURE_ROAD) {
-                    this._workable = false
-                    break
-                }
                 if (lookObject.type === LOOK_CONSTRUCTION_SITES) {
                     this._workable = false
                     break

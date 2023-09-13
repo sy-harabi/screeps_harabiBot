@@ -1,3 +1,5 @@
+const profiler = require('screeps-profiler');
+
 const EXPIRATION_PERIOD = 40000
 
 global.Overlord = {
@@ -32,20 +34,20 @@ global.Overlord = {
     }
     return Game._structures
   },
-  get colonies() {
-    if (Game._colonies) {
-      return Game._colonies
+  get remotes() {
+    if (Game._remotes) {
+      return Game._remotes
     }
-    Game._colonies = []
+    Game._remotes = []
     for (const myRoom of this.myRooms) {
-      if (!myRoom.memory.colony) {
+      if (!myRoom.memory.remotes) {
         continue
       }
-      for (const colonyName of Object.keys(myRoom.memory.colony)) {
-        Game._colonies.push(colonyName)
+      for (const remoteName of Object.keys(myRoom.memory.remotes)) {
+        Game._remotes.push(remoteName)
       }
     }
-    return Game._colonies
+    return Game._remotes
   },
 }
 
@@ -61,110 +63,67 @@ Overlord.purgeMapInfo = function () {
 Overlord.mapInfo = function () {
   const map = this.map
   for (const roomName of Object.keys(map)) {
-    try {
-      const info = map[roomName]
-      const center = new RoomPosition(25, 25, roomName)
+    const info = map[roomName]
+    const center = new RoomPosition(25, 25, roomName)
 
-      if (!info.lastScout || Game.time > info.lastScout + EXPIRATION_PERIOD) {
-        delete map[roomName]
-      }
-
-      if (info.lastScout !== undefined) {
-        Game.map.visual.text(`⏳${info.lastScout + EXPIRATION_PERIOD - Game.time}`, new RoomPosition(center.x - 20, center.y + 15, center.roomName), { fontSize: 7, align: 'left' })
-      }
-
-      if (info.isClaimCandidate) {
-        Game.map.visual.text(`🚩`, new RoomPosition(center.x - 15, center.y, center.roomName), { fontSize: 7, })
-        Game.map.visual.text(`⚡${info.numSource}/2`, new RoomPosition(center.x + 12, center.y, center.roomName), { fontSize: 7, })
-        Game.map.visual.text(`💎${info.mineralType}`, new RoomPosition(center.x, center.y - 15, center.roomName), { fontSize: 7, })
-      } else if (info.isRemoteCandidate) {
-        Game.map.visual.text(`⚡${info.numSource}/2`, new RoomPosition(center.x + 12, center.y - 15, center.roomName), { fontSize: 7, })
-        Game.map.visual.text(`⛏️`, new RoomPosition(center.x - 15, center.y - 15, center.roomName), { fontSize: 7, })
-      }
-      if (info.inaccessible && info.inaccessible > Game.time) {
-        Game.map.visual.text(`🚫${info.inaccessible - Game.time}`, new RoomPosition(center.x, center.y - 15, center.roomName), { fontSize: 7, color: '#f000ff' })
-      }
-
-      // 내 방인지 체크
-      const room = Game.rooms[roomName]
-      if (room && room.isMy) {
-        Game.map.visual.text(`${room.controller.level}`, new RoomPosition(center.x - 18, center.y - 20, center.roomName), { fontSize: 13, color: '#74ee15' })
-        if (room.memory.scout) {
-          Game.map.visual.text(`${room.memory.scout.state}`, new RoomPosition(center.x + 5, center.y - 20, center.roomName), { fontSize: 13, color: '#74ee15' })
-          if (room.memory.scout.next) {
-            Game.map.visual.line(center, new RoomPosition(25, 25, room.memory.scout.next), { color: '#ffe700', width: '2', opacity: 1 })
-            Game.map.visual.circle(new RoomPosition(25, 25, room.memory.scout.next), { fill: '#ffe700' })
-          }
-        }
-      } else {
-        Game.map.visual.text(`🚶${info.distance}`, new RoomPosition(center.x + 15, center.y + 15, center.roomName), { fontSize: 7 })
-      }
-
-      // host가 있는 info인지 체크. 즉 scouter가 확인한 방인지 체크
-      if (!info.host) {
-        continue
-      }
-
-      const hostPos = new RoomPosition(25, 25, info.host)
-      // Game.map.visual.line(hostPos, center, { color: '#00ffe8', width: '1', opacity: 0.2 })
-
-      const describedExits = Game.map.describeExits(roomName)
-      for (const direction of ['1', '3', '5', '7']) {
-        const adjacentName = describedExits[direction]
-        if (describedExits[direction] && map[adjacentName] && info.host === map[adjacentName].host) {
-          continue
-        }
-        let startPos = undefined
-        let endPos = undefined
-        switch (direction) {
-          case '1':
-            startPos = new RoomPosition(0, 0, roomName)
-            endPos = new RoomPosition(49, 0, roomName)
-            break
-          case '3':
-            startPos = new RoomPosition(49, 49, roomName)
-            endPos = new RoomPosition(49, 0, roomName)
-            break
-          case '5':
-            startPos = new RoomPosition(0, 49, roomName)
-            endPos = new RoomPosition(49, 49, roomName)
-            break
-          case '7':
-            startPos = new RoomPosition(0, 0, roomName)
-            endPos = new RoomPosition(0, 49, roomName)
-            break
-        }
-        if (!startPos || !endPos) {
-          continue
-        }
-        Game.map.visual.line(startPos, endPos, { color: '#00ffe8', width: '2', opacity: 1 })
-      }
-
-
+    if (!info.lastScout || Game.time > info.lastScout + EXPIRATION_PERIOD) {
+      delete map[roomName]
     }
-    catch (error) {
-      console.log(error)
-      data.recordLog(`MAP: ${error}`, roomName)
-      // delete map[roomName]
+
+    if (info.lastScout !== undefined) {
+      Game.map.visual.text(`⏳${info.lastScout + EXPIRATION_PERIOD - Game.time}`, new RoomPosition(center.x - 20, center.y + 15, center.roomName), { fontSize: 7, align: 'left' })
+    }
+
+    if (info.isClaimCandidate) {
+      Game.map.visual.text(`🚩`, new RoomPosition(center.x - 15, center.y, center.roomName), { fontSize: 7, })
+      Game.map.visual.text(`⚡${info.numSource}/2`, new RoomPosition(center.x + 12, center.y, center.roomName), { fontSize: 7, })
+      Game.map.visual.text(`💎${info.mineralType}`, new RoomPosition(center.x, center.y - 15, center.roomName), { fontSize: 7, })
+    } else if (info.isRemoteCandidate) {
+      Game.map.visual.text(`⚡${info.numSource}/2`, new RoomPosition(center.x + 12, center.y - 15, center.roomName), { fontSize: 7, })
+      Game.map.visual.text(`⛏️`, new RoomPosition(center.x - 15, center.y - 15, center.roomName), { fontSize: 7, })
+    }
+    if (info.inaccessible && info.inaccessible > Game.time) {
+      Game.map.visual.text(`🚫${info.inaccessible - Game.time}`, new RoomPosition(center.x, center.y - 15, center.roomName), { fontSize: 7, color: '#f000ff' })
+    }
+
+    // 내 방인지 체크
+    const room = Game.rooms[roomName]
+    if (room && room.isMy) {
+      Game.map.visual.text(`${room.controller.level}`, new RoomPosition(center.x, center.y, center.roomName), { fontSize: 13, color: '#000000' })
+      if (room.memory.scout) {
+        Game.map.visual.text(`⏰${room.memory.scout.nextScoutTime - Game.time}`, new RoomPosition(center.x + 23, center.y - 16, center.roomName), { align: 'right', fontSize: 5, color: '#74ee15' })
+
+        Game.map.visual.text(`${room.memory.scout.state}`, new RoomPosition(center.x - 23, center.y - 18, center.roomName), { align: 'left', fontSize: 13, color: '#74ee15' })
+        if (room.memory.scout.next) {
+          Game.map.visual.line(center, new RoomPosition(25, 25, room.memory.scout.next), { color: '#ffe700', width: '2', opacity: 1 })
+          Game.map.visual.circle(new RoomPosition(25, 25, room.memory.scout.next), { fill: '#ffe700' })
+        }
+      }
+    } else {
+      Game.map.visual.text(`🚶${info.distance}`, new RoomPosition(center.x + 15, center.y + 15, center.roomName), { fontSize: 7 })
     }
   }
 }
 
 Overlord.cleanRoomMemory = function () {
-  const colonyList = []
+  Memory.info = Memory.info || {}
+
+  const remotesList = []
+  let numRemotes = 0
   for (const myRoom of this.myRooms) {
-    if (!myRoom.memory.colony) {
+    if (!myRoom.memory.remotes) {
       continue
     }
-    for (const colonyName of Object.keys(myRoom.memory.colony)) {
-      colonyList.push(colonyName)
+    for (const remoteName of Object.keys(myRoom.memory.remotes)) {
+      remotesList.push(remoteName)
+      numRemotes += Object.keys(myRoom.memory.remotes[remoteName].infraPlan).length
     }
   }
-  Memory.info = Memory.info || {}
-  Memory.info.numRemotes = colonyList.length
+
+  Memory.info.numRemotes = numRemotes
   Object.keys(Memory.rooms).forEach( //메모리에 있는 방이름마다 검사
     function (roomName) {
-      if (!Game.rooms[roomName] && !colonyList.includes(roomName)) { //해당 이름을 가진 방이 존재하지 않으면
+      if (!Game.rooms[roomName] && !remotesList.includes(roomName)) { //해당 이름을 가진 방이 존재하지 않으면
         delete Memory.rooms[roomName]; //메모리를 지운다
       }
     }
@@ -274,3 +233,25 @@ Overlord.findClosestMyRoom = function (fromRoomName, level = 0) {
   })[0]
   return Game.rooms[closestRoomName]
 }
+
+Overlord.memHack = {
+  memory: null,
+  parseTime: -1,
+  register() {
+    const start = Game.cpu.getUsed()
+    this.memory = Memory
+    const end = Game.cpu.getUsed()
+    this.parseTime = end - start
+    console.log(this.parseTime)
+    this.memory = RawMemory._parsed
+  },
+  pretick() {
+    delete global.Memory
+    global.Memory = this.memory
+    RawMemory._parsed = this.memory
+  }
+}
+
+Overlord.memHack.register()
+
+profiler.registerObject(Overlord, 'Overlord')

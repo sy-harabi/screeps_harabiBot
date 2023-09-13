@@ -1,6 +1,6 @@
 Room.prototype.manageWork = function () {
     // 위협이 있으면 일단 막자
-    if (this.memory.militaryThreat) {
+    if (this.memory.militaryThreat && this.isWalledUp) {
         return this.manageReinforce()
     }
 

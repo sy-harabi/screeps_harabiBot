@@ -29,8 +29,8 @@ Room.prototype.runRoomManager = function () {
     // 여기서부터는 전시에는 안함
     if (!this.memory.militaryThreat) {
         this.manageExtractor()
-        this.manageColony()
-        this.manageHighWay()
+        this.manageRemotes()
+        // this.manageHighWay()
         this.manageFactory()
         this.managePowerSpawn()
         this.manageScout()
@@ -88,7 +88,7 @@ Room.prototype.checkTombstone = function () {
         const owner = attacker ? attacker.owner : undefined
         const username = owner ? owner.username : undefined
 
-        if (!checked[deadCreep.name]) {
+        if (!checked[deadCreep.name] && username !== 'Invader') {
             if (!Memory.creeps[deadCreep.name] || Memory.creeps[deadCreep.name].role !== 'scouter') {
                 data.recordLog(`KILLED: ${deadCreep.name} by ${username}`, this.name)
             }
@@ -115,11 +115,11 @@ Room.prototype.checkTombstone = function () {
         // user한테 죽은 경우 colony 버리고 확인 멈추고 return.
         if (username !== 'Invader') {
             map[this.name].threat = true
-            if (Overlord.colonies.includes(this.name) && this.memory.host) {
+            if (Overlord.remotes.includes(this.name) && this.memory.host) {
                 const hostRoom = Game.rooms[this.memory.host]
                 if (hostRoom) {
-                    data.recordLog(`COLONY: Abandon ${this.name}. defender is killed.`, this.name)
-                    hostRoom.abandonColony(this.name)
+                    data.recordLog(`REMOTE: Abandon ${this.name}. defender is killed.`, this.name)
+                    hostRoom.abandonRemote(this.name)
                 }
             }
             return
@@ -130,16 +130,26 @@ Room.prototype.checkTombstone = function () {
 Room.prototype.manageSource = function () {
     let sourceUtilizationRate = 0
     for (const source of this.sources) {
+        if (this.memory.militaryThreat) {
+            const container = source.container
+            if (!container || this.defenseCostMatrix.get(container.pos.x, container.pos.y) === 255) {
+                continue
+            }
+        }
         // RoomVisual
         this.visual.text(`⛏️${source.info.numWork}/6`,
             source.pos.x + 0.5, source.pos.y - 0.25,
             { font: 0.5, align: 'left' }
         )
 
+        this.spawnCapacity += 10
+
         this.visual.text(`🚚${source.info.numCarry}/${source.info.maxCarry}`,
             source.pos.x + 0.5, source.pos.y + 0.5,
             { font: 0.5, align: 'left' }
         )
+
+        this.spawnCapacity += Math.ceil(source.info.maxCarry * 1.5)
 
         // source 근처 energy 저장량 (container + dropped energy)
         this.visual.text(` 🔋${source.energyAmountNear}/2000`,
@@ -216,14 +226,14 @@ Room.prototype.abandonRoom = function () {
             for (const resourceType of Object.keys(terminal.store)) {
                 if (resourceType !== RESOURCE_ENERGY) {
                     if (terminal.store[RESOURCE_ENERGY] > 15000) {
-                        business.dump(resourceType, terminal.store[resourceType], this.name)
+                        Business.dump(resourceType, terminal.store[resourceType], this.name)
                     }
                     onlyEnergy = false
                     break
                 }
             }
             if (onlyEnergy === true && terminal.store[RESOURCE_ENERGY] > 10000) {
-                business.dump(RESOURCE_ENERGY, terminal.store[RESOURCE_ENERGY] / 2 - 100, this.name)
+                Business.dump(RESOURCE_ENERGY, terminal.store[RESOURCE_ENERGY] / 2 - 100, this.name)
             }
         }
     } else {
