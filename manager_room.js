@@ -30,7 +30,7 @@ Room.prototype.runRoomManager = function () {
     if (!this.memory.militaryThreat) {
         this.manageExtractor()
         this.manageRemotes()
-        // this.manageHighWay()
+        this.manageHighWay()
         this.manageFactory()
         this.managePowerSpawn()
         this.manageScout()
@@ -339,7 +339,7 @@ Room.prototype.manageLab = function () {
 Room.prototype.manageFactory = function () {
     const factory = this.structures.factory[0]
 
-    if (!factory || !this.terminal || !this.closeHighways.length) {
+    if (!factory || !this.terminal) {
         return
     }
 
@@ -360,27 +360,12 @@ Room.prototype.managePowerSpawn = function () {
 }
 
 Room.prototype.manageHighWay = function () {
-    if (!this.closeHighways.length) {
+    if (!this.memory.depositRequests) {
         return
     }
-
-    const rawCommodity = this.specialtyCommodities ? this.specialtyCommodities[6] : undefined
-
-    if (!rawCommodity) {
-        return
-    }
-
-    const observer = this.structures.observer[0]
-    if (observer && Game.time % 20 < 2 && data.enoughCPU && this.terminal.store[rawCommodity] < 8000) {
-        const depositCheckOrder = Math.floor(Game.time / 20) % this.closeHighways.length
-        observer.depositCheck(this.closeHighways[depositCheckOrder])
-    }
-
-    if (this.memory.depositRequests) {
-        for (const depositRequest of Object.values(this.memory.depositRequests)) {
-            Game.map.visual.text('deposit', new RoomPosition(25, 25, depositRequest.roomName))
-            this.runDepositWork(depositRequest)
-        }
+    for (const depositRequest of Object.values(this.memory.depositRequests)) {
+        Game.map.visual.text('deposit', new RoomPosition(25, 25, depositRequest.roomName))
+        this.runDepositWork(depositRequest)
     }
 }
 
@@ -391,7 +376,9 @@ Room.prototype.manageVisual = function () {
     }
 
     const controller = this.controller
-    this.visual.text(`🔼${Math.round(100 * controller.progress / controller.progressTotal)}%`, controller.pos.x + 0.75, controller.pos.y + 0.5, { align: 'left' })
+    if (controller.level < 8) {
+        this.visual.text(`🔼${Math.round(100 * controller.progress / controller.progressTotal)}%`, controller.pos.x + 0.75, controller.pos.y + 0.5, { align: 'left' })
+    }
 
     if (this.storage) {
         this.visual.text(` 🔋${Math.floor(this.storage.store.getUsedCapacity(RESOURCE_ENERGY) / 1000)}K`, this.storage.pos.x - 2.9, this.storage.pos.y, { font: 0.5, align: 'left' })

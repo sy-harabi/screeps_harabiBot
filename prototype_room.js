@@ -276,7 +276,12 @@ Object.defineProperties(Room.prototype, {
                 this.heap.upgrading = false
                 return this.heap.maxWork = 0
             }
+
             const economyStandard = ECONOMY_STANDARD[level]
+            if (this.energy < economyStandard) {
+                return this.heap.maxWork = 10
+            }
+
             const buffer = BUFFER[level]
             const extra = Math.min(7, Math.max(0, Math.floor((this.energy - economyStandard) / buffer)))
             return this.heap.maxWork = Math.min(numWorkEach * (1 + extra))

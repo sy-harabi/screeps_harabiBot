@@ -125,6 +125,10 @@ function extractor(creep) { //스폰을 대입하는 함수 (이름 아님)
 }
 
 function reserver(creep) {
+    if (creep.memory.getRecycled === true) {
+        creep.getRecycled()
+    }
+
     if (!creep.memory.runAway && creep.room.memory.isKiller) {
         creep.memory.runAway = true
         creep.memory.killerRoom = creep.room.name
@@ -176,22 +180,24 @@ function reserver(creep) {
     }
 
     if (!controller.sign || controller.sign.username !== creep.owner.username) {
-        return creep.signController(controller, "A creep can do what he wants, but not want what he wants.")
+        creep.signController(controller, "A creep can do what he wants, but not want what he wants.")
     }
 
-    if (creep.reserveController(controller) === -9) {
-        creep.moveMy(controller, { range: 1 })
-    } else if (creep.reserveController(controller) !== OK) {
+    // if reserved, attack controller
+    if (controller.reservation && controller.reservation.username !== MY_NAME) {
         creep.attackController(controller)
-    } else if (!creep.isWorkable(creep.pos)) {
-        const workingSpot = creep.pos.findClosestByRange(creep.getWorkingSpots(controller.pos, 1))
-        if (workingSpot) {
-            creep.moveMy(workingSpot)
-        }
+        return
     }
+
+    creep.reserveController(controller)
+    return
 }
 
 function colonyLaborer(creep) {
+    if (creep.memory.getRecycled === true) {
+        creep.getRecycled()
+    }
+
     if (!creep.memory.runAway && creep.room.memory.isKiller) {
         creep.memory.runAway = true
         creep.memory.killerRoom = creep.room.name
@@ -263,6 +269,10 @@ function colonyLaborer(creep) {
 }
 
 function colonyMiner(creep) {
+    if (creep.memory.getRecycled === true) {
+        creep.getRecycled()
+    }
+
     if (!creep.memory.runAway && creep.room.memory.isKiller) {
         creep.memory.runAway = true
         creep.memory.killerRoom = creep.room.name
@@ -271,7 +281,7 @@ function colonyMiner(creep) {
     }
 
     if (creep.memory.runAway) {
-        if (creep.room.memory.isKiller) {
+        if (creep.room.memory.isKiller === true) {
             creep.moveToRoom(creep.memory.base, 2)
             return
         }
@@ -282,6 +292,7 @@ function colonyMiner(creep) {
         }
         return
     }
+
 
     const source = Game.getObjectById(creep.memory.sourceId)
 
@@ -307,6 +318,10 @@ function colonyMiner(creep) {
 }
 
 function colonyHauler(creep) {
+    if (creep.memory.getRecycled === true) {
+        creep.getRecycled()
+    }
+
     if (!creep.memory.runAway && creep.room.memory.isKiller) {
         creep.memory.runAway = true
         creep.memory.killerRoom = creep.room.name

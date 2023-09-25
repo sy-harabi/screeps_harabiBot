@@ -10,8 +10,7 @@ StructureTerminal.prototype.gatherResource = function (resourceType, amount, opt
         return OK
     }
 
-    const terminals = Overlord.structures.terminal
-
+    const terminals = Overlord.structures.terminal.sort((a, b) => b.store[resourceType] - a.store[resourceType])
     for (const terminal of terminals) {
         if (terminal.room.name === this.room.name) {
             continue
@@ -25,7 +24,7 @@ StructureTerminal.prototype.gatherResource = function (resourceType, amount, opt
             continue
         }
         if (terminal.store[resourceType] < threshold) {
-            continue
+            break
         }
         const amountToSend = Math.min(terminal.store[resourceType], amount - this.store[resourceType])
         if (terminal.send(resourceType, amountToSend, this.room.name) === OK) {

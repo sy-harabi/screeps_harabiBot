@@ -1,5 +1,3 @@
-const profiler = require('screeps-profiler');
-
 const EXPIRATION_PERIOD = 40000
 
 global.Overlord = {
@@ -61,6 +59,13 @@ Overlord.purgeMapInfo = function () {
 }
 
 Overlord.mapInfo = function () {
+  if (Memory.showMapInfo === 0) {
+    return
+  }
+  if (Memory.mapInfoTime > 0 && Game.time - Memory.mapInfoTime > 500) {
+    Memory.showMapInfo = 0
+    return
+  }
   const map = this.map
   for (const roomName of Object.keys(map)) {
     const info = map[roomName]
@@ -253,5 +258,3 @@ Overlord.memHack = {
 }
 
 Overlord.memHack.register()
-
-profiler.registerObject(Overlord, 'Overlord')

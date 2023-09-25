@@ -70,8 +70,8 @@ Room.prototype.getFactoryTarget = function () {
     if (!this.isMy) {
         return undefined
     }
-    // RCL이 6보다 낮으면 오류
-    if (this.controller.level < 8) {
+    // RCL이 7보다 낮으면 오류
+    if (this.controller.level < 7) {
         return undefined
     }
 
@@ -145,6 +145,9 @@ Room.prototype.getFactoryTarget = function () {
                 // 둘 다 아니면 queue에 넣고 다음으로 넘어가자
                 queue.push(adjacent)
                 checked[adjacent] = true
+
+                // 첫 번째 요소가 만들어지지 않으면 두 번째 요소를 만들진 않는다.
+                break
             }
 
             // 만들만한 게 아무것도 없었으면 다음 target으로 넘어가자

@@ -18,6 +18,7 @@ require('manager_reconstruction')
 require('manager_room')
 require('manager_remote')
 require('manager_scout')
+require('manager_war')
 require('prototype_creep_attacker')
 require('prototype_creep_hauler')
 require('prototype_creep_powerCreep')
@@ -149,6 +150,10 @@ module.exports.loop = () => {
                 if (flag.room) {
                     flag.room.getBasePlanByPos(flag.pos)
                 }
+                continue
+            }
+            if (name.includes('war')) {
+                flag.conductWar()
                 continue
             }
         }

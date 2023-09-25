@@ -1,4 +1,4 @@
-// 전체 범위
+const profiler = require('screeps-profiler');
 
 global.X_ENTIRE = {
     start: 0,
@@ -247,3 +247,5 @@ Object.defineProperties(Room.prototype, {
         }
     }
 })
+
+profiler.registerObject(Overlord, 'Overlord')

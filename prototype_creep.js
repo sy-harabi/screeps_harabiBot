@@ -202,16 +202,16 @@ Creep.prototype.searchPath = function (target, range = 0, maxRooms = 1, option =
     })
 
     // 길 표시
-    for (let i = 0; i < result.path.length - 1; i++) {
-        const posNow = result.path[i]
-        const posNext = result.path[i + 1]
-        if (posNow.roomName === posNext.roomName) {
-            new RoomVisual(posNow.roomName).line(posNow, posNext, {
-                color: 'aqua', width: .15,
-                opacity: .2, lineStyle: 'dashed'
-            })
-        }
-    }
+    // for (let i = 0; i < result.path.length - 1; i++) {
+    //     const posNow = result.path[i]
+    //     const posNext = result.path[i + 1]
+    //     if (posNow.roomName === posNext.roomName) {
+    //         new RoomVisual(posNow.roomName).line(posNow, posNext, {
+    //             color: 'aqua', width: .15,
+    //             opacity: .2, lineStyle: 'dashed'
+    //         })
+    //     }
+    // }
 
     if (result.incomplete) {
         return ERR_NO_PATH

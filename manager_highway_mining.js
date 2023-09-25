@@ -1,32 +1,49 @@
-StructureObserver.prototype.depositCheck = function (roomName) {
+const WORKER_SIZE = 15
+const RETURN_RATIO = 3
+const WORKER_ENERGY_COST = 3250 //15w10c25m
+
+Room.prototype.depositCheck = function (roomName) {
     const targetRoom = Game.rooms[roomName]
     if (!targetRoom) {
-        this.observeRoom(roomName)
         return
     }
 
-    if (!this.room.memory.depositRequests) {
-        this.room.memory.depositRequests = {}
+    if (this.structures.factory.length === 0 || !this.terminal || this.controller.level < 7) {
+        return
+    }
+
+    if (!this.memory.depositRequests) {
+        this.memory.depositRequests = {}
     }
 
     const deposits = targetRoom.find(FIND_DEPOSITS)
     for (const deposit of deposits) {
-        if (this.room.memory.depositRequests[deposit.id]) {
+        if (this.memory.depositRequests[deposit.id]) {
             continue
         }
-        if (this.room.terminal && this.room.terminal.store[deposit.depositType] > 10000) {
+        if (this.terminal && this.terminal.store[deposit.depositType] > 10000) {
             continue
         }
-        const depositRequest = new DepositRequest(this.room, deposit)
-        const workSize = 15
-        const returnRatio = 2.5
-        const workerEnergyCost = 3250
-        const maxCooldown = workSize * (1500 - depositRequest.distance * 2.4) * Business.getPriceRange(deposit.depositType).avgPrice / (returnRatio * workerEnergyCost * Business.energyPrice) - 10
-        if (depositRequest.lastCooldown < maxCooldown) {
-            depositRequest.maxCooldown = maxCooldown
-            this.room.memory.depositRequests[depositRequest.depositId] = depositRequest
-            data.recordLog(`OBSERVE: ${deposit.depositType}(lastCooldown ${depositRequest.lastCooldown}, maxCooldown ${depositRequest.maxCooldown}) in ${roomName}`, this.room.name)
+
+        const depositRequest = new DepositRequest(this, deposit)
+
+        const maxCooldown = WORKER_SIZE * (1500 - depositRequest.distance * 2.2) * Business.getMaxBuyOrder(deposit.depositType, this.name).finalPrice / (RETURN_RATIO * WORKER_ENERGY_COST * Business.energyPrice) - 10
+
+        // check spawnCapacity
+        let spawnCapacity = this.memory.spawnCapacity
+        spawnCapacity += depositRequest.available * 50 * 3
+        if (spawnCapacity / this.memory.spawnCapacityAvailable > 0.9) {
+            continue
         }
+
+        // check cooldown
+        if (depositRequest.lastCooldown >= maxCooldown) {
+            continue
+        }
+
+        depositRequest.maxCooldown = maxCooldown
+        this.memory.depositRequests[depositRequest.depositId] = depositRequest
+        data.recordLog(`DEPOSIT: ${deposit.depositType}(lastCooldown ${depositRequest.lastCooldown}, maxCooldown ${depositRequest.maxCooldown}) in ${roomName}`, this.name)
     }
 }
 
@@ -76,6 +93,11 @@ Room.prototype.runDepositWork = function (depositRequest) {
 
     if (deposit) {
         depositRequest.lastCooldown = deposit.lastCooldown
+        new RoomVisual(depositRequest.roomName).text(depositRequest.maxCooldown, depositRequest.pos)
+    }
+
+    if (depositRequest.lastCooldown <= depositRequest.maxCooldown) {
+        this.spawnCapacity += depositRequest.available * 50 * 3
     }
 
     if (depositRequest.lastCooldown > depositRequest.maxCooldown && numDepositWorker === 0) {
@@ -96,7 +118,7 @@ Creep.prototype.depositWork = function (depositRequest) {
         this.memory.supplying = true
     }
 
-    if (this.ticksToLive < depositRequest.distance * 1.2) {
+    if (this.ticksToLive < depositRequest.distance * 1.1) {
         this.memory.supplying = true
     }
 
@@ -124,8 +146,10 @@ Creep.prototype.depositWork = function (depositRequest) {
         delete Game.rooms[this.memory.base].memory.depositRequests[depositRequest.depositId]
     }
 
-    if (this.harvest(deposit) === -9) {
+    if (this.pos.getRangeTo(deposit) > 1) {
         this.moveMy(deposit, { range: 1 })
         return
     }
+
+    this.harvest(deposit)
 }

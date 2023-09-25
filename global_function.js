@@ -168,3 +168,10 @@ global.link = function () {
         console.log(myRoom.hyperLink)
     }
 }
+
+global.mapInfo = function () {
+    Memory.showMapInfo = (Memory.showMapInfo || 0) ^ 1
+    if (Memory.showMapInfo === 1) {
+        Memory.mapInfoTime = Game.time
+    }
+}

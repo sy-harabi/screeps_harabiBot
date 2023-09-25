@@ -177,46 +177,6 @@ Room.prototype.resetScout = function () {
 Room.prototype.scoutRoom = function (roomName, distance) {
   const map = Overlord.map
 
-  // highway면 대충 넘기자
-  const roomCoord = roomName.match(/[a-zA-Z]+|[0-9]+/g)
-  roomCoord[1] = Number(roomCoord[1])
-  roomCoord[3] = Number(roomCoord[3])
-  const x = roomCoord[1]
-  const y = roomCoord[3]
-  if (x % 10 === 0 || y % 10 === 0) {
-    let host = this.name
-
-    const lastScout = Game.time
-
-    const numSource = 0
-    const isController = false
-
-    const isClaimed = false
-    const isReserved = false
-
-    const defense = undefined
-
-    const inaccessible = false
-
-    const isRemoteCandidate = false
-    const isClaimCandidate = false
-
-    map[roomName] = {
-      lastScout,
-      numSource,
-      isController,
-      isClaimed,
-      isReserved,
-      defense,
-      host,
-      distance,
-      isRemoteCandidate,
-      isClaimCandidate,
-      inaccessible
-    }
-    return OK
-  }
-
   // BFS 이후에 다른방에서 정찰했고 distance가 더 작으면
   if (map[roomName] && map[roomName].distance && map[roomName].distance < distance) {
     return OK
@@ -253,13 +213,25 @@ Room.prototype.scoutRoom = function (roomName, distance) {
     return
   }
 
+  // highway면 deposit check
+  const roomCoord = roomName.match(/[a-zA-Z]+|[0-9]+/g)
+  roomCoord[1] = Number(roomCoord[1])
+  roomCoord[3] = Number(roomCoord[3])
+  const x = roomCoord[1]
+  const y = roomCoord[3]
+
+  if ((x % 10 === 0 || y % 10 === 0) && distance <= 3) {
+    this.depositCheck(roomName)
+  }
+
+
   let host = this.name
 
   const lastScout = Game.time
   const linearDistance = Game.map.getRoomLinearDistance(this.name, roomName)
 
   const numSource = room.find(FIND_SOURCES).length
-  const mineralType = room.mineral.mineralType
+  const mineralType = room.mineral ? room.mineral.mineralType : undefined
 
   const isController = room.controller ? true : false
 
@@ -370,8 +342,6 @@ Room.prototype.scoutRoom = function (roomName, distance) {
 
     break remote
   }
-
-
 
   if (Memory.autoClaim && isClaimCandidate && Overlord.myRooms.length < Game.gcl.level) {
     claim(roomName, this.name)

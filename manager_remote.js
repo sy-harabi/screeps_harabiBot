@@ -68,6 +68,12 @@ Room.prototype.operateRemote = function (remoteName) {
         isThreat = true
         if (status.state !== 'evacuate') {
             status.state = 'evacuate'
+
+            // get recycled all the creeps
+            for (const creep of Overlord.getCreepsByAssignedRoom(remoteName)) {
+                creep.memory.getRecycled = true
+            }
+
             data.recordLog(`REMOTE: Evacuate from ${remoteName}.`, remoteName)
         }
         new RoomVisual(remoteName).text(`⏱️${map[remoteName].threat - Game.time}`, visualPos.x + 6, visualPos.y, { align: 'left' })
@@ -90,6 +96,12 @@ Room.prototype.operateRemote = function (remoteName) {
             intermediateEvacuate = true
             if (status.state !== 'evacuate') {
                 status.state = 'evacuate'
+
+                // get recycled all the creeps
+                for (const creep of Overlord.getCreepsByAssignedRoom(remoteName)) {
+                    creep.memory.getRecycled = true
+                }
+
                 data.recordLog(`REMOTE: Evacuate from ${remoteName}.`, remoteName)
             }
         }
@@ -103,11 +115,6 @@ Room.prototype.operateRemote = function (remoteName) {
 
     // evacuate state
     if (status.state === 'evacuate') {
-        // get recycled all the creeps
-        for (const creep of Overlord.getCreepsByAssignedRoom(remoteName)) {
-            creep.getRecycled()
-        }
-
         if (intermediateEvacuate) {
             return
         }
