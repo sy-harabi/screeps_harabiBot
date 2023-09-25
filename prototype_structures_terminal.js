@@ -1,6 +1,7 @@
-const MINERAL_AMOUNT_TO_KEEP = 2000
+const MINERAL_AMOUNT_TO_KEEP = 3600
 const MINERAL_AMOUNT_TO_SELL = 100000
 const MINERAL_AMOUNT_BUFFER = 30000
+const BOOST_RCL_ENERGY_LEVEL_GOAL = 3
 
 StructureTerminal.prototype.gatherResource = function (resourceType, amount, options = {}) {
     const defaultOptions = { threshold: 1000, RCLthreshold: 6 }
@@ -85,12 +86,12 @@ StructureTerminal.prototype.run = function () {
     //     Business.buy('power', 1000, this.room.name)
     // }
 
-    if (Memory.boostRCL && this.room.controller.level < 8) {
+    if (this.room.controller.level < 8) {
         if (this.store['XGH2O'] < 1000) {
             this.gatherResource('XGH2O', 1000, { threshold: 1000, RCLthreshold: 8 })
         }
 
-        if (this.room.storage && this.room.storage.store.getUsedCapacity(RESOURCE_ENERGY) >= 500000) {
+        if (this.room.storage && this.room.energyLevel >= BOOST_RCL_ENERGY_LEVEL_GOAL) {
             return
         }
         for (const room of Object.values(Game.rooms)) {
@@ -134,9 +135,5 @@ StructureTerminal.prototype.run = function () {
         if (COMMODITIES_TO_SELL.includes(resourceType)) {
             Business.sell(resourceType, this.store[resourceType], this.room.name)
         }
-    }
-
-    if (this.room.storage && this.room.storage.store[RESOURCE_ENERGY] > 600000) {
-        console.log(`${this.room.name} wanna sell energy`)
     }
 }

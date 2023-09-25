@@ -1,10 +1,12 @@
+const AMOUNT_TO_ACCUMULATE_BOOSTS = 5000
+
+const AMOUNT_REQUIRED_TO_MAKE_BOOSTS = 1000
+
 const emoji = {
     produce: '🧪',
     transfer: '🚚',
     prepare: '📦'
 }
-
-const AMOUNT_TO_BOOST = 900
 
 Room.prototype.operateLab = function (resource0, resource1) {
     const researcher = this.creeps.researcher[0]
@@ -15,7 +17,7 @@ Room.prototype.operateLab = function (resource0, resource1) {
     this.visual.text(`${emoji[this.labState]}${this.memory.labTarget}`, sourceLabs[0].pos.x, sourceLabs[0].pos.y,)
 
     if (this.labState === 'produce') {
-        if (sourceLabs[0].store[resource0] && sourceLabs[1].store[resource1]) {
+        if (sourceLabs[0].store[resource0] >= LAB_REACTION_AMOUNT && sourceLabs[1].store[resource1] >= LAB_REACTION_AMOUNT) {
             for (const lab of reactionLabs) {
                 if (lab.runReaction(sourceLabs[0], sourceLabs[1]) === -10) { // reaction lab에 이상한 거 들어있으면 terminal에 반납해라
                     if (!researcher) {
@@ -41,14 +43,14 @@ Room.prototype.operateLab = function (resource0, resource1) {
             this.memory.labState = 'transfer'
             return
         }
-        if (sourceLabs[0].store[resource0] < 1000) {
-            if (researcher.isFree && terminal.store[resource0] >= 1000 - sourceLabs[0].store[resource0]) {
+        if (sourceLabs[0].store[resource0] < AMOUNT_REQUIRED_TO_MAKE_BOOSTS) {
+            if (researcher.isFree && terminal.store[resource0] >= AMOUNT_REQUIRED_TO_MAKE_BOOSTS - sourceLabs[0].store[resource0]) {
                 researcher.getDeliveryRequest(terminal, sourceLabs[0], resource0)
             }
             return
         }
-        if (sourceLabs[1].store[resource1] < 1000) {
-            if (researcher.isFree && terminal.store[resource1] >= 1000 - sourceLabs[1].store[resource1]) {
+        if (sourceLabs[1].store[resource1] < AMOUNT_REQUIRED_TO_MAKE_BOOSTS) {
+            if (researcher.isFree && terminal.store[resource1] >= AMOUNT_REQUIRED_TO_MAKE_BOOSTS - sourceLabs[1].store[resource1]) {
                 researcher.getDeliveryRequest(terminal, sourceLabs[1], resource1)
             }
             return
@@ -160,14 +162,14 @@ Room.prototype.getLabTarget = function () {
         return this.memory.labTarget
     }
 
-    const targetCompounds = USEFULL_COMPOUNDS
+    const targetCompounds = USEFULL_COMPOUNDS.sort((a, b) => this.terminal.store[a] - this.terminal.store[b])
 
     const checked = {}
     //target 확인
     for (const target of targetCompounds) {
 
         // 충분히 있으면 넘어가자
-        if (terminal.store[target] >= 3000) {
+        if (terminal.store[target] >= AMOUNT_TO_ACCUMULATE_BOOSTS) {
             continue
         }
 
@@ -203,7 +205,7 @@ Room.prototype.getLabTarget = function () {
                 }
 
                 // adjacent가 충분히 있으면 다음으로 넘어가자
-                if (terminal.store[adjacent] >= 1000) {
+                if (terminal.store[adjacent] >= AMOUNT_REQUIRED_TO_MAKE_BOOSTS) {
                     continue
                 }
 
@@ -238,7 +240,7 @@ Room.prototype.checkCompound = function (compound) {
     const terminal = this.terminal
 
     // 만들 resource가 없으면 오류. (queue에 삽입)
-    if (terminal.store[formula.resourceType0] < 1000 || terminal.store[formula.resourceType1] < 1000) {
+    if (terminal.store[formula.resourceType0] < AMOUNT_REQUIRED_TO_MAKE_BOOSTS || terminal.store[formula.resourceType1] < AMOUNT_REQUIRED_TO_MAKE_BOOSTS) {
         return ERR_NOT_ENOUGH_RESOURCES
     }
 

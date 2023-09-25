@@ -1,6 +1,7 @@
 const WORKER_SIZE = 15
-const RETURN_RATIO = 3
+const RETURN_RATIO = 2
 const WORKER_ENERGY_COST = 3250 //15w10c25m
+const THREAT_LEVEL_THRESHOLD = 10
 
 Room.prototype.depositCheck = function (roomName) {
     const targetRoom = Game.rooms[roomName]
@@ -27,7 +28,7 @@ Room.prototype.depositCheck = function (roomName) {
 
         const depositRequest = new DepositRequest(this, deposit)
 
-        const maxCooldown = WORKER_SIZE * (1500 - depositRequest.distance * 2.2) * Business.getMaxBuyOrder(deposit.depositType, this.name).finalPrice / (RETURN_RATIO * WORKER_ENERGY_COST * Business.energyPrice) - 10
+        const maxCooldown = WORKER_SIZE * (1500 - depositRequest.distance * 2.2) * Business.getMaxBuyOrder(deposit.depositType, this.name).finalPrice / (RETURN_RATIO * WORKER_ENERGY_COST * Business.energyPrice)
 
         // check spawnCapacity
         let spawnCapacity = this.memory.spawnCapacity
@@ -77,18 +78,33 @@ global.DepositRequest = function (room, deposit) {
     this.depositId = deposit.id
     this.factoryId = factory.id
     this.lastCooldown = deposit.lastCooldown
+    this.threatLevel = 0
 }
 
 Room.prototype.runDepositWork = function (depositRequest) {
-
     const depositWorkers = Overlord.getCreepsByRole(depositRequest.depositId, 'depositWorker')
+    const numDepositWorker = depositWorkers.length
+
+    if (depositRequest.lastCooldown > depositRequest.maxCooldown && numDepositWorker === 0) {
+        data.recordLog(`DEPOSIT: retreat from deposit ${depositRequest.depositId}. cooldown exceeded max cooldown`, depositRequest.roomName)
+        delete this.memory.depositRequests[depositRequest.depositId]
+        return
+    }
+
+    if (depositRequest.threatLevel > THREAT_LEVEL_THRESHOLD) {
+        data.recordLog(`DEPOSIT: retreat from deposit ${depositRequest.depositId} because of threat.`, depositRequest.roomName)
+        delete this.memory.depositRequests[depositRequest.depositId]
+        return
+    }
+
+    if (depositRequest.lastCooldown <= depositRequest.maxCooldown) {
+        this.spawnCapacity += depositRequest.available * 50 * 3
+    }
+
     for (const worker of depositWorkers) {
         worker.depositWork(depositRequest)
     }
-    const numDepositWorker = depositWorkers.length
-    if (numDepositWorker < depositRequest.available && depositRequest.lastCooldown <= depositRequest.maxCooldown) {
-        this.requestDepositWorker(depositRequest)
-    }
+
     const deposit = Game.getObjectById(depositRequest.depositId)
 
     if (deposit) {
@@ -96,15 +112,9 @@ Room.prototype.runDepositWork = function (depositRequest) {
         new RoomVisual(depositRequest.roomName).text(depositRequest.maxCooldown, depositRequest.pos)
     }
 
-    if (depositRequest.lastCooldown <= depositRequest.maxCooldown) {
-        this.spawnCapacity += depositRequest.available * 50 * 3
+    if (numDepositWorker < depositRequest.available && depositRequest.lastCooldown <= depositRequest.maxCooldown) {
+        this.requestDepositWorker(depositRequest)
     }
-
-    if (depositRequest.lastCooldown > depositRequest.maxCooldown && numDepositWorker === 0) {
-        delete this.memory.depositRequests[depositRequest.depositId]
-        return
-    }
-
 }
 
 Creep.prototype.depositWork = function (depositRequest) {
@@ -136,7 +146,9 @@ Creep.prototype.depositWork = function (depositRequest) {
 
     if (this.room.name !== depositRequest.roomName) {
         const targetPos = new RoomPosition(depositRequest.pos.x, depositRequest.pos.y, depositRequest.pos.roomName)
-        this.moveMy(targetPos, { range: 1 })
+        if (this.moveMy(targetPos, { range: 1 }) === ERR_NO_PATH) {
+            depositRequest.threatLevel++
+        }
         return
     }
 

@@ -67,7 +67,7 @@ const control = new VisualItem('Control', 3.5, (room) => {
         const option = { color: 'lime' }
         return { content, option }
     }
-    const content = `${room.controlPointsPerTick.toFixed(1)}e/t`
+    const content = `${Math.floor(10 * room.controlPointsPerTick) / 10}e/t`
     const option = { color: room.controlPointsPerTick > 14 ? 'lime' : room.controlPointsPerTick > 8 ? 'yellow' : 'magenta' }
     return { content, option }
 })
@@ -75,7 +75,7 @@ const control = new VisualItem('Control', 3.5, (room) => {
 // next RCL
 const nextRCL = new VisualItem('next RCL', 4, (room) => {
     const day = Math.floor(room.hoursToNextRCL / 24)
-    const hour = (room.hoursToNextRCL % 24).toFixed(1)
+    const hour = Math.floor(10 * (room.hoursToNextRCL % 24)) / 10
     const leftTime = day === Infinity ? "-" : day > 0 ? `${day}d ${hour}h` : `${hour}h`
     const content = room.controller.level === 8 ? '-' : leftTime
     const option = { color: 'cyan' }
@@ -133,7 +133,7 @@ const remoteIncome = new VisualItem('Remote', 5, (room) => {
     }
 
     room.heap.remoteIncome = Math.floor(income)
-    const content = `${income.toFixed(1)}e/t (S:${num})`
+    const content = `${Math.floor(10 * income) / 10}e/t (S:${num})`
     const option = { color: income / num >= 5 ? 'lime' : 'magenta' }
     return { content, option }
 })
@@ -186,7 +186,7 @@ Overlord.visualizeRoomInfo = function () {
 
     const option = { color: 'cyan', strokeWidth: 0.2, align: 'left', opacity: OPACITY }
     new RoomVisual().text("Time " + Game.time, 0.5, startPos.y, option)
-    new RoomVisual().text("CPU " + Game.cpu.getUsed().toFixed(2), 6.5, startPos.y, option)
+    new RoomVisual().text("CPU " + Math.floor(10 * Game.cpu.getUsed()) / 10, 6.5, startPos.y, option)
     new RoomVisual().text("Bucket " + Game.cpu.bucket, 11, startPos.y, option);
     new RoomVisual().text("Avg " + Math.round(100 * (_.sum(CPU) / CPU.length)) / 100, 16.5, startPos.y, option);
     new RoomVisual().text("# ticks " + CPU.length, 20.5, startPos.y, option);

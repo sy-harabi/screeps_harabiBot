@@ -97,7 +97,8 @@ Flag.prototype.attackRoom = function () {
     }
 
     if (this.room && this.memory.end && !Game.flags[`harass ${roomName}`]) {
-        this.pos.createFlag(`harass ${roomName}`)
+        data.recordLog(`ATTACK: Mission complted. send harassers.`, roomName, 0)
+        // this.pos.createFlag(`harass ${roomName}`)
     }
 
     if (this.memory.startAttack && (!attacker || !healer)) {
@@ -117,6 +118,7 @@ Flag.prototype.attackRoom = function () {
         const myTombstones = thisRoom.find(FIND_TOMBSTONES).filter(tombstone => tombstone.creep.my && tombstone.creep.ticksToLive > 1)
         const agentTombstone = myTombstones.find(tombstone => agentNames.includes(tombstone.creep.name))
         if (agentTombstone) {
+            data.recordLog(`ATTACK: ${agentTombstone.creep.name} died stop attack`, roomName, 0)
             delete this.memory
             this.remove()
             return

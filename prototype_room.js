@@ -128,6 +128,17 @@ Object.defineProperties(Room.prototype, {
             return this._energy
         }
     },
+    energyLevel: {
+        get() {
+            if (!this.controller) {
+                return undefined
+            }
+            const level = this.controller.level
+            const economyStandard = ECONOMY_STANDARD[level]
+            const buffer = BUFFER[level]
+            return (this.energy - economyStandard) / buffer
+        }
+    },
     constructionSites: {
         get() {
             if (!this._constructionSites) {
@@ -221,13 +232,10 @@ Object.defineProperties(Room.prototype, {
     savingMode: {
         get() {
             if (!this._savingMode) {
-                const level = this.controller.level
-                const economyStandard = ECONOMY_STANDARD[level]
-                const buffer = BUFFER[level]
                 if (this.storage) {
-                    if (this.energy >= economyStandard && this.memory.savingMode) {
+                    if (this.energyLevel >= 0 && this.memory.savingMode) {
                         this._savingMode = this.memory.savingMode = false
-                    } else if ((this.energy < (economyStandard - buffer)) && !this.memory.savingMode) {
+                    } else if (this.energyLevel < -1 && !this.memory.savingMode) {
                         this._savingMode = this.memory.savingMode = true
                     }
                 } else {
@@ -261,159 +269,46 @@ Object.defineProperties(Room.prototype, {
             }
             const level = this.controller.level
             if (level === 8) {
-                if (!this.savingMode && this.structures.weakProtection.length === 0) {
-                    this.heap.upgrading = true
-                    return this.heap.maxWork = 15
-                }
-                if (this.heap.constructing) {
-                    this.heap.upgrading = false
-                    return this.heap.maxWork = 15
-                }
+                // if downgrade is close, upgrade
                 if (this.controller.ticksToDowngrade < 10000) {
                     this.heap.upgrading = true
                     return this.heap.maxWork = 15
                 }
+
+                // if constructing, maxWrok 15
+                if (this.heap.constructing) {
+                    this.heap.upgrading = false
+                    return this.heap.maxWork = 15
+                }
+
+                // if savingMode, don't upgrade
+                if (this.savingMode) {
+                    this.heap.upgrading = false
+                    return this.heap.maxWork = 0
+                }
+
+                // if energy if more than enough, upgrade
+                if (this.energyLevel > 5) {
+                    this.heap.upgrading = true
+                    return this.heap.maxWork = 15
+                }
+
+                // if rampart is enough, upgrade
+                if (this.structures.weakProtection.length === 0) {
+                    this.heap.upgrading = true
+                    return this.heap.maxWork = 15
+                }
+
                 this.heap.upgrading = false
                 return this.heap.maxWork = 0
             }
 
-            const economyStandard = ECONOMY_STANDARD[level]
-            if (this.energy < economyStandard) {
+            if (this.energyLevel < 0) {
                 return this.heap.maxWork = 10
             }
 
-            const buffer = BUFFER[level]
-            const extra = Math.min(7, Math.max(0, Math.floor((this.energy - economyStandard) / buffer)))
+            const extra = Math.min(7, Math.max(0, Math.floor(this.energyLevel)))
             return this.heap.maxWork = Math.min(numWorkEach * (1 + extra))
-        }
-    },
-    closeHighways: {
-        get() {
-            if (this.memory.closeHighways) {
-                return this.memory.closeHighways
-            }
-
-            const roomCoord = this.name.match(/[a-zA-Z]+|[0-9]+/g)
-            roomCoord[1] = Number(roomCoord[1])
-            roomCoord[3] = Number(roomCoord[3])
-            const x = roomCoord[1]
-            const y = roomCoord[3]
-
-            let numSided = []
-            if (roomCoord[1] % 10 === 1 || roomCoord[1] % 10 === 9) {
-                roomCoord[1] = Math.round(roomCoord[1] / 10) * 10
-            }
-            if (roomCoord[3] % 10 === 1 || roomCoord[3] % 10 === 9) {
-                roomCoord[3] = Math.round(roomCoord[3] / 10) * 10
-            }
-
-            if (roomCoord[1] % 10 !== 0 && roomCoord[3] % 10 !== 0) {
-                this._closeHighways = []
-                this.memory.closeHighways = this._closeHighways
-                return this._closeHighways
-            }
-
-            if (roomCoord[1] % 10 === 0 && roomCoord[3] % 10 === 0) {
-                this._closeHighways = []
-                const dx = x - roomCoord[1]
-                const dy = y - roomCoord[3]
-
-                let isExit = false
-                if (dx < 0) {
-                    if (this.find(FIND_EXIT_RIGHT).length) {
-                        isExit = true
-                    }
-                } else {
-                    if (this.find(FIND_EXIT_LEFT).length) {
-                        isExit = true
-                    }
-                }
-                if (dy > 0) {
-                    if (this.find(FIND_EXIT_TOP).length) {
-                        isExit = true
-                    }
-                } else {
-                    if (this.find(FIND_EXIT_BOTTOM).length) {
-                        isExit = true
-                    }
-                }
-
-                if (!isExit) {
-                    this.memory.closeHighways = this._closeHighways
-                    return this._closeHighways
-                }
-
-                this._closeHighways.push(roomCoord.join(''))
-                for (let i = 1; i < 3; i++) {
-                    roomCoord[1] += dx * i
-                    this._closeHighways.push(roomCoord.join(''))
-                    roomCoord[1] -= dx * i
-                }
-                for (let i = 1; i < 3; i++) {
-                    roomCoord[3] += dy * i
-                    this._closeHighways.push(roomCoord.join(''))
-                    roomCoord[3] -= dy * i
-                }
-                this.memory.closeHighways = this._closeHighways
-                return this._closeHighways
-            }
-
-            if (roomCoord[1] % 10 === 0) {
-                this._closeHighways = []
-                const dx = x - roomCoord[1]
-
-                let isExit = false
-                if (dx < 0) {
-                    if (this.find(FIND_EXIT_RIGHT).length) {
-                        isExit = true
-                    }
-                } else {
-                    if (this.find(FIND_EXIT_LEFT).length) {
-                        isExit = true
-                    }
-                }
-                if (!isExit) {
-                    this.memory.closeHighways = this._closeHighways
-                    return this._closeHighways
-                }
-
-                for (let i = -2; i < 3; i++) {
-                    roomCoord[3] += i
-                    this._closeHighways.push(roomCoord.join(''))
-                    roomCoord[3] -= i
-                }
-                this.memory.closeHighways = this._closeHighways
-                return this._closeHighways
-            }
-
-            if (roomCoord[3] % 10 === 0) {
-                this._closeHighways = []
-                const dy = y - roomCoord[3]
-
-                let isExit = false
-                if (dy > 0) {
-                    if (this.find(FIND_EXIT_TOP).length) {
-                        isExit = true
-                    }
-                } else {
-                    if (this.find(FIND_EXIT_BOTTOM).length) {
-                        isExit = true
-                    }
-                }
-
-                if (!isExit) {
-                    this.memory.closeHighways = this._closeHighways
-                    return this._closeHighways
-                }
-
-                for (let i = -2; i < 3; i++) {
-                    roomCoord[1] += i
-                    this._closeHighways.push(roomCoord.join(''))
-                    roomCoord[1] -= i
-                }
-                this.memory.closeHighways = this._closeHighways
-                return this._closeHighways
-            }
         }
     },
     terrain: {

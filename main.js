@@ -14,6 +14,7 @@ require('manager_harass')
 require('manager_clearAll')
 require('manager_highway_mining')
 require('manager_lootRoom')
+require('manager_quad')
 require('manager_reconstruction')
 require('manager_room')
 require('manager_remote')
@@ -119,7 +120,8 @@ module.exports.loop = () => {
                 continue
             }
             if (name.includes('harass')) {
-                flag.harass()
+                const number = name.includes('three') ? 3 : name.includes('two') ? 2 : 1
+                flag.harass(number)
                 continue
             }
             if (name.includes('loot')) {
@@ -155,6 +157,9 @@ module.exports.loop = () => {
             if (name.includes('war')) {
                 flag.conductWar()
                 continue
+            }
+            if (name.includes('quad')) {
+                flag.manageQuad()
             }
         }
 
@@ -235,9 +240,9 @@ module.exports.loop = () => {
         } else {
             Overlord.purgeMapInfo()
             new RoomVisual().text('time: ' + Game.time, 0, 46, { align: 'left' })
-            new RoomVisual().text('CPU: ' + Game.cpu.getUsed().toFixed(1), 0, 47, { align: 'left' })
+            new RoomVisual().text('CPU: ' + Game.cpu.getUsed(), 0, 47, { align: 'left' })
             new RoomVisual().text("AvgCPU: " + Math.round(100 * (_.sum(CPU) / CPU.length)) / 100 + `(for ${CPU.length} ticks)`, 0, 48, { align: 'left' })
-            new RoomVisual().text(`bucket: ${Game.cpu.bucket.toFixed(0)}(${data.enoughCPU ? 'market, ' : ''}${data.okCPU ? 'lab' : ''})`, 0, 49, { align: 'left' })
+            new RoomVisual().text(`bucket: ${Game.cpu.bucket}(${data.enoughCPU ? 'market, ' : ''}${data.okCPU ? 'lab' : ''})`, 0, 49, { align: 'left' })
         }
 
 

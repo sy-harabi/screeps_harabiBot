@@ -1,3 +1,6 @@
+const TICKS_TO_CHANGE_PRICE = 100
+const CHANGE_PRICE_RATIO = 0.1
+
 const profiler = require('screeps-profiler');
 
 global.Business = {
@@ -28,7 +31,7 @@ global.Business = {
     }
 }
 
-Business.getFinalPrice = function (order, roomName) {
+Business.getFinalPrice = function (order, roomName, log = false) {
     const targetRoomName = order.roomName
     const price = order.price
 
@@ -39,16 +42,23 @@ Business.getFinalPrice = function (order, roomName) {
     const energyPrice = Business.energyPrice
     const transactionCost = Game.market.calcTransactionCost(1000, roomName, targetRoomName)
     const sign = order.type === ORDER_SELL ? 1 : -1
-    return (price + sign * energyPrice * transactionCost / 1000).toFixed(2)
+    const tax = sign * energyPrice * transactionCost / 1000
+    if (log) {
+        console.log(`price:${price}, tax:${tax}, finalPrice:${price + tax}`)
+    }
+    return (price + tax)
 }
 
-Business.getMaxBuyOrder = function (resourceType, roomName) {
+Business.getMaxBuyOrder = function (resourceType, roomName, log) {
     const myOrdersId = Business.myOrdersId
     const buyOrders = Game.market.getAllOrders({ resourceType: resourceType, type: ORDER_BUY }).filter(order => !myOrdersId.includes(order.id))
     const maxBuyOrder = getMaxObject(buyOrders, order => {
-        order.finalPrice = Business.getFinalPrice(order, roomName)
+        order.finalPrice = Business.getFinalPrice(order, roomName, log)
         return order.finalPrice
     })
+    if (maxBuyOrder === undefined) {
+        return { order: undefined, finalPrice: undefined }
+    }
     return { order: maxBuyOrder, finalPrice: maxBuyOrder.finalPrice }
 }
 
@@ -113,11 +123,31 @@ Business.buy = function (resourceType, amount, roomName) {
     if (priceRange === undefined) {
         return ERR_NOT_FOUND
     }
+    const startPrice = priceRange.avgPrice
+
+    //check order
+    const myOrders = this.myOrders
+    const targetOrders = myOrders.filter(order => {
+        if (order.roomName !== roomName) {
+            return false
+        }
+        if (order.resourceType !== resourceType) {
+            return false
+        }
+        if (order.type !== ORDER_BUY) {
+            return false
+        }
+        return true
+    })
+
+    const currentOrder = targetOrders[0]
+    const time = currentOrder ? Game.time - currentOrder.created : 0
+    const priceNow = startPrice + (priceRange.max - startPrice) * Math.floor(time / TICKS_TO_CHANGE_PRICE) * CHANGE_PRICE_RATIO
 
     //try deal
     const minSellOrder = this.getMinSellOrder(resourceType, roomName)
     const order = minSellOrder !== undefined ? minSellOrder.order : undefined
-    if (minSellOrder && minSellOrder.finalPrice <= priceRange.avgPrice * (1 + MARKET_FEE)) {
+    if (minSellOrder && minSellOrder.finalPrice <= priceNow * (1 + MARKET_FEE)) {
         const dealAmount = Math.min(amount, order.amount)
         if (Game.market.deal(order.id, amount, roomName) === OK && dealAmount === amount) {
             this.cancelAllOrder(resourceType, roomName, ORDER_BUY)
@@ -125,39 +155,28 @@ Business.buy = function (resourceType, amount, roomName) {
         }
     }
 
-    //create or change order
-    const myOrders = this.myOrders
-    const targetOrders = myOrders.filter(order => {
-        if (order.type !== ORDER_BUY) {
-            return false
+    //deal at private server
+    if (order && priceRange.max - priceRange.min === 0) {
+        const dealAmount = Math.min(amount, order.amount)
+        if (Game.market.deal(order.id, amount, roomName) === OK && dealAmount === amount) {
+            this.cancelAllOrder(resourceType, roomName, ORDER_BUY)
+            return OK
         }
-        if (order.resourceType !== resourceType) {
-            return false
-        }
-        if (order.roomName !== roomName) {
-            return false
-        }
-        return true
-    })
+    }
 
     // create order
     if (targetOrders.length === 0) {
         Game.market.createOrder({
             type: ORDER_BUY,
             resourceType: resourceType,
-            price: priceRange.min,
+            price: startPrice,
             totalAmount: amount,
             roomName
         })
         return
     }
 
-    // change order
-    const currentOrder = targetOrders[0]
-    const time = Game.time - currentOrder.created
-
     // increase price as time goes by. take 10000 ticks from min to max.
-    const priceNow = (priceRange.min + (priceRange.max - priceRange.min) * Math.floor(time / 100) / 100).toFixed(2)
     if (currentOrder.price < priceNow) {
         Game.market.changeOrderPrice(currentOrder.id, priceNow)
     }
@@ -174,27 +193,35 @@ Business.sell = function (resourceType, amount, roomName = undefined) {
     //check order
     const myOrders = this.myOrders
     const targetOrders = myOrders.filter(order => {
-        if (order.type !== ORDER_SELL) {
+        if (order.roomName !== roomName) {
             return false
         }
         if (order.resourceType !== resourceType) {
             return false
         }
-        if (order.roomName !== roomName) {
+        if (order.type !== ORDER_SELL) {
             return false
         }
         return true
     })
 
-
     const currentOrder = targetOrders[0]
     const time = currentOrder ? Game.time - currentOrder.created : 0
-    const priceNow = (priceRange.max - (priceRange.max - priceRange.min) * Math.floor(time / 100) / 100).toFixed(2)
+    const priceNow = priceRange.max - (priceRange.max - priceRange.avgPrice) * Math.floor(time / TICKS_TO_CHANGE_PRICE) * CHANGE_PRICE_RATIO
 
     //try deal
     const maxBuyOrder = this.getMaxBuyOrder(resourceType, roomName)
     const order = maxBuyOrder.order
-    if (maxBuyOrder.finalPrice >= Math.min(priceNow, priceRange.avgPrice) * (1 - MARKET_FEE)) {
+    if (maxBuyOrder.finalPrice && maxBuyOrder.finalPrice >= priceNow * (1 - MARKET_FEE)) {
+        const dealAmount = Math.min(amount, order.amount)
+        if (Game.market.deal(order.id, dealAmount, roomName) === OK && dealAmount === amount) {
+            this.cancelAllOrder(resourceType, roomName, ORDER_SELL)
+            return OK
+        }
+    }
+
+    //deal at private server
+    if (order && priceRange.max - priceRange.min === 0) {
         const dealAmount = Math.min(amount, order.amount)
         if (Game.market.deal(order.id, dealAmount, roomName) === OK && dealAmount === amount) {
             this.cancelAllOrder(resourceType, roomName, ORDER_SELL)

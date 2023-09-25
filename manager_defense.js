@@ -1,4 +1,5 @@
 const DEFENSE_TEST = false
+const REQUIRED_DAMAGE_RATIO = 0.1
 
 Room.prototype.manageDefense = function () {
     this.memory.defense = this.memory.defense || {}
@@ -30,7 +31,7 @@ Room.prototype.manageDefense = function () {
     if (strong.length > 0 && status.state === 'normal' && this.isWalledUp && attackPowerTotal > 0) {
         const invaderName = strong[0].owner.username
         status.state = 'emergency'
-        data.recordLog(`WAR: Emergency occured by ${invaderName}`, this.name)
+        data.recordLog(`WAR: Emergency occured by ${invaderName}`, this.name, 0)
         this.memory.militaryThreat = true
         for (const hauler of this.creeps.hauler) {
             hauler.memory.role = 'manager'
@@ -39,7 +40,7 @@ Room.prototype.manageDefense = function () {
         data.recordLog('WAR: Emergency ended', this.name)
         status.state = 'normal'
         this.memory.militaryThreat = false
-        this.memory.level = 0
+        this.memory.level = this.controller.level - 1
         for (const creep of this.find(FIND_MY_CREEPS)) {
             if (creep.memory.assignedRoom) {
                 delete creep.memory.assignedRoom
@@ -69,6 +70,10 @@ Room.prototype.manageDefense = function () {
                 if (creep.heap.backToBase > 0) {
                     creep.heap.backToBase--
                     creep.moveMy(spawn, { range: 1, avoidRampart: false })
+                }
+                if (creep.memory.role === 'wallMaker') {
+                    creep.memory.assignedRoom = this.name
+                    creep.memory.role = 'laborer'
                 }
                 continue
             }
@@ -506,7 +511,7 @@ Room.prototype.getRampartAnchorsStatus = function () {
         let totalAttackPower = 0
 
         for (const intruder of status.intruders) {
-            const netDamage = Math.ceil(intruder.hitsMax / 5)
+            const netDamage = Math.ceil(intruder.hitsMax * REQUIRED_DAMAGE_RATIO)
             const requiredDamage = this.getRequiredDamageFor(intruder, { netDamage: netDamage }) - this.frontLineTowersDamageMin
 
             requiredDamageMax = Math.max(requiredDamageMax, requiredDamage)

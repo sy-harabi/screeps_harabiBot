@@ -447,26 +447,27 @@ function colonyDefender(creep) {
     }
 
     const hostileCreeps = creep.room.find(FIND_HOSTILE_CREEPS)
-    const target = creep.pos.findClosestByPath(hostileCreeps)
-    if (hostileCreeps.length) {
+    const closestHostileCreeps = creep.pos.findClosestByPath(hostileCreeps)
+
+    if (closestHostileCreeps !== null) {
         creep.memory.lastEnemy = Game.time
         creep.heal(creep)
-        const range = creep.pos.getRangeTo(target)
+        const range = creep.pos.getRangeTo(closestHostileCreeps)
         if (range <= 1) {
-            creep.rangedMassAttack(target)
+            creep.rangedMassAttack(closestHostileCreeps)
         } else if (range <= 3) {
-            creep.rangedAttack(target)
+            creep.rangedAttack(closestHostileCreeps)
         }
 
         if ((creep.hits / creep.hitsMax) <= 0.6) {
-            creep.fleeFrom(target)
+            creep.fleeFrom(closestHostileCreeps)
             return
         }
 
         if (range > 3) {
-            creep.moveMy(target, { range: 1, avoidRampart: false, ignoreMap: 1 })
-        } else if (creep.pos.getRangeTo(target) < 3) {
-            creep.fleeFrom(target)
+            creep.moveMy(closestHostileCreeps, { range: 1, avoidRampart: false, ignoreMap: 1 })
+        } else if (creep.pos.getRangeTo(closestHostileCreeps) < 3) {
+            creep.fleeFrom(closestHostileCreeps)
         }
         return
     }
@@ -481,14 +482,10 @@ function colonyDefender(creep) {
         return
     }
 
-    const constructionSites = creep.room.find(FIND_CONSTRUCTION_SITES).sort((a, b) => a.pos.getRangeTo(creep) - b.pos.getRangeTo(creep))
-    for (const constructionSite of constructionSites) {
-        if (!constructionSite.my) {
-            if (constructionSite.pos.isWall) {
-                continue
-            }
-            return creep.moveMy(constructionSite)
-        }
+    const constructionSites = creep.room.find(FIND_CONSTRUCTION_SITES).filter(constructionSite => !constructionSite.my && !constructionSite.pos.isWall)
+    const closestConstructionSite = creep.pos.findClosestByPath(constructionSites)
+    if (closestConstructionSite) {
+        return creep.moveMy(closestConstructionSite)
     }
 
     const hostileStructure = creep.pos.findClosestByPath(creep.room.find(FIND_HOSTILE_STRUCTURES).filter(structure => structure.structureType !== 'controller'))
@@ -507,8 +504,6 @@ function colonyDefender(creep) {
             return creep.moveMy(targetProtect, { range: 3, avoidRampart: false, ignoreMap: 1 })
         }
     }
-
-
 
     const center = new RoomPosition(25, 25, creep.memory.colony)
     if (creep.pos.getRangeTo(center) > 23) {

@@ -220,7 +220,7 @@ Room.prototype.scoutRoom = function (roomName, distance) {
   const x = roomCoord[1]
   const y = roomCoord[3]
 
-  if ((x % 10 === 0 || y % 10 === 0) && distance <= 3) {
+  if ((x % 10 === 0 || y % 10 === 0) && distance <= 5) {
     this.depositCheck(roomName)
   }
 

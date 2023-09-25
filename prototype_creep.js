@@ -276,18 +276,16 @@ Creep.prototype.resetPath = function () {
  * @param {number} options.range - range to pos before goal is considered reached. default is 0
  * @param {boolean} options.avoidEnemy - if true, avoid enemy creeps. usually used in SK rooms.
  * @param {boolean} options.avoidRampart - if true, don't go outside of protected area.
- * @param {number} options.ignoreMap - at 0, don't pass through inassessible roons.
- *                                     at 1, ignore assessibility of target room.
- *                                     at 2, totally ignore assessibility
+ * @param {number} options.ignoreMap - at 0, don't pass through inassessible roons. at 1, ignore assessibility of target room. at 2, totally ignore assessibility
  * @param {boolean} ignoreCreeps - if true, ignore creeps
  * @param {boolean} ignoreOrder - if true, ignore scheduled move
  * @returns {Constant} OK - The creep is arrived to target or move action is scheduled
- *                     ERR_BUSY - The creep is spawning or staying or already moved
- *                     ERR_TIRED - 	The fatigue indicator of the creep is non-zero.
- *                     ERR_NOT_FOUND - there's no nextPos
- *                     ERR_NO_PATH - there's no route or PathFinder failed
- *                     ERR_INVALID_TARGET - Tried swapPos but failed. target is not my creep or cannot move
- *                     ERR_NOT_IN_RANGE - Tried swapPos but failed. target is not adjacent
+ * @returns {Constant} ERR_BUSY - The creep is spawning or staying or already moved
+ * @returns {Constant} ERR_TIRED - 	The fatigue indicator of the creep is non-zero.
+ * @returns {Constant} ERR_NOT_FOUND - there's no nextPos
+ * @returns {Constant} ERR_NO_PATH - there's no route or PathFinder failed
+ * @returns {Constant} ERR_INVALID_TARGET - Tried swapPos but failed. target is not my creep or cannot move
+ * @returns {Constant} ERR_NOT_IN_RANGE - Tried swapPos but failed. target is not adjacent
  */
 Creep.prototype.moveMy = function (target, options = {}) { //option = {range, avoidEnemy, avoidRampart, ignoreMap}
     const defaultOptions = {

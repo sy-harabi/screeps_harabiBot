@@ -39,14 +39,23 @@ global.basePlan = function (roomName, numIteration = 10) {
     return `observe room and get basePlan ${roomName.toUpperCase()} start`
 }
 
+/**
+ * 
+ * @param {array} array - array of object 
+ * @param {function} func - function to calculate value 
+ * @returns - object which has maximum function value. undefined if array is empty
+ */
 global.getMaxObject = function (array, func) {
     if (!array.length) {
         return undefined
     }
     let maximumPoint = array[0]
+    let maximumValue = func(maximumPoint)
     for (const point of array) {
-        if (func(point) > func(maximumPoint)) {
+        const value = func(point)
+        if (value > maximumValue) {
             maximumPoint = point
+            maximumValue = value
         }
     }
     return maximumPoint

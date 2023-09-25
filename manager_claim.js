@@ -79,8 +79,8 @@ Room.prototype.claimRoom = function (roomName) {
     const map = Overlord.map
     if (map[roomName] && map[roomName].threat) {
         delete this.memory.claimRoom[roomName]
-        // const centerPos = new RoomPosition(25, 25, roomName)
-        // centerPos.createFlag(`clear ${roomName}`)
+        const centerPos = new RoomPosition(25, 25, roomName)
+        centerPos.createFlag(`clear ${roomName}`)
         return
     }
     const defenders = Overlord.getCreepsByRole(roomName, 'colonyDefender')

@@ -1406,7 +1406,7 @@ Room.prototype.getBasePlanAfterMincut = function (pos, inputCosts, mincut, costs
     }
   }
 
-  const score = ((rampartEfficiency + distanceToExits + maxTravelDistance + controllerScore + sourceScore) / 5).toFixed(3)
+  const score = ((rampartEfficiency + distanceToExits + maxTravelDistance + controllerScore + sourceScore) / 5)
   console.log('rampart efficiency score: ' + rampartEfficiency)
   console.log('distance to exits score: ' + distanceToExits)
   console.log('compactness score: ' + maxTravelDistance)

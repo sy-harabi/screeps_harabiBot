@@ -9,6 +9,12 @@ data.cpuEmergency = false
 data.isEnoughCredit = false
 data.info = true
 
+/**
+ * record log to the memory.
+ * @param {string} text - text to log 
+ * @param {string} roomName - roomName to link
+ * @param {number} groupInterval - grouped with other notifications using the specified time in minutes. default is 180
+ */
 data.recordLog = function (text, roomName, groupInterval = 180) {
   roomName = roomName ? roomName.toUpperCase() : undefined
   if (!Memory._log) {

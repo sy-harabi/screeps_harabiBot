@@ -174,10 +174,15 @@ Room.prototype.operateRemote = function (remoteName) {
 
     // construct state
     if (status.state === 'construct') {
+        Game.map.visual.text(`🏗️`, visualPos, { fontSize: 7 })
         // if don't have vision, wait
         if (!remote) return ERR_NOT_FOUND
 
         if (remote && remote.controller.reservation && remote.controller.reservation.username !== MY_NAME) {
+            return
+        }
+
+        if (Math.random() < 0.9) {
             return
         }
 
@@ -256,7 +261,7 @@ Room.prototype.operateRemote = function (remoteName) {
     // extract state
     if (status.state === 'extract') {
         // check infra
-        if (remote && Game.time % TICKS_TO_CHECK_INFRA === 0) {
+        if (remote && (Game.time % TICKS_TO_CHECK_INFRA === 0)) {
             const infraPlan = this.getRemoteInfraPlan(remoteName)
             if (infraPlan === ERR_NOT_FOUND) {
                 data.recordLog(`REMOTE: Abandon ${remoteName}. cannot find infraPlan`, remoteName)

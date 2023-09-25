@@ -1,3 +1,8 @@
+/**
+ * find closest my room
+ * @param {number} level - RCL threshold
+ * @returns
+ */
 Flag.prototype.findClosestMyRoom = function (level = 0) {
     if (this.memory.closestRoom) {
         return Game.rooms[this.memory.closestRoom]
