@@ -1,4 +1,4 @@
-const SCOUT_INTERVAL = 20000 // scout 완료 후 얼마나 기다렸다가 다시 시작할 것인지
+const SCOUT_INTERVAL = 5000 // scout 완료 후 얼마나 기다렸다가 다시 시작할 것인지
 const NUM_REMOTE_SOURCES = {
   1: 0,
   2: 0,
@@ -9,7 +9,6 @@ const NUM_REMOTE_SOURCES = {
   7: 7,
   8: 10
 }
-
 
 Room.prototype.manageScout = function () {
   const MAX_DISTANCE = 12 // 최대 거리

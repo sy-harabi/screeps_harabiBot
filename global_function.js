@@ -33,6 +33,18 @@ global.info = function () {
     }
 }
 
+Memory.autoClaim
+
+global.autoClaim = function () {
+    if (Memory.autoClaim) {
+        Memory.autoClaim = false
+        return 'deactivate automated claim'
+    } else {
+        Memory.autoClaim = true
+        return 'atcivate automated claim'
+    }
+}
+
 global.basePlan = function (roomName, numIteration = 10) {
 
     data.observe = { roomName: roomName.toUpperCase(), tick: numIteration + 5 }

@@ -1,3 +1,5 @@
+const RAMPART_HIT_THRESHOLD = 5000000
+
 Object.defineProperties(Room.prototype, {
     spawnCapacity: {
         get() {
@@ -69,7 +71,7 @@ Object.defineProperties(Room.prototype, {
                     this._structures.damaged.push(structure)
                 }
                 if ((structure.structureType === STRUCTURE_RAMPART || structure.structureType === STRUCTURE_WALL)) {
-                    if (structure.hits < 20000000) {
+                    if (structure.hits < RAMPART_HIT_THRESHOLD) {
                         this._structures.weakProtection.push(structure)
                     }
                     if (structure.hits < this._structures.minProtectionHits || this._structures.minProtectionHits === 0) {

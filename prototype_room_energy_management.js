@@ -5,9 +5,10 @@ const ENERGY_PRIORITY = {
     link: 1,
     container: 6,
     terminal: 7,
-    factory: 8,
-    nuker: 9,
-    storage: 10,
+    lab: 8,
+    factory: 9,
+    nuker: 10,
+    storage: 11,
 }
 
 global.ENERGY_DEPOT_PRIORITY = {
@@ -56,6 +57,12 @@ Room.prototype.getEnergyRequests = function (numApplicants) {
             if (client.store.getFreeCapacity(RESOURCE_ENERGY)) {
                 requests[client.id] = new Request(client)
             }
+        }
+    }
+
+    for (const client of this.structures.lab) {
+        if (client.store.getFreeCapacity(RESOURCE_ENERGY)) {
+            requests[client.id] = new Request(client)
         }
     }
 

@@ -62,7 +62,7 @@ Overlord.mapInfo = function () {
   if (Memory.showMapInfo === 0) {
     return
   }
-  if (Memory.mapInfoTime > 0 && Game.time - Memory.mapInfoTime > 500) {
+  if (!Memory.mapInfoTime || Game.time - Memory.mapInfoTime > 500) {
     Memory.showMapInfo = 0
     return
   }

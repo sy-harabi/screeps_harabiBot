@@ -80,38 +80,40 @@ Creep.prototype.getEnergyFrom = function (id) {
     return this.pickup(target)
 }
 
-Creep.prototype.searchPath = function (target, range = 0, maxRooms = 1, option = {}) { //option = {ignoreCreeps: true, avoidEnemy: false, avoidRampart: false, ignoreMap:0}
-    let { ignoreCreeps, avoidEnemy, avoidRampart, ignoreMap } = option
-    if (ignoreCreeps === undefined) {
-        ignoreCreeps = true
-    }
-    if (avoidEnemy === undefined) {
-        avoidEnemy = false
-    }
-    if (avoidRampart === undefined) {
-        avoidRampart = false
-    }
+/**
+ * 
+ * @param {array} goals - an array of goals {pos, range}. should be in normalized form.
+ * @param {object} options 
+ * @returns ERR_NO_PATH if there is no path. otherwise path(an array of roomPositions)
+ */
+Creep.prototype.searchPath = function (goals, options = {}) {
 
-    // ignoreMap 0이면 map 무조건 반영 / 1이면 목적지만 무시 / 2면 모두 무시
-    if (ignoreMap === undefined) {
-        ignoreMap = 0
-    }
+    const defaultOptions = { ignoreCreeps: true, avoidEnemy: false, staySafe: false, ignoreMap: 0, visualize: false }
+
+    const mergedOptions = { ...defaultOptions, ...options }
+
+    const { ignoreCreeps, avoidEnemy, staySafe, ignoreMap, visualize } = mergedOptions
 
     const thisCreep = this
     // mobility가 1이면 plain에서 2tick, swamp에서 10tick. mibility가 0.5면 plain에서 1tick, swamp에서 5tick
     const mobility = this.getMobility()
-    const targetPos = target.pos || target
+
+    const mainTargetPos = goals[0].pos
+    const targetRoomName = mainTargetPos.roomName
 
     let route = undefined
     // maxRooms가 1보다 크면 route 먼저 찾자
+
+    const maxRooms = this.room.name === targetRoomName ? 1 : 16
+
     if (maxRooms > 1) {
 
         // 목적지가 접근금지면 길 없음
-        if (ignoreMap === 0 && Memory.map[targetPos.roomName] && Memory.map[targetPos.roomName].inaccessible > Game.time) {
+        if (ignoreMap === 0 && Memory.map[targetRoomName] && Memory.map[targetRoomName].inaccessible > Game.time) {
             return ERR_NO_PATH
         }
 
-        route = Game.map.findRoute(this.room, targetPos.roomName, {
+        route = Game.map.findRoute(this.room, targetRoomName, {
             routeCallback(roomName, fromRoomName) {
                 // 현재 creep이 있는 방이면 무조건 쓴다
                 if (thisCreep.room.name === roomName) {
@@ -119,7 +121,7 @@ Creep.prototype.searchPath = function (target, range = 0, maxRooms = 1, option =
                 }
 
                 // ignoreMap이 1 이상이면 목적지는 무조건 간다
-                if (ignoreMap >= 1 && roomName === targetPos.roomName) {
+                if (ignoreMap >= 1 && roomName === targetRoomName) {
                     return 1
                 }
 
@@ -154,7 +156,7 @@ Creep.prototype.searchPath = function (target, range = 0, maxRooms = 1, option =
             }
         })
 
-        // route 안찾아지면 ERR_NO_PATH return
+        // route 안찾아지면 ERR_NO_PATH
         if (route === ERR_NO_PATH) {
             return ERR_NO_PATH
         }
@@ -164,7 +166,7 @@ Creep.prototype.searchPath = function (target, range = 0, maxRooms = 1, option =
     }
 
     // path 계산
-    const result = PathFinder.search(this.pos, { pos: targetPos, range: range }, {
+    const result = PathFinder.search(this.pos, goals, {
         plainCost: Math.ceil(2 * mobility),
         swampCost: Math.ceil(10 * mobility),
         roomCallback: function (roomName) {
@@ -181,8 +183,8 @@ Creep.prototype.searchPath = function (target, range = 0, maxRooms = 1, option =
                 return
             }
 
-            // avoidRampart가 true면 defenseCostMatrix 사용. 아니면 basicCostmatrix 사용.
-            let costs = (thisCreep.room.name === roomName && avoidRampart) ? room.defenseCostMatrix.clone() : room.basicCostmatrix.clone()
+            // staySafe가 true면 defenseCostMatrix 사용. 아니면 basicCostmatrix 사용.
+            let costs = (thisCreep.room.name === roomName && staySafe) ? room.defenseCostMatrix.clone() : room.basicCostmatrix.clone()
             // 방 보이고 ignoreCreeps가 false고 지금 이 방이 creep이 있는 방이면 creep 위치에 cost 255 설정
             if (ignoreCreeps !== true && thisCreep.room.name === roomName) {
                 const creepCost = ignoreCreeps === false ? 255 : ignoreCreeps
@@ -208,24 +210,29 @@ Creep.prototype.searchPath = function (target, range = 0, maxRooms = 1, option =
         maxOps: maxRooms > 1 ? (4000 * route.length) : 4000
     })
 
-    // 길 표시
-    // for (let i = 0; i < result.path.length - 1; i++) {
-    //     const posNow = result.path[i]
-    //     const posNext = result.path[i + 1]
-    //     if (posNow.roomName === posNext.roomName) {
-    //         new RoomVisual(posNow.roomName).line(posNow, posNext, {
-    //             color: 'aqua', width: .15,
-    //             opacity: .2, lineStyle: 'dashed'
-    //         })
-    //     }
-    // }
+    if (visualize) {
+        visualizePath(result.path)
+    }
 
     if (result.incomplete) {
         return ERR_NO_PATH
     }
 
-    // route가 안찾아지면 ERR_NO_PATH. 그 외에는 pathFinder.search의 result
-    return result
+    // route가 안찾아지면 ERR_NO_PATH. 그 외에는 path
+    return result.path
+}
+
+global.visualizePath = function (path) {
+    for (let i = 0; i < path.length - 1; i++) {
+        const posNow = path[i]
+        const posNext = path[i + 1]
+        if (posNow.roomName === posNext.roomName) {
+            new RoomVisual(posNow.roomName).line(posNow, posNext, {
+                color: 'aqua', width: .15,
+                opacity: .2, lineStyle: 'dashed'
+            })
+        }
+    }
 }
 
 Creep.prototype.searchBattlePath = function (target, range = 1, maxRooms = 16) {
@@ -278,11 +285,11 @@ Creep.prototype.resetPath = function () {
 
 /**
  * 
- * @param {Object} target - Either RoomPosition or an object which has RoomPosition property
+ * @param {Object} goals - Either goal {pos, range} or array of goals.
  * @param {Object} options - Object containing following options
  * @param {number} options.range - range to pos before goal is considered reached. default is 0
  * @param {boolean} options.avoidEnemy - if true, avoid enemy creeps. usually used in SK rooms.
- * @param {boolean} options.avoidRampart - if true, don't go outside of protected area.
+ * @param {boolean} options.staySafe - if true, don't go outside of protected area.
  * @param {number} options.ignoreMap - at 0, don't pass through inassessible roons. at 1, ignore assessibility of target room. at 2, totally ignore assessibility
  * @param {boolean} ignoreCreeps - if true, ignore creeps
  * @param {boolean} ignoreOrder - if true, ignore scheduled move
@@ -294,48 +301,49 @@ Creep.prototype.resetPath = function () {
  * @returns {Constant} ERR_INVALID_TARGET - Tried swapPos but failed. target is not my creep or cannot move
  * @returns {Constant} ERR_NOT_IN_RANGE - Tried swapPos but failed. target is not adjacent
  */
-Creep.prototype.moveMy = function (target, options = {}) { //option = {range, avoidEnemy, avoidRampart, ignoreMap}
+Creep.prototype.moveMy = function (goals, options = {}) { //option = {avoidEnemy, staySafe, ignoreMap}
     const defaultOptions = {
-        range: 0,
         avoidEnemy: false,
-        avoidRampart: (this.room.memory.militaryThreat && this.room.isWalledUp),
+        staySafe: (this.room.memory.militaryThreat && this.room.isWalledUp),
         ignoreMap: (this.memory.ignoreMap || 0),
         ignoreCreeps: true,
         ignoreOrder: false
     }
     const mergedOptions = { ...defaultOptions, ...options }
 
-    const { range, avoidEnemy, avoidRampart, ignoreMap, ignoreCreeps, ignoreOrder } = mergedOptions
+    const { avoidEnemy, staySafe, ignoreMap, ignoreCreeps, ignoreOrder } = mergedOptions
 
-    const targetPos = target.pos || target
-    if (!(targetPos instanceof RoomPosition)) {
-        return ERR_INVALID_TARGET
-    }
+    goals = normalizeGoals(goals)
 
-    if (avoidRampart) {
+    const mainTargetPos = goals[0].pos
+
+    if (staySafe) {
         const defenseCostMatrix = this.room.defenseCostMatrix
         const spawn = this.room.structures.spawn[0]
         if (defenseCostMatrix.get(this.pos.x, this.pos.y) >= 255 && spawn) {
-            return this.moveMy(spawn, { range: 1, avoidRampart: false, ignoreOrder: true })
+            return this.moveMy(spawn, { range: 1, staySafe: false, ignoreOrder: true })
         }
 
         let isValidTarget = false
-        for (const pos of targetPos.getInRange(range)) {
-            if (defenseCostMatrix.get(pos.x, pos.y) < 255) {
-                isValidTarget = true
-                break
+        outer:
+        for (const goal of goals) {
+            for (const pos of goal.pos.getInRange(goal.range)) {
+                if (defenseCostMatrix.get(pos.x, pos.y) < 255) {
+                    isValidTarget = true
+                    break outer
+                }
             }
         }
 
         if (!isValidTarget) {
-            this.room.visual.line(this.pos, targetPos, { color: 'red', lineStyle: 'dashed' })
+            this.room.visual.line(this.pos, mainTargetPos, { color: 'red', lineStyle: 'dashed' })
             this.say('🚫', true)
             return ERR_INVALID_TARGET
         }
     }
 
     //도착했으면 기억 지우고 return
-    if (this.pos.roomName === targetPos.roomName && this.pos.getRangeTo(targetPos) <= range) {
+    if (this.pos.isInGoal(goals)) {
         this.resetPath()
         return OK
     }
@@ -353,7 +361,7 @@ Creep.prototype.moveMy = function (target, options = {}) { //option = {range, av
     // stay 중이면 return
     if (this.heap.stay) {
         if (this.heap.stay > Game.time) {
-            this.room.visual.line(this.pos, targetPos, { color: 'red', lineStyle: 'dashed' })
+            this.room.visual.line(this.pos, mainTargetPos, { color: 'red', lineStyle: 'dashed' })
             this.say(`🛌${this.heap.stay - Game.time}`, true)
             return ERR_BUSY
         } else {
@@ -365,9 +373,9 @@ Creep.prototype.moveMy = function (target, options = {}) { //option = {range, av
         }
     }
 
-    //같은 방에 있으면 목적지 표시
-    if (this.pos.roomName === targetPos.roomName) {
-        this.room.visual.line(this.pos, targetPos, { color: 'yellow', lineStyle: 'dashed' })
+    //같은 방에 있으면 목적지 표시. 다른 방에 있으면 지도에 표시
+    if (this.pos.roomName === mainTargetPos.roomName) {
+        this.room.visual.line(this.pos, mainTargetPos, { color: 'yellow', lineStyle: 'dashed' })
     } else if (this.heap.path && this.heap.path.length > 0) {
         Game.map.visual.poly(this.heap.path, { stroke: '#ffe700', strokeWidth: 1, opacity: 0.75 })
     }
@@ -377,14 +385,11 @@ Creep.prototype.moveMy = function (target, options = {}) { //option = {range, av
         return ERR_TIRED
     }
 
-    //같은 방에 있으면 maxRooms 1로 하자. (같은 방에 있는 목적지 가려고 다른 방으로 나갔다 들어오는 거 방지)
-    const maxRooms = (this.room.name === targetPos.roomName) ? 1 : 16
+    if (this.needNewPath(goals)) {
+        this.resetPath()
 
-    //원래 target이 있었는데 지금 target이랑 다르거나, heap에 path가 없거나, heap에 있는 path가 비어있으면 새롭게 길 찾자
-    if ((this.heap.targetPos && !targetPos.isEqualTo(this.heap.targetPos)) || !this.heap.path || this.heap.path.length === 0 || avoidEnemy) {
-        this.resetPath() //일단 지금 기억하고 있는 거 다 지우고 시작
-        // searchPath는 route가 안찾아지면 ERR_NO_PATH고 그 외의 경우에는 PathFinder.search의 result다.
-        const result = this.searchPath(targetPos, range, maxRooms, { ignoreCreeps: ignoreCreeps, avoidEnemy, avoidRampart, ignoreMap })
+        const result = this.searchPath(goals, { ignoreCreeps: ignoreCreeps, avoidEnemy, staySafe, ignoreMap })
+
         // 도착지까지 길이 안찾아지는 경우
         if (result === ERR_NO_PATH) {
             this.heap.noPath = this.heap.noPath || 0
@@ -392,16 +397,14 @@ Creep.prototype.moveMy = function (target, options = {}) { //option = {range, av
             this.say(`❓${this.heap.noPath}`, true)
             if (this.heap.noPath > 1) {
                 this.heap.stay = Game.time + 10
-                delete this.heap.stuck
             }
             return ERR_NO_PATH
         }
+
         // 찾아진 경우
         this.say('🗺️', true)
         delete this.heap.noPath
-        this.heap.path = result.path
-        this.heap.targetPos = targetPos
-        this.heap.range = range
+        this.heap.path = result
     }
 
     // 직전 위치랑 지금 위치가 같은 경우
@@ -421,7 +424,7 @@ Creep.prototype.moveMy = function (target, options = {}) { //option = {range, av
     // stuck이 5이상인 경우 (지난 5tick이 제자리였던 경우)
     if (this.heap.stuck > 4) {
         const ignoreCreeps = this.heap.noPath > 0 ? true : false
-        const result = this.searchPath(targetPos, range, maxRooms, { ignoreCreeps: ignoreCreeps, avoidEnemy, avoidRampart, ignoreMap })
+        const result = this.searchPath(goals, { ignoreCreeps, avoidEnemy, staySafe, ignoreMap })
 
         // 도착지까지 길이 안찾아지는 경우
         if (result === ERR_NO_PATH) {
@@ -435,9 +438,7 @@ Creep.prototype.moveMy = function (target, options = {}) { //option = {range, av
             return ERR_NO_PATH
         }
         this.heap.stuck = 0
-        this.heap.path = result.path
-        this.heap.targetPos = targetPos
-        this.heap.range = range
+        this.heap.path = result
     } else if (this.heap.stuck > 0) { // stuck이 1이상인 경우 (지난 1tick이 제자리였던 경우)
         const obstacleCreep = Game.rooms[this.heap.path[0].roomName] ? this.heap.path[0].creep : undefined
         if (obstacleCreep && !obstacleCreep._moved && !obstacleCreep._swaped) {
@@ -446,20 +447,18 @@ Creep.prototype.moveMy = function (target, options = {}) { //option = {range, av
             }
 
             // 갈 길이 먼거 아니면 일단 우회로 찾아보자
-            const result = this.searchPath(targetPos, range, maxRooms, { ignoreCreeps: false, avoidEnemy, avoidRampart, ignoreMap })
+            const result = this.searchPath(goals, { ignoreCreeps: false, avoidEnemy, staySafe, ignoreMap })
 
             if (result === ERR_NO_PATH) { //길이 안찾아져도 swapPos
                 return this.swapPos(obstacleCreep)
             }
 
-            if (result.path.length > this.heap.path.length + 3) {  //너무 돌아가야되면 swapPos
+            if (result.length > this.heap.path.length + 3) {  //너무 돌아가야되면 swapPos
                 return this.swapPos(obstacleCreep)
             }
 
             // 전부 아니면 우회하자
-            this.heap.path = result.path
-            this.heap.targetPos = targetPos
-            this.heap.range = range
+            this.heap.path = result
         }
     }
 
@@ -496,23 +495,62 @@ Creep.prototype.moveMy = function (target, options = {}) { //option = {range, av
     return OK
 }
 
-RoomPosition.prototype.isInGoal = function (goals) {
-    if (Array.isArray(goals)) {
-        for (const goal of goals) {
-            const goalPos = goal.pos || goal
-            const goalRange = goal.range || 0
-            if (this.pos.getRangeTo(goalPos) <= goalRange) {
-                return true
-            }
-        }
+/**
+ * 
+ * @param {array} goals - an array of goals {pos, range}. should be in normalized form.
+ * @returns {boolean} - whether this creep needs new path or not
+ */
+Creep.prototype.needNewPath = function (goals) {
+    //원래 target이 있었는데 지금 target이랑 다르거나, heap에 path가 없거나, heap에 있는 path가 비어있으면 새롭게 길 찾자
+    if (!this.heap.path) {
+        return true
+    }
+
+    if (this.heap.path.length === 0) {
+        return true
+    }
+
+    const cachedPath = this.heap.path
+    const cachedPathLastPos = cachedPath[cachedPath.length - 1]
+    if (cachedPathLastPos.isInGoal(goals)) {
         return false
     }
-    const goal = goals
+}
 
-    const goalPos = goal.pos || goal
-    const goalRange = goal.range || 0
+function normalizeGoals(goals) {
+    goals = Array.isArray(goals) ? goals : [goals]
+    const result = []
+    for (let i = 0; i < goals.length; i++) {
+        const goal = goals[i]
 
-    return this.pos.getRangeTo(goalPos) <= goalRange
+        const pos = goal.pos || goal
+        if (!RoomPosition.prototype.isPrototypeOf(pos)) {
+            continue
+        }
+
+        const range = goal.range || 0
+        if (isNaN(range)) {
+            continue
+        }
+
+        result.push({ pos, range })
+    }
+    return result
+}
+
+RoomPosition.prototype.isInGoal = function (goals) {
+    goals = normalizeGoals(goals)
+
+    for (const goal of goals) {
+        if (this.roomName !== goal.pos.roomName) {
+            continue
+        }
+        if (this.pos.getRangeTo(goal.pos) <= goal.range) {
+            return true
+        }
+    }
+
+    return false
 }
 
 Creep.prototype.checkStuck = function () {
@@ -522,7 +560,7 @@ Creep.prototype.checkStuck = function () {
     if (!this.heap.lastPosTick) {
         return false
     }
-    if (Game.time - this.heap.lastPosTick !== 1) {
+    if ((Game.time - this.heap.lastPosTick) !== 1) {
         return false
     }
     if (this.pos.isEqualTo(this.heap.lastPos)) {

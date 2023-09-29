@@ -1,3 +1,5 @@
+const IMPORTANT_STRUCTURE_TYPES = ['spawn', 'tower']
+
 Flag.prototype.conductWar = function () {
   const roomName = this.pos.roomName
   const closestMyRoom = this.findClosestMyRoom(8)
@@ -13,13 +15,22 @@ Flag.prototype.conductWar = function () {
     return
   }
 
-  for (let x = 0; x < 50; x++) {
-    for (let y = 0; y < 50; y++) {
-      const pos = new RoomPosition(x, y, roomName)
-      if (pos.isWall) {
-        continue
-      }
-      room.visual.text(pos.getTowerDamageAt(), pos, { font: 0.4 })
-    }
+  const hostileStructures = this.room.find(FIND_HOSTILE_STRUCTURES)
+  const importantStructures = hostileStructures.filter(structure => IMPORTANT_STRUCTURE_TYPES.includes(structure.structureType))
+
+  const goals = importantStructures.map(structure => {
+    return { pos: structure.pos, range: 0 }
+  })
+
+  const power = 5000
+
+  if (power === 0) {
+    return
   }
+
+  const costArray = this.room.getCostArrayForBulldoze(power)
+
+  const dijkstra = this.room.dijkstra(this.pos, goals, costArray)
+
+  this.room.visual.poly(dijkstra)
 }

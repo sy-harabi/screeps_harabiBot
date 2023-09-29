@@ -281,7 +281,7 @@ function colonyMiner(creep) {
     }
 
     if (creep.memory.runAway) {
-        if (creep.room.memory.isKiller === true) {
+        if (creep.room.memory.isKiller) {
             creep.moveToRoom(creep.memory.base, 2)
             return
         }

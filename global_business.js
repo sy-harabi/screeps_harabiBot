@@ -22,10 +22,14 @@ global.Business = {
         if (Game._energyPrice) {
             return Game._energyPrice
         }
-        const history = Game.market.getHistory('energy')
+
+        let history = Game.market.getHistory('energy')
+        history = Array.isArray(history) ? history : []
+
         if (history.length < 2) {
             return Game._energyPrice = this.getMaxBuyOrder('energy').order.price
         }
+
         const lastHistory = history[history.length - 2]
         return Game._energyPrice = lastHistory.avgPrice
     }

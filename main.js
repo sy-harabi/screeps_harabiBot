@@ -42,6 +42,7 @@ require('prototype_room_work_management')
 require('prototype_room_powerSpawn_operation')
 require('util_base_planner')
 require('util_defenseCostMatrix')
+require('util_dijkstra')
 require('util_distance_transform')
 require('util_flood_fill')
 require('util_heap')
@@ -87,10 +88,6 @@ module.exports.loop = () => {
         } else if (!data.isEnoughCredit && Game.market.credits > 20000000) {
             data.isEnoughCredit = true
         }
-
-        // creeps 방별로, 역할별로 분류
-
-        Overlord.classifyCreeps()
 
         // flag 실행
 
@@ -162,6 +159,10 @@ module.exports.loop = () => {
                 flag.manageQuad()
             }
         }
+
+        // creeps 방별로, 역할별로 분류
+
+        Overlord.classifyCreeps()
 
         // 방마다 roomManager 동작
         for (const room of Object.values(Game.rooms)) {

@@ -78,7 +78,6 @@ Room.prototype.manageSpawn = function () {
 
         // wallMaker 생산
         if (this.controller.level === 8 && this.structures.rampart.length > 0 && this.weakestRampart.hits < RAMPART_HITS_MAX) {
-            const buffer = BUFFER[level]
             // 2buffer만큼 storageEnergy 많아질때마다 wallMaker 하나씩 추가. 최대 WALLMAKER_NUM_MAX 마리
             const maxNumWallMaker = Math.min(WALLMAKER_NUM_MAX, Math.max(0, Math.ceil(this.energyLevel / 2)))
             this.spawnCapacity += Math.min(16, Math.floor(this.energyAvailable / 200)) * maxNumWallMaker

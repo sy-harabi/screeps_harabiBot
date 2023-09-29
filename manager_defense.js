@@ -160,9 +160,9 @@ Room.prototype.manageTower = function (targets) {
         this.requestWallMaker()
     }
 
-    // 제일 약한 rampart가 200k 안되면 수리
-    if (weakestRampart.hits < 200000 && this.storage && this.storage.store[RESOURCE_ENERGY] > 10000) {
-        const weakRamparts = this.structures.rampart.filter(ramart => ramart.hits < 200000).sort((a, b) => a.hits - b.hits)
+    // 제일 약한 rampart가 20k 안되면 수리
+    if (weakestRampart.hits < 20000 && this.storage && this.storage.store[RESOURCE_ENERGY] > 10000) {
+        const weakRamparts = this.structures.rampart.filter(ramart => ramart.hits < 20000).sort((a, b) => a.hits - b.hits)
         outer:
         for (const structure of weakRamparts) {
             const towers = this.structures.tower.filter(tower => !tower.busy)
@@ -1012,6 +1012,14 @@ Object.defineProperties(Creep.prototype, {
             return this._attackPower = this.getAttackPower()
         }
     },
+    rangedAttackPower: {
+        get() {
+            if (this._rangedAttackPower) {
+                return this._rangedAttackPower
+            }
+            return this._rangedAttackPower = this.getRangedAttackPower()
+        }
+    },
     totalHealPower: {
         get() {
             if (this._totalHealPower) {
@@ -1122,6 +1130,66 @@ Creep.prototype.getDismantlePower = function () {
         }
         if (part.boost === 'XZH2O') {
             result += 200 // +300%
+            continue
+        }
+    }
+    return result
+}
+
+Creep.prototype.getRangedAttackPower = function () {
+    const body = this.body
+    let result = 0
+
+    //copy boostRequest.requiredResources since we doesn't want to change request
+    const boostrequiredResources = this.room.boostQueue[this.name] ? this.room.boostQueue[this.name].requiredResources : undefined
+    const boostResources = {}
+    for (const resourceType in boostrequiredResources) {
+        boostResources[resourceType] = boostrequiredResources[resourceType].mineralAmount
+    }
+
+    for (const part of body) {
+        if (part.type !== 'ranged_attack') {
+            continue
+        }
+
+        if (part.hits <= 0) {
+            continue
+        }
+
+        if (!part.boost && boostResources) {
+            if (boostResources['KO'] && boostResources['KO'] >= 30) {
+                result += 20 // +100%
+                boostResources['KO'] -= 30
+                continue
+            }
+
+            if (boostResources['KHO2'] && boostResources['KHO2'] >= 30) {
+                result += 30 // +200%
+                boostResources['KHO2'] -= 30
+                continue
+            }
+
+            if (boostResources['XKHO2'] && boostResources['XKHO2'] >= 30) {
+                result += 40 // +300%
+                boostResources['XKHO2'] -= 30
+                continue
+            }
+        }
+
+        if (!part.boost) {
+            result += 10
+            continue
+        }
+        if (part.boost === 'KO') {
+            result += 20 // +100%
+            continue
+        }
+        if (part.boost === 'KHO2') {
+            result += 30 // +200%
+            continue
+        }
+        if (part.boost === 'XKHO2') {
+            result += 40 // +300%
             continue
         }
     }
