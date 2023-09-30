@@ -188,7 +188,7 @@ Room.prototype.manageEnergySupply = function (arrayOfCreeps) {
             continue
         }
         if (spawn) {
-            creep.moveMy(spawn, { range: 3 })
+            creep.moveMy({ pos: spawn.pos, range: 3 })
         }
     }
 }

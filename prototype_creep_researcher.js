@@ -1,6 +1,6 @@
 Creep.prototype.giveCompoundTo = function (target, resourceType) {
     if (this.pos.getRangeTo(target) > 1) {
-        this.moveMy(target, { range: 1 })
+        this.moveMy({ pos: target.pos, range: 1 })
         return ERR_NOT_IN_RANGE
     }
     return this.transfer(target, resourceType)
@@ -8,7 +8,7 @@ Creep.prototype.giveCompoundTo = function (target, resourceType) {
 
 Creep.prototype.getCompoundFrom = function (target, resourceType) {
     if (this.pos.getRangeTo(target) > 1) {
-        this.moveMy(target, { range: 1 })
+        this.moveMy({ pos: target.pos, range: 1 })
         return ERR_NOT_IN_RANGE
     }
     return this.withdraw(target, resourceType)

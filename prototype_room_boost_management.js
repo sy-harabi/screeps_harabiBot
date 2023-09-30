@@ -17,6 +17,19 @@ Room.prototype.manageBoost = function () {
     this.operateBoost(targetRequest)
 }
 
+Room.prototype.prepareBoost = function () {
+    const requests = Object.values(this.boostQueue)
+    let requiredResourcesTotal = {}
+    for (const request of requests) {
+        const requiredResources = request.requiredResources
+        const targetCreep = Game.creeps[request.creepName]
+        const resourceTypes = Object.keys(requiredResources)
+        for (const resourceType of resourceTypes) {
+
+        }
+    }
+}
+
 Room.prototype.operateBoost = function (boostRequest) {
     const requiredResources = boostRequest.requiredResources
     const researcher = this.creeps.researcher[0]
@@ -66,9 +79,9 @@ Room.prototype.operateBoost = function (boostRequest) {
                 continue
             }
 
-            const needAmount = amount - totalAmount
+            console.log(resourceType)
 
-            const result = terminal.gatherResource(resourceType, needAmount)
+            const result = terminal.gatherResource(resourceType, amount, { threshold: 0 })
 
             if (result !== OK) {
                 if (!targetCreep.spawning) {
@@ -173,7 +186,7 @@ Room.prototype.operateBoost = function (boostRequest) {
             }
 
             if (targetCreep.pos.getRangeTo(lab) > 1) {
-                return targetCreep.moveMy(lab, { range: 1 })
+                return targetCreep.moveMy({ pos: lab.pos, range: 1 })
             }
 
             const result = lab.boostCreep(targetCreep)

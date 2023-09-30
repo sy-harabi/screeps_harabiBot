@@ -20,13 +20,13 @@ Creep.prototype.attackRoom = function (roomName) {
     if (this.room.name === healer.room.name) {
         const range = this.pos.getRangeTo(healer)
         if (range > 2) {
-            this.moveMy(healer, { range: 1 })
-            healer.moveMoy(this, { range: 1 })
+            this.moveMy({ pos: healer.pos, range: 1 })
+            healer.moveMy({ pos: this.pos, range: 1 })
             return
         }
 
         if (range > 1) {
-            this.moveMy(healer, { range: 1 })
+            this.moveMy({ pos: healer.pos, range: 1 })
             return
         }
     } else {
@@ -119,7 +119,7 @@ Creep.prototype.attackRoom = function (roomName) {
     const hostile = this.pos.findClosestByRange(hostiles)
 
     if (this.pos.getRangeTo(hostile) > 1) {
-        this.moveMy(hostile, { range: 1 })
+        this.moveMy({ pos: hostile.pos, range: 1 })
     }
 
     this.attack(hostile)
@@ -172,6 +172,10 @@ Room.prototype.getCostArrayForBulldoze = function (attackPower) {
 
     for (let x = 0; x < 50; x++) {
         for (let y = 0; y < 50; y++) {
+            if (!isValidCoord(x, y)) {
+                continue
+            }
+
             const packed = packCoord(x, y)
 
             const pos = new RoomPosition(x, y, this.name)
@@ -284,14 +288,14 @@ Creep.prototype.retreat = function () {
     const base = new RoomPosition(25, 25, this.memory.base)
     const healer = Game.creeps[this.memory.healer]
     if (healer && this.room.name === healer.room.name && this.pos.getRangeTo(healer) > 1) {
-        this.moveMy(healer, { range: 1 })
+        this.moveMy({ pos: healer.pos, range: 1 })
         this.attackNear()
         return
     }
     if (healer.fatigue > 0) {
         return
     }
-    this.moveMy(base, { range: 20, ignoreMap: 2 })
+    this.moveMy({ pos: base, range: 20 }, { ignoreMap: 2 })
     this.attackNear()
 }
 
@@ -301,7 +305,7 @@ Creep.prototype.follow = function (target) {
     }
 
     if (this.room.name !== target.room.name) {
-        this.moveMy(target, { ignoreMap: 2 })
+        this.moveMy({ pos: target.pos, range: 0 }, { ignoreMap: 2 })
         return
     }
 

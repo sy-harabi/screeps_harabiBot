@@ -31,7 +31,7 @@ Room.prototype.manageReinforce = function () {
     for (const laborer of this.creeps.laborer) {
         // 위험한 곳에 있으면 즉시 탈출해라
         if (costs.get(laborer.pos.x, laborer.pos.y) >= 254 && spawn) {
-            laborer.moveMy(spawn, { range: 1, avoidRampart: false })
+            laborer.moveMy({ pos: spawn.pos, range: 1 }, { staySafe: false })
         }
         const status = rampartAnchorsStatus[laborer.memory.assign]
         if (!status) {
@@ -244,7 +244,7 @@ Creep.prototype.repairMy = function (target) {
         const spawn = this.room.structures.spawn[0]
         this.heap.run--
         if (spawn && costs.get(this.pos.x, this.pos.y) >= 255) {
-            return this.moveMy(spawn, { range: 1 })
+            return this.moveMy({ pos: spawn.pos, range: 1 })
         }
     }
 
@@ -288,7 +288,7 @@ Creep.prototype.upgradeRCL = function () {
             this.heap.workingSpot = { id: controller.id, pos: workingSpot }
             return this.moveMy(workingSpot)
         }
-        return this.moveMy(controller, { range: 3 })
+        return this.moveMy({ pos: controller.pos, range: 3 })
     }
 
     if (!this.isWorkable(this.pos)) {
@@ -326,7 +326,7 @@ Creep.prototype.buildTask = function () {
             this.heap.workingSpot = { id: this.memory.task, pos: workingSpot }
             return this.moveMy(workingSpot)
         }
-        return this.moveMy(constructionSite, { range: 3 })
+        return this.moveMy({ pos: constructionSite.pos, range: 3 })
     }
 
     if (!this.isWorkable(this.pos)) {

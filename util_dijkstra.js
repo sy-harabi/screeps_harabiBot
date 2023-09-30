@@ -22,6 +22,11 @@ Room.prototype.dijkstra = function (startPos, goals, costArray) {
     return ERR_INVALID_TARGET
   }
 
+  goals = normalizeGoals(goals)
+  if (startPos.isInGoal(goals)) {
+    return []
+  }
+
   const goalsPacked = new Set()
 
   for (const goal of goals) {

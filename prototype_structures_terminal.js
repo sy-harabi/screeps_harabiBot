@@ -28,6 +28,7 @@ StructureTerminal.prototype.gatherResource = function (resourceType, amount, opt
             break
         }
         const amountToSend = Math.min(terminal.store[resourceType], amount - this.store[resourceType])
+
         if (terminal.send(resourceType, amountToSend, this.room.name) === OK) {
             Overlord.structures.terminal.filter(element => element.id !== terminal.id)
             if (amountToSend + this.store[resourceType] >= amount) {

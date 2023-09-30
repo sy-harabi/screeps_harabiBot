@@ -1,6 +1,10 @@
 const TEST = false
 const IMPORTANT_STRUCTURE_TYPES = ['spawn', 'tower']
 const ENEMY_OBSTACLE_OBJECT_TYPES = [...OBSTACLE_OBJECT_TYPES, 'rampart']
+const QUAD_COST_VISUAL = false
+const BULLDOZE_COST_VISUAL = false
+const EDGE_COST = 50
+const HALF_EDGE_COST = 10
 
 const FORMATION_VECTORS = [
   { x: 0, y: 0 },
@@ -47,9 +51,8 @@ Flag.prototype.manageQuad = function () {
     this.memory.quadBoosted = true
   }
 
-  // if a member dies, spread out
-  if (quad.creeps.length < 4) {
-    quad.spread()
+  // if every member dies, end protocol
+  if (quad.creeps.length === 0) {
     delete this.memory
     this.remove()
     return
@@ -57,16 +60,28 @@ Flag.prototype.manageQuad = function () {
 
   this.memory.status = this.memory.status || 'travel'
 
-  quad.leader.say(this.memory.status, true)
+  // heal and attack all the time
+  quad.quadHeal()
 
   // move to target room
   const targetRoomName = this.pos.roomName
   const rallyExit = quad.getRallyExit(targetRoomName)
 
   if (this.memory.status === 'travel') {
+    quad.leader.say('🐍', true)
+
+    quad.rangedMassAttack()
     const rallyRoomCenterPos = new RoomPosition(25, 25, rallyExit.roomName)
 
-    if (quad.snakeTravel(rallyRoomCenterPos, 20) !== 'finished') {
+    if (quad.roomName !== rallyExit.roomName) {
+      quad.snakeTravel({ pos: rallyRoomCenterPos, range: 20 })
+      return
+    }
+
+    const exitPositions = quad.room.find(rallyExit.exit)
+    const goals = exitPositions.map(pos => { return { pos, range: 5 } })
+
+    if (quad.snakeTravel(goals) !== 'finished') {
       return
     }
 
@@ -75,22 +90,23 @@ Flag.prototype.manageQuad = function () {
   }
 
   if (this.memory.status === 'engage') {
-    if (quad.roomName !== targetRoomName) {
-      quad.quadHeal()
-      const targetRoomCenterPos = new RoomPosition(25, 25, targetRoomName)
-      const result = quad.moveInFormation({ pos: targetRoomCenterPos, range: 22 })
-      if (result === ERR_NO_PATH) {
-        for (const creep of this.creeps) {
-          creep.moveMy(targetRoomCenterPos, { range: 22 })
-        }
+    for (const creep of quad.creeps) {
+      if (creep.pos.roomName !== targetRoomName) {
+        quad.leader.say('🎺', true)
+
+        const targetRoomCenterPos = new RoomPosition(25, 25, targetRoomName)
+        quad.moveInFormation({ pos: targetRoomCenterPos, range: 22 })
+
+        quad.rangedMassAttack()
         return
       }
-      return
     }
+
     quad.attackRoom(targetRoomName)
     return
   }
 }
+
 
 Room.prototype.requestQuadMember = function (name, flag) {
   const flagName = flag.name
@@ -136,6 +152,13 @@ class Quad {
 
   get creeps() {
     return this.getCreeps()
+  }
+
+  get creepIds() {
+    if (this._creepIds) {
+      return this._creepIds
+    }
+    return this._creepIds = this.creeps.map(creep => creep.id)
   }
 
   get fatigue() {
@@ -220,84 +243,111 @@ class Quad {
     }
     return this._isSnakeFormedUp = this.getIsSnakeFormedUp()
   }
+
+  get costMatrix() {
+    if (this._costMatrix) {
+      return this._costMatrix
+    }
+    return this._costMatrix = getQuadCostMatrix(this.roomName)
+  }
 }
 
-Quad.prototype.attackRoom = function (targetRoomName) {
-
-  this.quadHeal()
+Quad.prototype.attackRoom = function () {
   this.passiveRangedAttack()
 
   if (this.healPower < (this.hitsMax - this.hits)) {
-    this.retreat(targetRoomName)
+    this.leader.say('🚑', true)
+    this.retreat()
     return
   }
 
   if (this.room.controller.safeMode > 0) {
-    this.retreat(targetRoomName)
+    this.leader.say('🏰', true)
+    this.retreat()
     return
   }
 
-  if (isValidCoord(this.leader.pos.x, this.leader.pos.y) && !this.isFormed) {
-    this.formUp()
-    return
+  if (!this.isFormed) {
+    this.leader.say('🎺', true)
+    const costs = this.costMatrix
+    if (costs.get(this.leader.pos.x, this.leader.pos.y) < EDGE_COST) {
+      this.formUp()
+      return
+    } else {
+      this.retreat()
+      return
+    }
   }
 
   const quadCostArray = this.getBulldozeQuadCostArray()
 
   const packed = packCoord(this.leader.pos.x, this.leader.pos.y)
   if (quadCostArray[packed] === 0) {
-    this.retreat(targetRoomName)
+    this.leader.say('🚑', true)
+    this.retreat()
     return
   }
 
-  const path = this.getBulldozePath(quadCostArray)
+  const path = this.getPathToAttack(quadCostArray)
 
   if (path === ERR_NOT_FOUND) {
-    this.retreat(targetRoomName)
+    this.leader.say('🚫', true)
+    this.retreat()
     return
   }
 
+  visualizePath(path)
   const nextPos = path[0]
 
   if (nextPos) {
-    if (this.fatigue > 0) {
-      return
+    if (this.isAbleToStep(nextPos)) {
+      const direction = this.leader.pos.getDirectionTo(nextPos)
+      this.move(direction)
     }
-    this.room.visual.poly(path, { stroke: 'red', strokeWidth: 0.3 })
-    const structures = this.room.lookForAtArea(LOOK_STRUCTURES, nextPos.y, nextPos.x, nextPos.y + 1, nextPos.x + 1, true)
-    const structuresFiltered = structures.filter(looked => ENEMY_OBSTACLE_OBJECT_TYPES.includes(looked.structure.structureType))
-    const creeps = this.room.lookForAtArea(LOOK_CREEPS, nextPos.y, nextPos.x, nextPos.y + 1, nextPos.x + 1, true)
-    const creepsFiltered = creeps.filter(looked => !looked.creep.my)
-
-    if (structuresFiltered.length > 0 || creepsFiltered.length > 0) {
-      return
-    }
-
-    const direction = this.leader.pos.getDirectionTo(nextPos)
-    this.move(direction)
     return
   }
+}
 
-  const hostileCreeps = this.room.find(FIND_HOSTILE_CREEPS)
-  const hostileStructures = this.room.find(FIND_HOSTILE_STRUCTURES).filter(structure => {
-    if (structure.structureType === 'controller') {
-      return false
-    }
-    if (!structure.store) {
-      return true
-    }
-    if (structure.store.getUsedCapacity() > 10000) {
-      return false
-    }
-    return true
-  })
-  const hostiles = [...hostileCreeps, ...hostileStructures]
-  const hostile = this.leader.pos.findClosestByRange(hostiles)
-  if (hostile) {
-    this.moveInFormation({ pos: hostile.pos, range: 2 })
+Quad.prototype.getPathToAttack = function (quadCostArray) {
+  const bulldozePath = this.getBulldozePath(quadCostArray)
+
+  if (Array.isArray(bulldozePath)) {
+    this.leader.say('🏇', true)
+    return bulldozePath
   }
 
-  this.moveInFormation({ pos: this.room.controller.pos, range: 3 })
+  const skirmishPath = this.getSkirmishPath(quadCostArray)
+  if (Array.isArray(skirmishPath)) {
+    this.leader.say('🏹', true)
+    return skirmishPath
+  }
+
+  this.leader.say('🚫', true)
+  return ERR_NOT_FOUND
+}
+
+Quad.prototype.isAbleToStep = function (pos) {
+  const costs = this.costMatrix
+  if (costs.get(pos.x, pos.y) > EDGE_COST) {
+    return false
+  }
+
+  const maxX = Math.min(49, pos.x + 1)
+  const maxY = Math.min(49, pos.y + 1)
+
+  const structures = this.room.lookForAtArea(LOOK_STRUCTURES, pos.y, pos.x, maxY, maxX, true)
+  const structuresFiltered = structures.filter(looked => ENEMY_OBSTACLE_OBJECT_TYPES.includes(looked.structure.structureType))
+  if (structuresFiltered.length > 0) {
+    return false
+  }
+
+  const creeps = this.room.lookForAtArea(LOOK_CREEPS, pos.y, pos.x, maxY, maxX, true)
+  const creepsFiltered = creeps.filter(looked => !this.creepIds.includes(looked.creep.id))
+  if (creepsFiltered.length > 0) {
+    return false
+  }
+
+  return true
 }
 
 Quad.prototype.getBulldozePath = function (quadCostArray) {
@@ -309,11 +359,32 @@ Quad.prototype.getBulldozePath = function (quadCostArray) {
   const importantStructures = hostileStructures.filter(structure => IMPORTANT_STRUCTURE_TYPES.includes(structure.structureType))
 
   const goals = importantStructures.map(structure => {
-    return { pos: structure.pos, range: 0 }
+    return { pos: structure.pos, range: 1 }
   })
 
   const dijkstra = this.room.dijkstra(this.leader.pos, goals, quadCostArray)
   return this._bulldozePath = dijkstra
+}
+
+Quad.prototype.getSkirmishPath = function (quadCostArray) {
+  if (this._skirmishPath) {
+    return this._skirmishPath
+  }
+
+  const hostileStructures = this.room.find(FIND_HOSTILE_STRUCTURES).filter(structure => structure.hits)
+  const hostileCreeps = this.room.find(FIND_HOSTILE_CREEPS)
+  const goals = []
+  for (const structure of hostileStructures) {
+    const goal = { pos: structure.pos, range: 1 }
+    goals.push(goal)
+  }
+  for (const creep of hostileCreeps) {
+    const goal = { pos: creep.pos, range: 1 }
+    goals.push(goal)
+  }
+
+  const dijkstra = this.room.dijkstra(this.leader.pos, goals, quadCostArray)
+  return this._skirmishPath = dijkstra
 }
 
 Quad.prototype.getBulldozeQuadCostArray = function () {
@@ -338,9 +409,18 @@ Quad.prototype.getBulldozeQuadCostArray = function () {
     }
   }
 
-  const quadCostArray = transformCostArrayForQuad(costArray)
+  const quadCostArray = transformCostArrayForQuad(costArray, this.roomName)
 
   return this._bulldozeQuadCostArray = quadCostArray
+}
+
+Quad.prototype.rangedMassAttack = function () {
+  for (const creep of this.creeps) {
+    const hostileCreeps = creep.pos.findInRange(FIND_HOSTILE_CREEPS, 3)
+    if (hostileCreeps.length > 0) {
+      creep.rangedMassAttack()
+    }
+  }
 }
 
 Quad.prototype.passiveRangedAttack = function () {
@@ -359,30 +439,30 @@ Creep.prototype.passiveRangedAttack = function () {
   let rangedAttackTarget = undefined
 
   for (const pos of positions) {
-    const hostileCreeps = pos.lookFor(LOOK_CREEPS).filter(creep => !creep.my)
-    const hostileCreep = hostileCreeps ? hostileCreeps[0] : undefined
-    const hostileStructure = getMaxObject(pos.lookFor(LOOK_STRUCTURES).filter(structure => structure.my === false), (structure) => structure.hits)
+    const priorityTarget = this.getPriorityTarget(pos)
 
-    if (!hostileCreep && !hostileStructure) {
+    if (!priorityTarget) {
       continue
     }
 
-    if (!hostileStructure) {
-      if (rangedAttackTarget === undefined || hostileCreep.hits < rangedAttackTarget.hits) {
-        rangedAttackTarget = hostileCreep
-      }
-    } else if (rangedAttackTarget === undefined || hostileStructure.hits < rangedAttackTarget.hits) {
-      rangedAttackTarget = hostileStructure
+    if (rangedAttackTarget === undefined || priorityTarget.hits < rangedAttackTarget.hits) {
+      rangedAttackTarget = priorityTarget
     }
 
-    const range = this.pos.getRangeTo(pos)
-    if (range <= 1) {
-      this.rangedMassAttack()
-      return
+    if (priorityTarget.my === false) {
+      const range = this.pos.getRangeTo(pos)
+
+      if (range <= 1) {
+        this.rangedMassAttack()
+        return
+      }
+
+      const rangeConstant = range <= 1 ? 1 : range <= 2 ? 0.4 : 0.1
+      const damage = rangedAttackPower * rangeConstant
+
+      rangedMassAttackTotalDamage += damage
+      continue
     }
-    const rangeConstant = range <= 1 ? 1 : range <= 2 ? 0.4 : 0.1
-    const damage = rangedAttackPower * rangeConstant
-    rangedMassAttackTotalDamage += damage
   }
 
   if (rangedMassAttackTotalDamage >= rangedAttackPower) {
@@ -395,11 +475,77 @@ Creep.prototype.passiveRangedAttack = function () {
   }
 }
 
-Quad.prototype.retreat = function (targetRoomName) {
-  this.leader.say('retreat!', true)
-  const rallyExit = this.getRallyExit(targetRoomName)
-  const rallyPosition = new RoomPosition(25, 25, rallyExit.roomName)
-  this.moveInFormation({ pos: rallyPosition, range: 20 })
+Creep.prototype.getPriorityTarget = function (pos) {
+  const structures = pos.lookFor(LOOK_STRUCTURES).filter(structure => structure.hits)
+  const hostileCreeps = pos.lookFor(LOOK_CREEPS).filter(creep => !creep.my)
+
+  if (structures.length === 0 && hostileCreeps.length === 0) {
+    return undefined
+  }
+
+  let hostileStructure = undefined
+  let neutralStructure = undefined
+
+  for (const structure of structures) {
+    if (structure.structureType === 'rampart') {
+      return structure
+    }
+    if (structure.my === false) {
+      hostileStructure = structure
+      continue
+    }
+    if (neutralStructure === undefined || structure.hits > neutralStructure.hits) {
+      neutralStructure = structure
+      continue
+    }
+  }
+
+  if (hostileCreeps.length > 0) {
+    return hostileCreeps[0]
+  }
+
+  if (hostileStructure) {
+    return hostileStructure
+  }
+
+  if (neutralStructure) {
+    return neutralStructure
+  }
+
+  return undefined
+}
+
+Quad.prototype.retreat = function () {
+  if (!this.isFormed) {
+    const costs = this.costMatrix
+    if (costs.get(this.leader.pos.x, this.leader.pos.y) < EDGE_COST) {
+      this.leader.say('form!', true)
+      this.formUp()
+      return
+    }
+  }
+
+  const damageArray = this.room.getDamageArray()
+
+  const adjacentPositions = this.leader.pos.getAtRange(1)
+  const adjacentPositionsFiltered = adjacentPositions.filter(pos => this.isAbleToStep(pos))
+
+  const posToRetreat = getMinObject(adjacentPositionsFiltered, (pos) => {
+    const packed = packCoord(pos.x, pos.y)
+    return damageArray[packed]
+  })
+
+  if (!posToRetreat) {
+    this.leader.say('noPos')
+    const exitPositions = this.room.find(FIND_EXIT)
+    const goals = exitPositions.map(pos => { return { pos, range: 2 } })
+    this.moveInFormation(goals)
+    return
+  }
+
+  const direction = this.leader.pos.getDirectionTo(posToRetreat)
+  this.room.visual.circle(posToRetreat)
+  this.move(direction)
 }
 
 Quad.prototype.getRallyExit = function (targetRoomName) {
@@ -462,10 +608,10 @@ Quad.prototype.getRallyExit = function (targetRoomName) {
   return this.leader.memory.rallyExit = result
 }
 
-Quad.prototype.snakeTravel = function (target, range = 0) {
-  const targetPos = target.pos || target
+Quad.prototype.snakeTravel = function (goals) {
+  goals = normalizeGoals(goals)
 
-  if (this.leader.pos.getRangeTo(targetPos) <= range) {
+  if (this.leader.pos.isInGoal(goals)) {
     delete this.leader.memory.snakeFormed
     return 'finished'
   }
@@ -478,22 +624,22 @@ Quad.prototype.snakeTravel = function (target, range = 0) {
     this.leader.memory.snakeFormed = true
   }
 
-  if (!this.leader.memory.snakeFormed) {
+  if (!this.leader.memory.snakeFormed && Game.time % 3 === 0) {
     this.formSnake()
     return ERR_BUSY
   }
 
   if (this.fatigue > 0) {
-    return ERR_BUSY
+    return ERR_TIRED
   }
 
-  this.leader.moveMy(targetPos, { range, ignoreCreeps: 20 })
+  this.leader.moveMy(goals, { ignoreCreeps: 20, ignoreMap: 2 })
 
   for (i = 1; i < this.creeps.length; i++) {
     const formerCreep = this.creeps[i - 1]
     const creep = this.creeps[i]
     if (creep.pos.roomName !== formerCreep.pos.roomName || creep.pos.getRangeTo(formerCreep) > 1) {
-      creep.moveMy(formerCreep)
+      creep.moveMy(formerCreep, { ignoreMap: 2 })
       continue
     }
     const direction = creep.pos.getDirectionTo(formerCreep)
@@ -521,23 +667,8 @@ Quad.prototype.formSnake = function () {
     const formerCreep = this.creeps[i - 1]
     const creep = this.creeps[i]
     if (creep.pos.getRangeTo(formerCreep) > 1) {
-      creep.moveMy(formerCreep, { range: 1 })
+      creep.moveMy({ pos: formerCreep.pos, range: 1 }, { ignoreMap: 2 })
     }
-  }
-}
-
-Quad.prototype.spread = function () {
-  const base = this.leader.memory.base
-  const colonyName = this.leader.memory.targetRoomName
-
-  const memory = {
-    role: 'colonyDefender',
-    base: base,
-    colony: colonyName
-  }
-
-  for (const creep of this.creeps) {
-    creep.memory = memory
   }
 }
 
@@ -583,7 +714,7 @@ Quad.prototype.formUp = function () {
     if (creep.pos.isEqualTo(pos)) {
       continue
     }
-    creep.moveMy(pos)
+    creep.moveMy(pos, { ignoreMap: 2 })
   }
 }
 
@@ -600,7 +731,9 @@ Quad.prototype.getFormation = function () {
   for (const vector of FORMATION_VECTORS) {
     const newX = vector.x + x
     const newY = vector.y + y
-
+    if (newX < 0 || newX > 49 || newY < 0 || newY > 49) {
+      continue
+    }
     const pos = new RoomPosition(newX, newY, this.roomName)
 
     if (pos.isWall) {
@@ -616,9 +749,9 @@ Quad.prototype.getFormation = function () {
 Quad.prototype.getIsFormed = function () {
   const formation = this.formation
   const creeps = this.creeps
-  for (let i = 0; i < creeps.length; i++) {
+  for (let i = 0; i < Math.min(creeps.length, formation.length); i++) {
     const creep = creeps[i]
-    if (!isValidCoord(creep.pos.x, creep.pos.y)) {
+    if (creep.pos.roomName !== this.roomName) {
       continue
     }
     if (!creep.pos.isEqualTo(formation[i])) {
@@ -641,10 +774,12 @@ Quad.prototype.getCreeps = function () {
     }
   }
 
-  return (this._creeps = result)
+  result.sort((a, b) => (b.ticksToLive || 1500) - (a.ticksToLive || 1500))
+
+  return this._creeps = result
 }
 
-function transformCostArrayForQuad(costArray) {
+global.transformCostArrayForQuad = function (costArray, roomName) {
   const result = new Uint32Array(2500)
   for (let x = 0; x < 50; x++) {
     for (let y = 0; y < 50; y++) {
@@ -660,11 +795,14 @@ function transformCostArrayForQuad(costArray) {
         const newCost = costArray[newPacked]
         if (cost === 0 || newCost === 0) {
           cost = 0
-          continue
+          break
         }
-        cost = Math.max(cost, newCost - 1)
+        cost = Math.max(cost, newCost)
       }
       result[packed] = cost
+      if (BULLDOZE_COST_VISUAL) {
+        new RoomVisual(roomName).text(cost, x, y, { font: 0.3 })
+      }
     }
   }
   return result
@@ -685,8 +823,8 @@ function getQuadCostMatrix(roomName) {
         continue
       }
 
-      if (!isValidCoord(x, y) && basicCosts.get(x, y) < 10) {
-        basicCosts.set(x, y, 10)
+      if (!isValidCoord(x, y) && basicCosts.get(x, y) < HALF_EDGE_COST) {
+        basicCosts.set(x, y, HALF_EDGE_COST)
       }
 
       if (terrainMask === TERRAIN_MASK_SWAMP && basicCosts.get(x, y) < 5) {
@@ -703,11 +841,15 @@ function getQuadCostMatrix(roomName) {
         const newX = vector.x + x
         const newY = vector.y + y
         if (newX < 0 || newX > 49 || newY < 0 || newY > 49) {
-          continue
+          cost = Math.max(cost, EDGE_COST)
+          break
         }
-        cost = Math.max(cost, basicCosts.get(newX, newY) - 1)
+        cost = Math.max(cost, basicCosts.get(newX, newY))
       }
       costs.set(x, y, cost)
+      if (QUAD_COST_VISUAL) {
+        new RoomVisual(roomName).text(cost, x, y, { font: 0.5 })
+      }
     }
   }
   return costs
@@ -719,31 +861,55 @@ function getQuadCostMatrix(roomName) {
  * @returns 
  */
 Quad.prototype.moveInFormation = function (goals) {
-  const search = this.getSearchTo(goals)
-
-  if (search.incomplete) {
-    return ERR_NO_PATH
+  if (this.fatigue > 0) {
+    return ERR_TIRED
   }
 
-  const path = search.path
+  const costs = this.costMatrix
 
-  const costs = getQuadCostMatrix(this.roomName)
+  const costsNow = costs.get(this.leader.pos.x, this.leader.pos.y)
 
-  if (costs.get(this.leader.pos.x, this.leader.pos.y) <= 5 && !this.isFormed) {
-    this.leader.say('form!', true)
-    this.formUp()
+  if (costsNow === 255) {
+    this.leader.say('255cost')
+    this.indivisualMove(goals)
     return
   }
 
-  new RoomVisual(this.roomName).line(this.leader.pos, path[0])
-  for (let i = 0; i < path.length - 1; i++) {
-    if (path[i].roomName === path[i + 1].roomName) {
-      new RoomVisual(path[i].roomName).line(path[i], path[i + 1])
+  if (!this.isFormed) {
+    if (costsNow < EDGE_COST) {
+      this.leader.say('form!', true)
+      this.formUp()
+      return
     }
+    this.indivisualMove(goals)
+    return
   }
 
-  const direction = this.leader.pos.getDirectionTo(path[0])
-  this.move(direction)
+  const search = this.getSearchTo(goals)
+
+  if (search.incomplete) {
+    this.indivisualMove(goals)
+    return
+  }
+
+  const path = search.path
+  visualizePath(path)
+
+  const nextPos = path[0]
+  if (nextPos && this.isAbleToStep(nextPos)) {
+    const direction = this.leader.pos.getDirectionTo(nextPos)
+    this.move(direction)
+    return
+  }
+
+  this.indivisualMove(goals)
+  return
+}
+
+Quad.prototype.indivisualMove = function (goals) {
+  for (const creep of this.creeps) {
+    creep.moveMy(goals, { ignoreMap: 2 })
+  }
 }
 
 Quad.prototype.getSearchTo = function (goals) {
@@ -764,4 +930,5 @@ Quad.prototype.move = function (direction) {
     }
     creep.move(direction)
   }
+  return OK
 }

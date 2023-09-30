@@ -12,7 +12,7 @@ function miner(creep) {
     }
 
     if (creep.pos.getRangeTo(source) > 1) {
-        return creep.moveMy(source, { range: 1 })
+        return creep.moveMy({ pos: source.pos, range: 1 })
     }
 
     creep.harvest(source)
@@ -78,14 +78,14 @@ function wallMaker(creep) { //스폰을 대입하는 함수 (이름 아님)
     if (!creep.memory.working) {
         if (room.storage) {
             if (creep.withdraw(room.storage, RESOURCE_ENERGY) === -9) {
-                creep.moveMy(room.storage, { range: 1 })
+                creep.moveMy({ pos: room.storage.pos, range: 1 })
             }
         }
         return
     }
     if (Game.getObjectById(creep.memory.task)) {
         if (creep.repair(Game.getObjectById(creep.memory.task)) === -9) {
-            creep.moveMy(Game.getObjectById(creep.memory.task).pos, { range: 3 })
+            creep.moveMy({ pos: Game.getObjectById(creep.memory.task).pos, range: 3 })
         }
         return
     }
@@ -143,7 +143,7 @@ function reserver(creep) {
         }
         const center = new RoomPosition(25, 25, creep.room.name)
         if (creep.pos.getRangeTo(center) > 20) {
-            creep.moveMy(center, { range: 20, maxRooms: 1 })
+            creep.moveMy({ pos: center, range: 20 })
             return
         }
         return
@@ -154,7 +154,7 @@ function reserver(creep) {
     const base = Game.rooms[creep.memory.base]
     if (creep.room.name !== creep.memory.colony) {
         if (controller) {
-            if (creep.moveMy(controller, { range: 1 }) !== ERR_NO_PATH) {
+            if (creep.moveMy({ pos: controller.pos, range: 1 }) !== ERR_NO_PATH) {
                 return
             }
             if (colony && !colony.getAccessibleToController()) {
@@ -169,7 +169,7 @@ function reserver(creep) {
     }
 
     if (creep.pos.getRangeTo(controller.pos) > 1) {
-        if (creep.moveMy(controller, { range: 1 }) === ERR_NO_PATH) {
+        if (creep.moveMy({ pos: controller.pos, range: 1 }) === ERR_NO_PATH) {
             if (colony && !colony.getAccessibleToController()) {
                 data.recordLog(`COLONY: Abandon ${colony.hyperLink} since controller is blocked`, creep.memory.colony)
                 base.abandonColony(creep.memory.colony)
@@ -212,7 +212,7 @@ function colonyLaborer(creep) {
         }
         const center = new RoomPosition(25, 25, creep.room.name)
         if (creep.pos.getRangeTo(center) > 20) {
-            creep.moveMy(center, { range: 20, maxRooms: 1 })
+            creep.moveMy({ pos: center, range: 20 })
             return
         }
         return
@@ -246,7 +246,7 @@ function colonyLaborer(creep) {
         }
 
         if (creep.pos.getRangeTo(target) > 3) {
-            return creep.moveMy(target, { range: 3 })
+            return creep.moveMy({ pos: target.pos, range: 3 })
         }
 
         return creep.build(target)
@@ -257,7 +257,7 @@ function colonyLaborer(creep) {
     if (colony) {
         const source = Game.getObjectById(creep.memory.sourceId)
         if (creep.harvest(source) === -9) {
-            creep.moveMy(source, { range: 1 })
+            creep.moveMy({ pos: source.pos, range: 1 })
         }
         return
     } else {
@@ -287,7 +287,7 @@ function colonyMiner(creep) {
         }
         const center = new RoomPosition(25, 25, creep.room.name)
         if (creep.pos.getRangeTo(center) > 20) {
-            creep.moveMy(center, { range: 20, maxRooms: 1 })
+            creep.moveMy({ pos: center, range: 20 })
             return
         }
         return
@@ -336,7 +336,7 @@ function colonyHauler(creep) {
         }
         const center = new RoomPosition(25, 25, creep.room.name)
         if (creep.pos.getRangeTo(center) > 20) {
-            creep.moveMy(center, { range: 20, maxRooms: 1 })
+            creep.moveMy({ pos: center, range: 20 })
             return
         }
         return
@@ -370,7 +370,7 @@ function colonyHauler(creep) {
             creep.suicide()
             return
         }
-        creep.moveMy(storage, { range: 1 })
+        creep.moveMy({ pos: storage.pos, range: 1 })
         return
     }
 
@@ -393,11 +393,11 @@ function colonyHauler(creep) {
             if (closeBrokenThings.length) {
                 creep.repair(closeBrokenThings[0])
             }
-            creep.moveMy(storage.pos, { range: 1 })
+            creep.moveMy({ pos: storage.pos, range: 1 })
             return
         }
         if (creep.pos.getRangeTo(storage) > 1) {
-            return creep.moveMy(storage, { range: 1 })
+            return creep.moveMy({ pos: storage.pos, range: 1 })
         }
         if (creep.transfer(creep.room.storage, RESOURCE_ENERGY) === OK) {
             creep.room.addRemoteProfit(creep.memory.colony, creep.store[RESOURCE_ENERGY])
@@ -416,19 +416,19 @@ function colonyHauler(creep) {
     }
 
     if (creep.room.name !== creep.memory.colony) {
-        creep.moveMy(source.container.pos, { range: 1 })
+        creep.moveMy({ pos: source.container.pos, range: 1 })
         return
     }
 
     if (creep.pos.findInRange(creep.room.find(FIND_DROPPED_RESOURCES), 1).length) {
         if (creep.pickup(creep.pos.findInRange(creep.room.find(FIND_DROPPED_RESOURCES), 1)[0]) === -9) {
-            creep.moveMy(source.container.pos, { range: 1 })
+            creep.moveMy({ pos: source.container.pos, range: 1 })
         }
         return
     }
 
     if (creep.pos.getRangeTo(source.container.pos) > 1) {
-        creep.moveMy(source.container.pos, { range: 1 })
+        creep.moveMy({ pos: source.container.pos, range: 1 })
         return
     }
 
@@ -447,27 +447,27 @@ function colonyDefender(creep) {
     }
 
     const hostileCreeps = creep.room.find(FIND_HOSTILE_CREEPS)
-    const closestHostileCreeps = creep.pos.findClosestByPath(hostileCreeps)
+    const closestHostileCreep = creep.pos.findClosestByPath(hostileCreeps)
 
-    if (closestHostileCreeps !== null) {
+    if (closestHostileCreep !== null) {
         creep.memory.lastEnemy = Game.time
         creep.heal(creep)
-        const range = creep.pos.getRangeTo(closestHostileCreeps)
+        const range = creep.pos.getRangeTo(closestHostileCreep)
         if (range <= 1) {
-            creep.rangedMassAttack(closestHostileCreeps)
+            creep.rangedMassAttack(closestHostileCreep)
         } else if (range <= 3) {
-            creep.rangedAttack(closestHostileCreeps)
+            creep.rangedAttack(closestHostileCreep)
         }
 
         if ((creep.hits / creep.hitsMax) <= 0.6) {
-            creep.fleeFrom(closestHostileCreeps)
+            creep.fleeFrom(closestHostileCreep)
             return
         }
 
         if (range > 3) {
-            creep.moveMy(closestHostileCreeps, { range: 1, avoidRampart: false, ignoreMap: 1 })
-        } else if (creep.pos.getRangeTo(closestHostileCreeps) < 3) {
-            creep.fleeFrom(closestHostileCreeps)
+            creep.moveMy({ pos: closestHostileCreep.pos, range: 1 }, { staySafe: false, ignoreMap: 1 })
+        } else if (creep.pos.getRangeTo(closestHostileCreep) < 3) {
+            creep.fleeFrom(closestHostileCreep)
         }
         return
     }
@@ -476,7 +476,7 @@ function colonyDefender(creep) {
     if (wounded.length) {
         const target = creep.pos.findClosestByRange(wounded)
         if (creep.pos.getRangeTo(target) > 1) {
-            creep.moveMy(target, { range: 1, avoidRampart: false, ignoreMap: 1 })
+            creep.moveMy({ pos: target.pos, range: 1 }, { staySafe: false, ignoreMap: 1 })
         }
         creep.heal(target)
         return
@@ -491,7 +491,7 @@ function colonyDefender(creep) {
     const hostileStructure = creep.pos.findClosestByPath(creep.room.find(FIND_HOSTILE_STRUCTURES).filter(structure => structure.structureType !== 'controller'))
     if (hostileStructure) {
         if (creep.pos.getRangeTo(hostileStructure) > 1) {
-            creep.moveMy(hostileStructure, { range: 1, avoidRampart: false, ignoreMap: 1 })
+            creep.moveMy({ pos: hostileStructure.pos, range: 1 }, { staySafe: false, ignoreMap: 1 })
             return
         }
         creep.rangedMassAttack(hostileStructure)
@@ -501,13 +501,13 @@ function colonyDefender(creep) {
     if (creep.room.constructionSites.length) {
         const targetProtect = creep.room.constructionSites.sort((a, b) => b.progress - a.progress)[0]
         if (creep.pos.getRangeTo(targetProtect) > 3) {
-            return creep.moveMy(targetProtect, { range: 3, avoidRampart: false, ignoreMap: 1 })
+            return creep.moveMy({ pos: targetProtect.pos, range: 3 }, { staySafe: false, ignoreMap: 1 })
         }
     }
 
     const center = new RoomPosition(25, 25, creep.memory.colony)
     if (creep.pos.getRangeTo(center) > 23) {
-        creep.moveMy(center, { range: 23, avoidRampart: false, ignoreMap: 1 })
+        creep.moveMy({ pos: center.pos, range: 23 }, { staySafe: false, ignoreMap: 1 })
     }
 }
 
@@ -524,7 +524,7 @@ function colonyCoreDefender(creep) {
         if (range <= 1) {
             creep.attack(target)
         } else {
-            creep.moveMy(target, { range: 1 })
+            creep.moveMy({ pos: target.pos, range: 1 })
         }
         return
     }
@@ -533,7 +533,7 @@ function colonyCoreDefender(creep) {
     const targetCore = creep.pos.findClosestByPath(creep.room.find(FIND_HOSTILE_STRUCTURES).concat(constructedWalls))
     if (targetCore) {
         if (creep.pos.getRangeTo(targetCore) > 1) {
-            creep.moveMy(targetCore, { range: 1 })
+            creep.moveMy({ pos: targetCore.pos, range: 1 })
             return
         }
         creep.attack(targetCore)
@@ -542,7 +542,7 @@ function colonyCoreDefender(creep) {
 
     const center = new RoomPosition(25, 25, creep.memory.colony)
     if (creep.pos.getRangeTo(center) > 23) {
-        creep.moveMy(center, { range: 23 })
+        creep.moveMy({ pos: center, range: 23 })
     }
 }
 
@@ -559,7 +559,7 @@ function claimer(creep) { //스폰을 대입하는 함수 (이름 아님)
     if (creep.room.name !== creep.memory.targetRoom) {
         const controller = Game.rooms[creep.memory.targetRoom] ? Game.rooms[creep.memory.targetRoom].controller : false
         if (controller) {
-            return creep.moveMy(controller, { range: 1 })
+            return creep.moveMy({ pos: controller.pos, range: 1 })
         }
         creep.moveToRoom(creep.memory.targetRoom)
         return
@@ -573,7 +573,7 @@ function claimer(creep) { //스폰을 대입하는 함수 (이름 아님)
 
     // approach
     if (creep.pos.getRangeTo(controller.pos) > 1) {
-        return creep.moveMy(controller, { range: 1 });
+        return creep.moveMy({ pos: controller.pos, range: 1 });
     }
 
     // if reserved, attack controller
@@ -623,11 +623,11 @@ function pioneer(creep) {
             if (creep.room.controller.ticksToDowngrade > 1000 && creep.memory.task) {
                 const workshop = Game.getObjectById(creep.memory.task)
                 if (creep.build(workshop) === -9) {
-                    return creep.moveMy(workshop, { range: 3 })
+                    return creep.moveMy({ pos: workshop.pos, range: 3 })
                 }
             } else {
                 if (creep.upgradeController(creep.room.controller) === -9) {
-                    return creep.moveMy(creep.room.controller, { range: 3 })
+                    return creep.moveMy({ pos: creep.room.controller.pos, range: 3 })
                 }
             }
         } else {
@@ -636,14 +636,14 @@ function pioneer(creep) {
             if (remainStructures.length) {
                 creep.memory.withdrawFrom = creep.pos.findClosestByRange(remainStructures).id
                 if (creep.withdraw(Game.getObjectById(creep.memory.withdrawFrom), RESOURCE_ENERGY) === -9) {
-                    return creep.moveMy(Game.getObjectById(creep.memory.withdrawFrom), { range: 1 })
+                    return creep.moveMy({ pos: Game.getObjectById(creep.memory.withdrawFrom).pos, range: 1 })
                 }
             }
             const droppedEnergies = creep.room.find(FIND_DROPPED_RESOURCES).filter(resource => resource.resourceType === 'energy')
             const closestDroppedEnergy = creep.pos.findClosestByRange(droppedEnergies)
             if (creep.pos.getRangeTo(closestDroppedEnergy) <= 3) {
                 if (creep.pos.getRangeTo(closestDroppedEnergy) > 1) {
-                    return creep.moveMy(closestDroppedEnergy, { range: 1 })
+                    return creep.moveMy({ pos: closestDroppedEnergy.pos, range: 1 })
                 }
                 return creep.pickup(closestDroppedEnergy)
             }
@@ -653,7 +653,7 @@ function pioneer(creep) {
             }
             const source = sources[(creep.memory.number || 0) % 2]
             if (creep.pos.getRangeTo(source) > 1) {
-                return creep.moveMy(source, { range: 1 })
+                return creep.moveMy({ pos: source.pos, range: 1 })
             }
             return creep.harvest(source)
         }
@@ -666,7 +666,7 @@ function pioneer(creep) {
             return creep.moveMy(flag.pos)
         }
         const target = new RoomPosition(25, 25, creep.memory.targetRoom)
-        return creep.moveMy(target, { range: 20 });
+        return creep.moveMy({ pos: target, range: 20 });
     }
 }
 

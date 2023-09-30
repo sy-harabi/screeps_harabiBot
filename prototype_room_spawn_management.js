@@ -115,9 +115,19 @@ Room.prototype.manageSpawn = function () {
             i++
             continue
         }
+        if (spawning.remainingTime === 0) {
+            const creeps = spawn.pos.findInRange(FIND_MY_CREEPS, 1)
+
+            for (const creep of creeps) {
+                const direction = Math.floor(Math.random() * 8) + 1
+                creep.move(direction)
+            }
+
+            console.log('get Out')
+        }
         const name = spawning.name
         const role = name.split(' ')[1]
-        this.visual.text(`🐣${role}`, spawn.pos.x + 0.75, spawn.pos.y + j, { font: 0.5, align: 'left' })
+        this.visual.text(`🐣${role}`, spawn.pos.x, spawn.pos.y - 0.5 + 0.5 * j, { font: 0.5 })
         j++
         spawns.splice(i, 1)
     }

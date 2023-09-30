@@ -19,7 +19,7 @@ Creep.prototype.giveEnergyTo = function (id) {
     }
 
     if (this.pos.getRangeTo(target) > 1) {
-        this.moveMy(target, { range: 1 })
+        this.moveMy({ pos: target.pos, range: 1 })
         return ERR_NOT_IN_RANGE
     }
 

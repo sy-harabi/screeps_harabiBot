@@ -65,7 +65,7 @@ Flag.prototype.lootRoom = function () {
         if (!scouter) {
             return closestMyRoom.spawnScouter(targetRoomName, scouterName)
         }
-        return scouter.moveMy(new RoomPosition(25, 25, targetRoomName), { range: 20 })
+        return scouter.moveMy({ pos: new RoomPosition(25, 25, targetRoomName), range: 20 })
     }
 
     // prepare
@@ -165,7 +165,7 @@ Creep.prototype.lootRoom = function () {
         }
 
         if (this.room.name !== this.memory.base) {
-            return this.moveMy(storage.pos, { range: 1, ignoreMap: 1 })
+            return this.moveMy({ pos: storage.pos, range: 1 }, { ignoreMap: 1 })
         }
 
         return this.returnAll()
@@ -183,7 +183,7 @@ Creep.prototype.lootRoom = function () {
         const target = this.pos.findClosestByRange(remainStructures) || remainStructures[0]
         for (const resourceType of Object.keys(target.store)) {
             if (this.room.name !== this.memory.targetRoom || this.pos.getRangeTo(target) > 1) {
-                return this.moveMy(target, { range: 1, ignoreMap: 1 })
+                return this.moveMy({ pos: target.pos, range: 1 }, { ignoreMap: 1 })
             }
             return this.getCompoundFrom(target, resourceType)
         }

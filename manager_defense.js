@@ -69,7 +69,7 @@ Room.prototype.manageDefense = function () {
                 }
                 if (creep.heap.backToBase > 0) {
                     creep.heap.backToBase--
-                    creep.moveMy(spawn, { range: 1, avoidRampart: false })
+                    creep.moveMy({ pos: spawn.pos, range: 1 }, { staySafe: false })
                 }
                 if (creep.memory.role === 'wallMaker') {
                     creep.memory.assignedRoom = this.name
@@ -710,7 +710,7 @@ Room.prototype.getTowersDamageFor = function (target) {//target은 hostile creep
 }
 
 RoomPosition.prototype.getTowerDamageAt = function () {
-    const towers = Game.rooms[this.roomName].structures.tower.filter(tower => tower.store[RESOURCE_ENERGY] > 0)
+    const towers = Game.rooms[this.roomName].structures.tower.filter(tower => !tower.my || tower.store[RESOURCE_ENERGY] > 0)
 
     let result = 0
     for (const tower of towers) {
@@ -725,13 +725,22 @@ StructureTower.prototype.getAttackDamageTo = function (target) { //target은 roo
     if (DEFENSE_TEST) {
         return 0
     }
-    if (range <= 5) {
-        return 600
+
+    const effectiveRange = Math.min(TOWER_FALLOFF_RANGE, Math.max(range, TOWER_OPTIMAL_RANGE))
+    const fallOffRatio = TOWER_FALLOFF * (effectiveRange - TOWER_OPTIMAL_RANGE) / (TOWER_FALLOFF_RANGE - TOWER_OPTIMAL_RANGE)
+
+    let effectRatio = 1
+
+    const effects = this.effects
+    if (effects) {
+        for (const effectInfo of effects) {
+            if (effectInfo.effect === PWR_OPERATE_TOWER) {
+                effectRatio += effectInfo.level * 0.1
+            }
+        }
     }
-    if (range >= 20) {
-        return 150
-    }
-    return 750 - 30 * range
+
+    return TOWER_POWER_ATTACK * (1 - fallOffRatio) * effectRatio
 }
 
 Creep.prototype.getNetDamage = function (damage) {

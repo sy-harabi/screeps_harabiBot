@@ -27,7 +27,7 @@ PowerCreep.prototype.actRoomOperator = function () {
         if (!spot) {
             return
         }
-        this.moveMy(spot, 0)
+        this.moveMy(spot)
     }
 }
 

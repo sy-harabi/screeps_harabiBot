@@ -146,7 +146,7 @@ Creep.prototype.depositWork = function (depositRequest) {
 
     if (this.room.name !== depositRequest.roomName) {
         const targetPos = new RoomPosition(depositRequest.pos.x, depositRequest.pos.y, depositRequest.pos.roomName)
-        if (this.moveMy(targetPos, { range: 1 }) === ERR_NO_PATH) {
+        if (this.moveMy({ pos: targetPos, range: 1 }) === ERR_NO_PATH) {
             depositRequest.threatLevel++
         }
         return
@@ -159,7 +159,7 @@ Creep.prototype.depositWork = function (depositRequest) {
     }
 
     if (this.pos.getRangeTo(deposit) > 1) {
-        this.moveMy(deposit, { range: 1 })
+        this.moveMy({ pos: deposit.pos, range: 1 })
         return
     }
 
