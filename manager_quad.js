@@ -1,4 +1,4 @@
-const TEST = false
+const TEST = true
 const IMPORTANT_STRUCTURE_TYPES = ['spawn', 'tower']
 const ENEMY_OBSTACLE_OBJECT_TYPES = [...OBSTACLE_OBJECT_TYPES, 'rampart']
 const QUAD_COST_VISUAL = false
