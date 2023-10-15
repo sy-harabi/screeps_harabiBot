@@ -12,7 +12,7 @@ const REGION_SIZE_MIN = 1
 const REGION_SIZE_MAX = 10
 const REGION_NUM_MAX = 15
 
-const DOUBLE_LAYER = true
+const DOUBLE_LAYER = false
 
 const REPAIR_POS_RANGE = 4
 const NUM_INSIDE = 140
@@ -173,7 +173,6 @@ Room.prototype.getBasePlanByPos = function (pos) {
 
   if (result.score === 0) {
     const region = [pos]
-    this.getBasePlanByRegion(region)
     result = this.getBasePlanByRegion(region)
   }
 
@@ -522,7 +521,7 @@ Room.prototype.getRegions = function () {
     controllerFF
   ]
 
-  const weightSum = items.map(a => Math.abs(a.weight)).reduce((a, b) => a + b)
+  const weightSum = items.map(a => Math.abs(a.weight)).reduce((a, b) => a + b, 0)
 
   const costs = new PathFinder.CostMatrix
   const positions = {}
@@ -995,7 +994,7 @@ Room.prototype.getBasePlanAfterMincut = function (pos, inputCosts, mincut, costs
 
   const controllerPathSearch = PathFinder.search(firstSpawnPos, { pos: controllerLinkPos, range: 1 }, {
     plainCost: 2,
-    swampCost: 2,
+    swampCost: 4,
     roomCallback: function (roomName) {
       return costsForRoad
     },
@@ -1023,7 +1022,7 @@ Room.prototype.getBasePlanAfterMincut = function (pos, inputCosts, mincut, costs
   for (const source of sources) {
     const sourcePathSearch = PathFinder.search(firstSpawnPos, { pos: containerPositions[source.id], range: 1 }, {
       plainCost: 2,
-      swampCost: 2,
+      swampCost: 4,
       roomCallback: function (roomName) {
         return costsForRoad
       },
@@ -1066,7 +1065,7 @@ Room.prototype.getBasePlanAfterMincut = function (pos, inputCosts, mincut, costs
   structures.extractor.push(this.mineral.pos)
   const mineralPathSearch = PathFinder.search(firstSpawnPos, { pos: mineralContainerPos, range: 1 }, {
     plainCost: 2,
-    swampCost: 2,
+    swampCost: 4,
     roomCallback: function (roomName) {
       return costsForRoad
     },
@@ -1112,6 +1111,11 @@ Room.prototype.getBasePlanAfterMincut = function (pos, inputCosts, mincut, costs
     }
 
     structures.rampart.push(pos)
+    if (DOUBLE_LAYER === false) {
+      basePlan[`lv5`].push(pos.packStructurePlan('road'))
+      costs.set(pos.x, pos.y, ROAD_COST)
+      costsForRoad.set(pos.x, pos.y, ROAD_COST)
+    }
 
     checkRampart.set(pos.x, pos.y, 1)
     costsForGroupingRampart.set(pos.x, pos.y, 2)
@@ -1196,7 +1200,7 @@ Room.prototype.getBasePlanAfterMincut = function (pos, inputCosts, mincut, costs
       }
 
       if (costs.get(pathPos.x, pathPos.y) !== ROAD_COST) {
-        basePlan[`lv5`].push(pathPos.packStructurePlan('road'))
+        basePlan[`lv6`].push(pathPos.packStructurePlan('road'))
         costs.set(pathPos.x, pathPos.y, ROAD_COST)
         costsForRoad.set(pathPos.x, pathPos.y, ROAD_COST)
         costsForRampartRoad.set(pathPos.x, pathPos.y, ROAD_COST)
@@ -1294,7 +1298,7 @@ Room.prototype.getBasePlanAfterMincut = function (pos, inputCosts, mincut, costs
   for (const towerPos of structures.tower) {
     const towerPathSearch = PathFinder.search(firstSpawnPos, { pos: towerPos, range: 1 }, {
       plainCost: 2,
-      swampCost: 2,
+      swampCost: 4,
       roomCallback: function (roomName) {
         return costsForRoad
       },
@@ -1338,7 +1342,7 @@ Room.prototype.getBasePlanAfterMincut = function (pos, inputCosts, mincut, costs
 
     if (structureType === 'rampart') {
       for (const pos of structurePositions) {
-        basePlan[`lv5`].push(pos.packStructurePlan('rampart'))
+        basePlan[`lv4`].push(pos.packStructurePlan('rampart'))
       }
       continue
     }

@@ -1,4 +1,5 @@
-const BOOST_DEADLINE_RATIO = 0.9
+const BOOST_DEADLINE_RATIO = 0.7
+const BOOST_WAIT_RATIO = 0.99
 
 Object.defineProperties(Room.prototype, {
     boostQueue: {
@@ -11,10 +12,43 @@ Object.defineProperties(Room.prototype, {
     }
 })
 
-Room.prototype.manageBoost = function () {
-    const requests = Object.values(this.boostQueue)
+Room.prototype.manageBoost = function (requests) {
+    for (const request of requests) {
+        const targetCreep = Game.creeps[request.creepName]
+        if (!targetCreep || targetCreep.spawning) {
+            continue
+        }
+        if (!targetCreep.memory.wait) {
+            continue
+        }
+        if (targetCreep.ticksToLive < CREEP_LIFE_TIME * BOOST_WAIT_RATIO) {
+            targetCreep.say('♻️', true)
+            targetCreep.getRenew()
+        }
+    }
     const targetRequest = getMinObject(requests, (request) => request.time)
     this.operateBoost(targetRequest)
+}
+
+Creep.prototype.getRenew = function () {
+    const closestSpawn = this.pos.findClosestByRange(this.room.structures.spawn.filter(s => !s.spawning))
+
+    if (closestSpawn) {
+        if (this.pos.getRangeTo(closestSpawn) > 1) {
+            this.moveMy({ pos: closestSpawn.pos, range: 1 })
+            return
+        }
+        closestSpawn.renewCreep(this)
+        return
+    }
+
+    const anySpawn = this.room.structures.spawn[0]
+    if (anySpawn) {
+        if (this.pos.getRangeTo(anySpawn) > 2) {
+            this.moveMy({ pos: anySpawn.pos, range: 2 })
+        }
+        return
+    }
 }
 
 Room.prototype.prepareBoost = function () {
@@ -25,7 +59,6 @@ Room.prototype.prepareBoost = function () {
         const targetCreep = Game.creeps[request.creepName]
         const resourceTypes = Object.keys(requiredResources)
         for (const resourceType of resourceTypes) {
-
         }
     }
 }
@@ -143,6 +176,9 @@ Room.prototype.operateBoost = function (boostRequest) {
             }
         }
         if (!targetCreep.spawning) {
+            if (targetCreep.memory.wait === true) {
+                return 'wait'
+            }
             this.memory.boostState = 'boost'
         }
         return

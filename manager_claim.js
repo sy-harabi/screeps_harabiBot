@@ -48,6 +48,7 @@ Room.prototype.claimRoom = function (roomName) {
         }
         const structures = targetRoom.find(FIND_STRUCTURES)
         let numLeft = 0
+        let numDone = 0
         for (const structure of structures) {
             // 내 건물은 넘어가
             if (structure.my) {
@@ -62,10 +63,15 @@ Room.prototype.claimRoom = function (roomName) {
                 numLeft++
                 continue
             }
+            numDone++
             structure.destroy()
         }
-        status.isClearedOnce = true
-        if (numLeft === 0) {
+
+        if (numDone === 0) {
+            status.isClearedOnce = true
+        }
+
+        if (numLeft === 0 && numDone === 0) {
             status.isCleared = true
         }
     }
@@ -81,6 +87,7 @@ Room.prototype.claimRoom = function (roomName) {
         delete this.memory.claimRoom[roomName]
         const centerPos = new RoomPosition(25, 25, roomName)
         centerPos.createFlag(`clear ${roomName}`)
+        data.recordLog(`claim ${roomName} faild. clear ${roomName}.`, roomName)
         return
     }
     const defenders = Overlord.getCreepsByRole(roomName, 'colonyDefender')

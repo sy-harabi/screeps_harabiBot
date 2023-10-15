@@ -39,19 +39,19 @@ global.STRUCTURE_TYPES = [
 
 global.BUILD_PRIORITY = {
     spawn: 0,
-    extension: 3,
-    road: 4,
-    wall: 7,
-    rampart: 7,
     link: 1,
     storage: 1,
     tower: 2,
-    observer: 7,
-    powerSpawn: 8,
+    extension: 3,
+    road: 4,
     extractor: 5,
+    container: 5,
     lab: 6,
     terminal: 6,
-    container: 5,
+    wall: 7,
+    rampart: 7,
+    observer: 7,
+    powerSpawn: 8,
     nuker: 9,
     factory: 9,
 }
@@ -296,12 +296,12 @@ global.USEFULL_COMPOUNDS = [
     'XUH2O',
     'UH2O',
     'UH',
-    'XGH2O',
     'XKHO2',
     'XLHO2',
     'XZH2O',
     'XZHO2',
     'XGHO2',
+    'XGH2O',
 ]
 
 global.COMPOUNDS_MANUFACTURING_TIME = {

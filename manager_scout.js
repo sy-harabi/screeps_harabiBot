@@ -1,4 +1,7 @@
-const SCOUT_INTERVAL = 5000 // scout 완료 후 얼마나 기다렸다가 다시 시작할 것인지
+const SCOUT_INTERVAL = 3000 // scout 시작 후 얼마나 지나야 리셋할건지
+
+const DISTANCE_TO_DEPOSIT_MINING = 5
+
 const NUM_REMOTE_SOURCES = {
   1: 0,
   2: 0,
@@ -12,13 +15,19 @@ const NUM_REMOTE_SOURCES = {
 
 Room.prototype.manageScout = function () {
   const MAX_DISTANCE = 12 // 최대 거리
-  if (this.controller.level < 4) {
-    return
-  }
 
   this.memory.scout = this.memory.scout || {}
   const status = this.memory.scout
   const map = Overlord.map
+
+  if (!status.startTick) {
+    status.startTick = Game.time
+  }
+
+  // 5000 tick 마다 새로 정찰
+  if (Game.time - status.startTick > SCOUT_INTERVAL) {
+    delete this.memory.scout
+  }
 
   if (!status.state) {
     status.state = 'init'
@@ -29,12 +38,10 @@ Room.prototype.manageScout = function () {
     status.queue = new Array()
     status.queue.push(this.name)
     map[this.name] = {
-      lastScout: Game.time,
+      lastScout: status.startTick,
       numSource: this.sources.length,
       isController: true,
-      isClaimed: true,
-      isReserved: true,
-      defense: { numTower: this.structures.tower.length, owner: MY_NAME },
+      isClaimedByOther: false,
       host: this.name,
       linearDistance: 0,
       distance: 0,
@@ -60,7 +67,6 @@ Room.prototype.manageScout = function () {
         continue
       }
       if (map[node].distance >= MAX_DISTANCE) {
-        status.nextScoutTime = Game.time + SCOUT_INTERVAL
         status.state = 'wait'
         return
       }
@@ -76,27 +82,17 @@ Room.prototype.manageScout = function () {
           return false
         }
 
-        // source keeper room은 굳이 안봐도 됨
-        const roomCoord = roomName.match(/[a-zA-Z]+|[0-9]+/g)
-        roomCoord[1] = Number(roomCoord[1])
-        roomCoord[3] = Number(roomCoord[3])
-        const x = roomCoord[1]
-        const y = roomCoord[3]
-        if (4 <= (x % 10) && (x % 10) <= 6 && 4 <= (y % 10) && (y % 10) <= 6) {
+        if (getRoomType(roomName) === 'sourceKeeper') {
           return false
         }
 
         // 이미 본거면 제외
-        if (map[roomName] &&
-          map[roomName].host === thisRoomName &&
-          Game.time < map[roomName].lastScout + SCOUT_INTERVAL) {
+        if (map[roomName] && map[roomName].host === thisRoomName && status.startTick <= map[roomName].lastScout) {
           return false
         }
 
         // 다른 더 가까운 방에서 봤으면 제외
-        if (map[roomName] &&
-          map[roomName].distance &&
-          map[roomName].distance < map[status.node].distance + 1) {
+        if (map[roomName] && map[roomName].distance && map[roomName].distance < map[status.node].distance + 1) {
           return false
         }
 
@@ -119,7 +115,6 @@ Room.prototype.manageScout = function () {
         return
       }
     }
-    status.nextScoutTime = Game.time + SCOUT_INTERVAL
     status.state = 'wait'
     return
   }
@@ -131,7 +126,7 @@ Room.prototype.manageScout = function () {
       return
     }
     const nodeDistance = map[status.node].distance
-    const result = this.scoutRoom(status.next, nodeDistance + 1)
+    const result = this.scoutRoom(status.next, nodeDistance + 1, status.startTick)
     if (result === OK) {
       status.queue.push(status.next)
       delete status.next
@@ -144,10 +139,6 @@ Room.prototype.manageScout = function () {
   }
 
   if (status.state === 'wait') {
-    if (Game.time > status.nextScoutTime) {
-      status.state = 'init'
-      return
-    }
     return
   }
 }
@@ -172,8 +163,8 @@ Room.prototype.resetScout = function () {
   }
 }
 
-
-Room.prototype.scoutRoom = function (roomName, distance) {
+// lastScout means status.startTick. which means tick that started scout
+Room.prototype.scoutRoom = function (roomName, distance, lastScout) {
   const map = Overlord.map
 
   // BFS 이후에 다른방에서 정찰했고 distance가 더 작으면
@@ -181,192 +172,167 @@ Room.prototype.scoutRoom = function (roomName, distance) {
     return OK
   }
 
-  const room = Game.rooms[roomName]
-  if (!room) {
-    const observer = this.structures.observer[0]
-    if (observer && Game.map.getRoomLinearDistance(this.name, roomName) <= 10) {
-      observer.observeRoom(roomName)
-      return ERR_NOT_FOUND
-    }
+  // highway고 distance 5 초과면 봤다치자.
+  if (getRoomType(roomName) === 'highway' && distance > DISTANCE_TO_DEPOSIT_MINING) {
+    map[roomName] = map[roomName] || {}
 
-    const scouters = Overlord.getCreepsByRole(this.name, 'scouter')
-    const scouter = scouters[0]
-    if (!scouter) {
-      this.requestScouter()
-      return ERR_NOT_FOUND
-    }
-    if (scouter.spawning) {
-      return ERR_NOT_FOUND
-    }
-
-    scouter.notifyWhenAttacked(false)
-
-    if (scouter.room.name !== roomName) {
-      const result = scouter.moveToRoom(roomName, 1)
-      if (result === ERR_NO_PATH) {
-        return ERR_NO_PATH
-      }
-      return ERR_NOT_FOUND
-    }
-
-    return
+    map[roomName].host = this.name
+    map[roomName].distance = distance
+    map[roomName].lastScout = lastScout
+    map[roomName].numSource = 0
+    map[roomName].isController = false
+    map[roomName].isClaimedByOther = false
+    map[roomName].inaccessible = false
+    map[roomName].isRemoteCandidate = false
+    map[roomName].isClaimCandidate = false
+    return OK
   }
 
-  // highway면 deposit check
-  const roomCoord = roomName.match(/[a-zA-Z]+|[0-9]+/g)
-  roomCoord[1] = Number(roomCoord[1])
-  roomCoord[3] = Number(roomCoord[3])
-  const x = roomCoord[1]
-  const y = roomCoord[3]
+  const room = Game.rooms[roomName]
+  if (!room) {
+    return this.acquireVision(roomName)
+  }
 
-  if ((x % 10 === 0 || y % 10 === 0) && distance <= 5) {
+  // highway고 distance 5 이내면 deposit check.
+  if (getRoomType(roomName) === 'highway' && distance <= DISTANCE_TO_DEPOSIT_MINING) {
     this.depositCheck(roomName)
   }
 
+  const info = room.getInfo(this.name, distance, lastScout)
+  map[roomName] = { ...map[roomName], ...info }
 
-  let host = this.name
+  this.tryRemote(roomName)
 
-  const lastScout = Game.time
-  const linearDistance = Game.map.getRoomLinearDistance(this.name, roomName)
-
-  const numSource = room.find(FIND_SOURCES).length
-  const mineralType = room.mineral ? room.mineral.mineralType : undefined
-
-  const isController = room.controller ? true : false
-
-  const isClaimed = isController && room.controller.owner && (room.controller.owner.username !== MY_NAME)
-  const isReserved = isController && room.controller.reservation && !['Invader', MY_NAME].includes(room.controller.reservation.username)
-
-  const numTower = room.structures.tower.filter(tower => tower.RCLActionable).length
-  const defense = numTower > 0 ? { numTower: numTower } : undefined
-
-  const isAccessibleToContorller = room.getAccessibleToController()
-  const inaccessible = ((defense && (!room.isMy)) || (isController && !isAccessibleToContorller)) ? (Game.time + SCOUT_INTERVAL) : false
-
-  const isRemoteCandidate = isAccessibleToContorller && !inaccessible && !isClaimed && !isReserved && (numSource > 0)
-  const isClaimCandidate = isAccessibleToContorller && !inaccessible && !isClaimed && !isReserved && (distance > 2) && (numSource > 1) && !Overlord.remotes.includes(roomName)
-
-  remote: {
-    // not adequate
-    if (!isRemoteCandidate) {
-      break remote
-    }
-
-    // too far
-    if (distance > 2) {
-      break remote
-    }
-
-    const infraPlan = this.getRemoteInfraPlan(roomName)
-
-    // cannot find infraPlan
-    if (infraPlan === ERR_NOT_FOUND) {
-      this.abandonRemote(roomName)
-      break remote
-    }
-
-
-    // no competition
-    if (!Memory.rooms[roomName] || !Memory.rooms[roomName].host) {
-      data.recordLog(`REMOTE: No host. Colonize ${room.name} with distance ${distance}`, this.name)
-      colonize(roomName, this.name)
-      break remote
-    }
-
-    // already my remote
-    if (Memory.rooms[roomName].host === this.name) {
-      break remote
-    }
-
-    // competition
-    console.log(`competition for ${roomName}`)
-
-    const roomBefore = Game.rooms[Memory.rooms[roomName].host]
-    const statusBefore = roomBefore ? roomBefore.memory.remotes ? roomBefore.memory.remotes[roomName] : undefined : undefined
-
-    if (!statusBefore) {
-      console.log(`no status before`)
-
-      data.recordLog(`REMOTE: No competition. Abandon remote ${roomName}`, roomBefore.name)
-      roomBefore.abandonRemote(roomName)
-
-      data.recordLog(`REMOTE: Colonize ${room.name} with distance ${distance}`, this.name)
-      colonize(roomName, this.name)
-      break remote
-    }
-
-    // calcaulate total path length
-
-    const statusNow = this.memory.remotes ? this.memory.remotes[roomName] : undefined
-    if (!statusNow) {
-      console.log(`no status now`)
-      this.abandonRemote(roomName)
-      break remote
-    }
-
-    if (!statusBefore.infraPlan) {
-      console.log(`no infraPlan before`)
-
-      data.recordLog(`REMOTE: Abandon remote ${roomName}`, roomBefore.name)
-      roomBefore.abandonRemote(roomName)
-
-      data.recordLog(`REMOTE: Colonize ${room.name} with distance ${distance}`, this.name)
-      colonize(roomName, this.name)
-      break remote
-    }
-
-    if (Object.keys(statusNow.infraPlan).length < Object.keys(statusBefore.infraPlan).length) {
-      console.log(`infraPlan before has more source`)
-      this.abandonRemote(roomName)
-      break remote
-    }
-
-    const totalPathLengthBefore = Object.values(statusBefore.infraPlan).map(value => value.pathLength).reduce((acc, curr) => acc + curr, 0)
-    const totalPathLengthNow = Object.values(statusNow.infraPlan).map(value => value.pathLength).reduce((acc, curr) => acc + curr, 0)
-
-    // compare
-    if (totalPathLengthBefore <= totalPathLengthNow) {
-      console.log(`infraPlan before has better plan`)
-      this.abandonRemote(roomName)
-      break remote
-    }
-
-    console.log(`infraPlan now has better plan`)
-
-    data.recordLog(`REMOTE: Abandon remote ${roomName}`, roomBefore.name)
-    roomBefore.abandonRemote(roomName)
-
-    data.recordLog(`REMOTE: Colonize ${room.name} with distance ${distance}`, this.name)
-    colonize(roomName, this.name)
-
-    break remote
-  }
-
-  if (Memory.autoClaim && isClaimCandidate && Overlord.myRooms.length < Game.gcl.level) {
+  if (Memory.autoClaim && map[roomName].isClaimCandidate && Overlord.myRooms.length < Game.gcl.level) {
     claim(roomName, this.name)
   }
 
-  // save info
-  const info = {
-    lastScout,
-    numSource,
-    mineralType,
-    isController,
-    isClaimed,
-    isReserved,
-    defense,
-    host,
-    linearDistance,
-    distance,
-    isRemoteCandidate,
-    isClaimCandidate,
-    inaccessible
+  return OK
+}
+
+Room.prototype.tryRemote = function (roomName) {
+  const info = Overlord.map[roomName]
+
+  // not adequate
+  if (!info.isRemoteCandidate) {
+    return
   }
 
-  map[roomName] = map[roomName] || {}
-  map[roomName] = { ...map[roomName], ...info }
+  // too far
+  if (info.distance > 2) {
+    return
+  }
 
-  return OK
+  // already my remote
+  if (this.memory.remotes && Object.keys(this.memory.remotes).includes(roomName)) {
+    console.log(`${roomName} is already my remote`)
+    return
+  }
+
+  const roomBefore = findRemoteHost(roomName)
+
+  // no competition
+  if (!roomBefore) {
+
+    console.log(`Try make remote ${roomName}`)
+
+    const infraPlan = this.getRemoteInfraPlan(roomName)
+
+    if (infraPlan === ERR_NOT_FOUND) {
+      data.recordLog(`FAIL: Cannot colonize ${roomName}. cannot find infraPlan.`, this.name)
+      this.abandonRemote(roomName)
+      return
+    }
+
+    const spawnCapacityRatio = this.getSpawnCapacityRatio()
+    if (spawnCapacityRatio > SPAWN_CAPACITY_THRESHOLD) {
+      data.recordLog(`REMOTE: spawn capacity is full. do not remote ${roomName}`, roomName)
+      this.abandonRemote(roomName)
+      return
+    }
+
+    data.recordLog(`REMOTE: Not my remote. Colonize ${roomName} with distance ${info.distance}`, this.name)
+    colonize(roomName, this.name)
+    return
+  }
+
+
+  // competition
+  console.log(`competition for ${roomName}`)
+
+  const statusBefore = roomBefore.getRemoteStatus(roomName)
+
+  const infraPlan = this.getRemoteInfraPlan(roomName)
+
+  // cannot find infraPlan
+  if (infraPlan === ERR_NOT_FOUND) {
+    data.recordLog(`FAIL: Cannot colonize ${roomName}. cannot find infraPlan.`, this.name)
+    this.abandonRemote(roomName)
+    return
+  }
+
+  const spawnCapacityRatio = this.getSpawnCapacityRatio()
+  if (spawnCapacityRatio > SPAWN_CAPACITY_THRESHOLD) {
+    data.recordLog(`REMOTE: spawn capacity is full. do not remote ${roomName}`, roomName)
+    this.abandonRemote(roomName)
+    return
+  }
+
+  if (!statusBefore || !statusBefore.infraPlan) {
+    console.log(`no status before`)
+
+    data.recordLog(`REMOTE: No competition. Abandon remote ${roomName}`, roomName)
+    roomBefore.abandonRemote(roomName)
+
+    data.recordLog(`REMOTE: Colonize ${roomName} with distance ${info.distance}`, roomName)
+    colonize(roomName, this.name)
+    return
+  }
+
+  // compare
+
+  const statusNow = this.getRemoteStatus(roomName)
+
+  if (!statusNow) {
+    console.log(`no status now`)
+    this.abandonRemote(roomName)
+    return
+  }
+
+  if (Object.keys(statusNow.infraPlan).length < Object.keys(statusBefore.infraPlan).length) {
+    console.log(`infraPlan before has more source`)
+    this.abandonRemote(roomName)
+    return
+  }
+
+  const totalPathLengthBefore = Object.values(statusBefore.infraPlan).map(value => value.pathLength).reduce((acc, curr) => acc + curr, 0)
+  const totalPathLengthNow = Object.values(statusNow.infraPlan).map(value => value.pathLength).reduce((acc, curr) => acc + curr, 0)
+
+  // compare
+  if (totalPathLengthBefore <= totalPathLengthNow) {
+    console.log(`infraPlan before has better plan`)
+    this.abandonRemote(roomName)
+    return
+  }
+
+  console.log(`infraPlan now has better plan`)
+
+  data.recordLog(`REMOTE: Abandon remote ${roomName}. Less efficient than ${this.name}`, roomBefore.name)
+  roomBefore.abandonRemote(roomName)
+
+  data.recordLog(`REMOTE: Colonize ${roomName} with distance ${distance}`, roomName)
+  colonize(roomName, this.name)
+
+  return
+}
+
+function findRemoteHost(remoteName) {
+  for (const room of Overlord.myRooms) {
+    if (room.memory.remotes && room.memory.remotes[remoteName]) {
+      return room
+    }
+  }
+  return undefined
 }
 
 Room.prototype.getAccessibleToController = function () {
@@ -388,4 +354,61 @@ Room.prototype.getAccessibleToController = function () {
   }
   )
   return !search.incomplete
+}
+
+Room.prototype.acquireVision = function (roomName) {
+  const observer = this.structures.observer[0]
+  if (observer && Game.map.getRoomLinearDistance(this.name, roomName) <= 10) {
+    observer.observeRoom(roomName)
+    return ERR_NOT_FOUND
+  }
+
+  const scouters = Overlord.getCreepsByRole(this.name, 'scouter')
+  const scouter = scouters[0]
+
+  if (!scouter) {
+    this.requestScouter()
+    return ERR_NOT_FOUND
+  }
+
+  if (scouter.spawning) {
+    return ERR_NOT_FOUND
+  }
+
+  if (scouter.room.name !== roomName) {
+    const result = scouter.moveToRoom(roomName, 1)
+    if (result === ERR_NO_PATH) {
+      return ERR_NO_PATH
+    }
+    return ERR_NOT_FOUND
+  }
+}
+
+Room.prototype.getInfo = function (host, distance, lastScout) {
+  const numSource = this.find(FIND_SOURCES).length
+  const mineralType = this.mineral ? this.mineral.mineralType : undefined
+
+  const isController = this.controller ? true : false
+  const isClaimedByOther = isController && this.controller.owner && (this.controller.owner.username !== MY_NAME)
+
+  const numTower = this.structures.tower.filter(tower => tower.RCLActionable).length
+
+  const isAccessibleToContorller = this.getAccessibleToController()
+  const inaccessible = (((!this.isMy) && numTower > 0) || (isController && !isAccessibleToContorller)) ? (Game.time + 2 * SCOUT_INTERVAL) : 0
+
+  const isRemoteCandidate = isAccessibleToContorller && inaccessible < Game.time && !isClaimedByOther && (numSource > 0)
+  const isClaimCandidate = isAccessibleToContorller && inaccessible < Game.time && !isClaimedByOther && (distance > 2) && (numSource > 1) && !Overlord.remotes.includes(this.name)
+
+  return {
+    host,
+    distance,
+    lastScout,
+    numSource,
+    mineralType,
+    numTower,
+    isClaimedByOther,
+    isRemoteCandidate,
+    isClaimCandidate,
+    inaccessible
+  }
 }

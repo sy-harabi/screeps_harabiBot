@@ -1,17 +1,6 @@
 const RAMPART_HIT_THRESHOLD = 5000000
-
+const MAX_WORK = 40
 Object.defineProperties(Room.prototype, {
-    spawnCapacity: {
-        get() {
-            if (this._spawnCapacity !== undefined) {
-                return this._spawnCapacity
-            }
-            return this._spawnCapacity = 0
-        },
-        set(value) {
-            this._spawnCapacity = value
-        }
-    },
     GRCL: {
         get() {
             if (this._GRCL !== undefined) {
@@ -132,13 +121,16 @@ Object.defineProperties(Room.prototype, {
     },
     energyLevel: {
         get() {
+            if (this._energyLevel) {
+                return this._energyLevel
+            }
             if (!this.controller) {
                 return undefined
             }
             const level = this.controller.level
             const economyStandard = ECONOMY_STANDARD[level]
             const buffer = BUFFER[level]
-            return (this.energy - economyStandard) / buffer
+            return this._energyLevel = (this.energy - economyStandard) / buffer
         }
     },
     constructionSites: {
@@ -253,7 +245,10 @@ Object.defineProperties(Room.prototype, {
     },
     maxWork: {
         get() {
-            if (Game.time % 100 === 0) {
+            if (this.controller.level === 1) {
+                return 4
+            }
+            if (Game.time % 10 === 0) {
                 delete this.heap.maxWork
             }
 
@@ -262,14 +257,21 @@ Object.defineProperties(Room.prototype, {
             }
 
             const numWorkEach = this.laborer.numWorkEach
+
             if (!this.storage) {
                 if (this.constructionSites.length) {
-                    return this.heap.maxWork = Math.max(numWorkEach, 4)
+                    const basicNumWork = (this.storage ? 1 : (this.heap.sourceUtilizationRate || 0)) * Math.max(numWorkEach, 4)
+                    const remoteSurplusNumWork = Math.max(0, (this.heap.remoteIncome || 0))
+                    return this.heap.maxWork = Math.floor(basicNumWork + remoteSurplusNumWork / 3)
                 }
                 // former is spawn limit. latter is income limit
-                return this.heap.maxWork = Math.min(numWorkEach * 9, 16 + (this.heap.remoteIncome || 0))
+                const basicNumWork = (this.storage ? 1 : (this.heap.sourceUtilizationRate || 0)) * 16
+                const remoteSurplusNumWork = Math.max(0, (this.heap.remoteIncome || 0))
+                return this.heap.maxWork = Math.floor(basicNumWork + remoteSurplusNumWork)
             }
+
             const level = this.controller.level
+
             if (level === 8) {
                 // if downgrade is close, upgrade
                 if (this.controller.ticksToDowngrade < 10000) {
@@ -277,7 +279,7 @@ Object.defineProperties(Room.prototype, {
                     return this.heap.maxWork = 15
                 }
 
-                // if constructing, maxWrok 15
+                // if constructing, maxWork 15
                 if (this.heap.constructing) {
                     this.heap.upgrading = false
                     return this.heap.maxWork = 15
@@ -289,28 +291,20 @@ Object.defineProperties(Room.prototype, {
                     return this.heap.maxWork = 0
                 }
 
-                // if energy if more than enough, upgrade
-                if (this.energyLevel > 5) {
-                    this.heap.upgrading = true
-                    return this.heap.maxWork = 15
-                }
-
-                // if rampart is enough, upgrade
-                if (this.structures.weakProtection.length === 0) {
-                    this.heap.upgrading = true
-                    return this.heap.maxWork = 15
-                }
-
-                this.heap.upgrading = false
-                return this.heap.maxWork = 0
+                // else upgrade
+                this.heap.upgrading = true
+                return this.heap.maxWork = 15
             }
 
             if (this.energyLevel < 0) {
-                return this.heap.maxWork = 10
+                return this.heap.maxWork = numWorkEach
             }
 
-            const extra = Math.min(7, Math.max(0, Math.floor(this.energyLevel)))
-            return this.heap.maxWork = Math.min(numWorkEach * (1 + extra))
+            const rangeFromControllerToStorage = this.controller.pos.getRangeTo(this.storage)
+            const maxWorkByLinkCooldown = Math.ceil(LINK_CAPACITY / rangeFromControllerToStorage)
+
+            const extra = Math.max(0, Math.floor(this.energyLevel))
+            return this.heap.maxWork = Math.min(maxWorkByLinkCooldown, numWorkEach * (1 + extra))
         }
     },
     terrain: {
@@ -340,3 +334,102 @@ Object.defineProperties(Room.prototype, {
         }
     }
 })
+
+Room.prototype.getBasicSpawnCapacity = function () {
+    if (!this.isMy) {
+        return 0
+    }
+
+    if (this._basicSpawnCapacity !== undefined) {
+        return this._basicSpawnCapacity
+    }
+
+    const level = this.controller.level
+
+    // 2 miners, 13 parts each
+    let result = 20
+
+    // haulers
+    for (const source of this.sources) {
+        if (source.linked) {
+            continue
+        }
+        const maxCarry = source.info.maxCarry
+        result += Math.ceil(maxCarry * 1.5)
+    }
+
+    // manager + researcher
+    const numManager = this.getMaxNumManager()
+    result += 3 * Math.min(12, Math.floor(this.energyCapacityAvailable / 150), 16) * numManager
+    //laborer
+    result += this.maxWork * 3
+
+    //extractor
+    if (level >= 6 && this.structures.extractor.length > 0) {
+        result += 50
+    }
+
+    return this._basicSpawnCapacity = result
+}
+
+Room.prototype.getRemoteSpawnCapacity = function (remoteName) {
+    if (this._remotesSpawncapacity && this._remotesSpawncapacity[remoteName] !== undefined) {
+        return this._remotesSpawncapacity[remoteName]
+    }
+
+    const status = this.getRemoteStatus(remoteName)
+
+    if (!status.infraPlan) {
+        return 0
+    }
+
+    let result = 0
+
+    for (const info of Object.values(status.infraPlan)) {
+        result += 13 // miner
+        result += Math.floor(info.pathLength * 0.45 * 1.5) // hauler
+    }
+
+    const reserving = this.getRemoteReserveTick(remoteName) > 0
+
+    if (!reserving) {
+        result = result * 0.5
+    } else if (result > 0) {
+        result += 10 // reserver. 2/tick
+    }
+
+    this._remotesSpawncapacity = this._remotesSpawncapacity || {}
+
+    return this._remotesSpawncapacity[remoteName] = result
+}
+
+Room.prototype.getDepositSpawnCapacity = function (depositRequest) {
+    return depositRequest.available * 50 * 3
+}
+
+Room.prototype.getSpawnCapacity = function () {
+    let result = 0
+
+    result += this.getBasicSpawnCapacity()
+
+    if (this.memory.remotes) {
+        for (const remoteName in this.memory.remotes) {
+            result += this.getRemoteSpawnCapacity(remoteName)
+        }
+    }
+
+
+    if (this.memory.depositRequests) {
+        for (const depositRequest of Object.values(this.memory.depositRequests)) {
+            result += this.getDepositSpawnCapacity(depositRequest)
+        }
+    }
+
+    return result
+}
+
+Room.prototype.getSpawnCapacityRatio = function () {
+    const spawnCapacity = this.getSpawnCapacity()
+    const spawnCapacityAvailable = this.structures.spawn.length * 500
+    return spawnCapacity / spawnCapacityAvailable
+}

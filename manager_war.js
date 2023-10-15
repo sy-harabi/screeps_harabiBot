@@ -15,7 +15,7 @@ Flag.prototype.conductWar = function () {
     return
   }
 
-  const power = 5000
+  const power = 2000
 
   if (power === 0) {
     return
@@ -38,7 +38,7 @@ Flag.prototype.conductWar = function () {
   const importantStructures = hostileStructures.filter(structure => IMPORTANT_STRUCTURE_TYPES.includes(structure.structureType))
 
   const goals = importantStructures.map(structure => {
-    return { pos: structure.pos, range: 1 }
+    return { pos: structure.pos, range: 0 }
   })
 
   const dijkstra = this.room.dijkstra(this.pos, goals, quadCostArray)

@@ -1,5 +1,45 @@
 const profiler = require('screeps-profiler');
 
+Object.defineProperties(Room.prototype, {
+    progressHour: {
+        get() {
+            return (new Date().getTime() - this.memory.info[0].time) / 1000 / 60 / 60
+        }
+    },
+    progressPerHour: {
+        get() {
+            if (this.controller.level === 8) {
+                return undefined
+            }
+            const progress = this.controller.totalProgress - this.memory.info[0].progress
+            const time = this.progressHour //시간으로 계산
+            return progress / time
+        }
+    },
+    hoursToNextRCL: {
+        get() {
+            return (this.controller.progressTotal - this.controller.progress) / this.progressPerHour
+        }
+    }
+})
+
+Room.prototype.getControlPointsPerTick = function () {
+    if (this.controller.level === 8) {
+        return undefined
+    }
+    if (!this.memory.info) {
+        return undefined
+    }
+    if (!this.memory.info[0]) {
+        return undefined
+    }
+    const progressBefore = this.memory.info[0].progress || 0
+    const tickBefore = this.memory.info[0].tick || 0
+    const progress = this.controller.totalProgress - progressBefore
+    const tick = Game.time - tickBefore
+    return progress / tick
+}
+
 global.X_ENTIRE = {
     start: 0,
     end: 0
@@ -54,9 +94,9 @@ const rcl = new VisualItem('RCL', 3.5, (room) => {
 
 // Spawn
 const spawnCapacity = new VisualItem('Spawn', 3, (room) => {
-    const spawnCapacityRatio = room.memory.spawnCapacity / room.memory.spawnCapacityAvailable
+    const spawnCapacityRatio = room.getSpawnCapacityRatio()
     const content = `${Math.round(100 * spawnCapacityRatio)}%`
-    const option = { color: spawnCapacityRatio < 0.8 ? 'lime' : spawnCapacityRatio < 0.9 ? 'yellow' : 'magenta' }
+    const option = { color: spawnCapacityRatio < SPAWN_CAPACITY_THRESHOLD ? 'lime' : spawnCapacityRatio < 0.9 ? 'yellow' : 'magenta' }
     return { content, option }
 })
 
@@ -67,8 +107,9 @@ const control = new VisualItem('Control', 3.5, (room) => {
         const option = { color: 'lime' }
         return { content, option }
     }
-    const content = `${Math.floor(10 * room.controlPointsPerTick) / 10}e/t`
-    const option = { color: room.controlPointsPerTick > 14 ? 'lime' : room.controlPointsPerTick > 8 ? 'yellow' : 'magenta' }
+    const controlPointsPerTick = room.getControlPointsPerTick()
+    const content = `${Math.floor(10 * controlPointsPerTick) / 10}e/t`
+    const option = { color: controlPointsPerTick > 14 ? 'lime' : controlPointsPerTick > 8 ? 'yellow' : 'magenta' }
     return { content, option }
 })
 
@@ -126,13 +167,25 @@ const remoteIncome = new VisualItem('Remote', 5, (room) => {
     let income = 0
     for (const remoteName in room.memory.remotes) {
         const status = room.memory.remotes[remoteName]
-        if (status.state !== 'extract') {
+        if (!status) {
             continue
         }
-        income += ((status.lastProfit || 0) + status.profit - (status.lastCost || 0) - status.cost) / (Game.time - (status.lastTick || status.tick))
-    }
+        if (status.construction === 'proceed') {
+            continue
+        }
+        const remoteIncome = ((status.lastProfit || 0) + status.profit - (status.lastCost || 0) - status.cost) / (Game.time - (status.lastTick || status.tick))
+        if (isNaN(remoteIncome)) {
+            continue
+        }
 
-    room.heap.remoteIncome = Math.floor(income)
+        const visualPos = new RoomPosition(25, 5, remoteName)
+
+        const color = remoteIncome > 5 ? '#000000' : '#740001'
+        Game.map.visual.text(`📊${remoteIncome.toFixed(1)}e/t`, visualPos, { fontSize: 5, backgroundColor: color, opacity: 1 })
+
+        income += remoteIncome
+    }
+    room.heap.remoteIncome = income
     const content = `${Math.floor(10 * income) / 10}e/t (S:${num})`
     const option = { color: income / num >= 5 ? 'lime' : 'magenta' }
     return { content, option }
@@ -214,38 +267,5 @@ Overlord.visualizeRoomInfo = function () {
         }
     }
 }
-
-Object.defineProperties(Room.prototype, {
-    controlPointsPerTick: {
-        get() {
-            if (this.controller.level === 8) {
-                return undefined
-            }
-            const progress = this.controller.totalProgress - this.memory.info[0].progress
-            const tick = Game.time - this.memory.info[0].tick
-            return progress / tick
-        }
-    },
-    progressHour: {
-        get() {
-            return (new Date().getTime() - this.memory.info[0].time) / 1000 / 60 / 60
-        }
-    },
-    progressPerHour: {
-        get() {
-            if (this.controller.level === 8) {
-                return undefined
-            }
-            const progress = this.controller.totalProgress - this.memory.info[0].progress
-            const time = this.progressHour //시간으로 계산
-            return progress / time
-        }
-    },
-    hoursToNextRCL: {
-        get() {
-            return (this.controller.progressTotal - this.controller.progress) / this.progressPerHour
-        }
-    }
-})
 
 profiler.registerObject(Overlord, 'Overlord')

@@ -1,3 +1,28 @@
+global.getRoomType = function (roomName) {
+    const roomCoord = getRoomCoord(roomName)
+    const x = roomCoord.x
+    const y = roomCoord.y
+    if (x % 10 === 0 || y % 10 === 0) {
+        return 'highway'
+    }
+
+    if (x < 4 || x > 6 || y < 4 || y > 6) {
+        return 'normal'
+    }
+
+    return 'sourceKeeper'
+}
+
+global.getRoomCoord = function (roomName) {
+    roomName = roomName.name || roomName
+    const roomCoord = roomName.match(/[a-zA-Z]+|[0-9]+/g)
+    roomCoord[1] = Number(roomCoord[1])
+    roomCoord[3] = Number(roomCoord[3])
+    const x = roomCoord[1]
+    const y = roomCoord[3]
+    return { x, y }
+}
+
 global.isValidCoord = function (x, y) {
     if (x < 1) {
         return false
@@ -94,15 +119,15 @@ global.abandon = function (roomName) {
 }
 
 global.checkCPU = function (name) {
-    if (!data.cpu) {
-        data.cpu = Game.cpu.getUsed()
+    if (!Game._cpu) {
+        Game._cpu = Game.cpu.getUsed()
     }
     const cpu = Game.cpu.getUsed()
-    const cpuUsed = cpu - data.cpu
+    const cpuUsed = cpu - Game._cpu
     if (cpuUsed > 1) {
         console.log(`tick: ${Game.time} | name: ${name} | used: ${cpuUsed} at `)
     }
-    data.cpu = cpu
+    Game._cpu = cpu
 }
 
 global.colonize = function (remoteName, baseName) {
@@ -196,3 +221,4 @@ global.mapInfo = function () {
         Memory.mapInfoTime = Game.time
     }
 }
+

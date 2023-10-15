@@ -1,5 +1,9 @@
 const DEFENSE_TEST = false
 const REQUIRED_DAMAGE_RATIO = 0.1
+const RAMPART_COST = 10
+const VISUALIZE_DANGER_AREA = true
+const RAMPART_HITS_TO_REPAIR_WITH_TOWERS = 5000
+global.DANGER_TILE_COST = 254
 
 Room.prototype.manageDefense = function () {
     this.memory.defense = this.memory.defense || {}
@@ -40,7 +44,7 @@ Room.prototype.manageDefense = function () {
         data.recordLog('WAR: Emergency ended', this.name)
         status.state = 'normal'
         this.memory.militaryThreat = false
-        this.memory.level = this.controller.level - 1
+        this.memory.level = this.memory.level - 1
         for (const creep of this.find(FIND_MY_CREEPS)) {
             if (creep.memory.assignedRoom) {
                 delete creep.memory.assignedRoom
@@ -52,7 +56,9 @@ Room.prototype.manageDefense = function () {
         }
     }
 
-    if (strong.length > 0 && !this.isWalledUp && this.controller.level >= 4 && !this.controller.safeMode) {
+    if (strong.length > 0 && !this.isWalledUp && this.controller.level >= 3 && !this.controller.safeMode) {
+        const invaderName = strong[0].owner.username
+        data.recordLog(`WAR: Emergency occured by ${invaderName}. safemode activated`, this.name, 0)
         this.controller.activateSafeMode()
         return
     }
@@ -64,8 +70,8 @@ Room.prototype.manageDefense = function () {
                 creep.getRecycled()
             }
             if (creep.assignedRoom === this.name) {
-                if (spawn && this.defenseCostMatrix.get(creep.pos.x, creep.pos.y) === 255) {
-                    creep.heap.backToBase = 10
+                if (spawn && this.defenseCostMatrix.get(creep.pos.x, creep.pos.y) >= DANGER_TILE_COST) {
+                    creep.heap.backToBase = 3
                 }
                 if (creep.heap.backToBase > 0) {
                     creep.heap.backToBase--
@@ -144,7 +150,7 @@ Room.prototype.manageTower = function (targets) {
         return
     }
 
-    const threshold = (this.controller.level - 4) * 400000 // rcl5에 400K, 6에 800K, 7에 1.2M, 8에 1.6M
+    const threshold = (this.controller.level - 3) * WALL_HITS_PER_RCL
     const weakestRampart = this.weakestRampart
 
     // 제일 약한 rampart도 threshold 넘으면 종료
@@ -155,13 +161,8 @@ Room.prototype.manageTower = function (targets) {
 
     this.heap.rampartOK = false
 
-    // wallMaker 없으면 spawn
-    if (this.creeps.wallMaker.length === 0 && this.storage && this.storage.store[RESOURCE_ENERGY] > 10000) {
-        this.requestWallMaker()
-    }
-
-    // 제일 약한 rampart가 20k 안되면 수리
-    if (weakestRampart.hits < 20000 && this.storage && this.storage.store[RESOURCE_ENERGY] > 10000) {
+    // 제일 약한 rampart가 RAMPART_HITS_TO_REPAIR_WITH_TOWERS 안되면 수리
+    if (weakestRampart.hits < RAMPART_HITS_TO_REPAIR_WITH_TOWERS && this.storage && this.storage.store[RESOURCE_ENERGY] > 5000) {
         const weakRamparts = this.structures.rampart.filter(ramart => ramart.hits < 20000).sort((a, b) => a.hits - b.hits)
         outer:
         for (const structure of weakRamparts) {
@@ -189,7 +190,7 @@ Room.prototype.manageEmergency = function () {
     }
 
     // assign defenders to rampartAnchors for every 5 ticks
-    if (Game.time > (this.memory.assignAnchorsTick || 0) + 5) {
+    if (Game.time > (this.memory.assignAnchorsTick || 0) + 0) {
         this.assignRampartAnchors()
         this.memory.assignAnchorsTick = Game.time
     }
@@ -298,7 +299,7 @@ Room.prototype.manageEmergency = function () {
             return
         }
         if (this.creeps.wounded.length) {
-            const safeWounded = this.creeps.wounded.filter(creep => this.defenseCostMatrix.get(creep.pos.x, creep.pos.y) < 254)
+            const safeWounded = this.creeps.wounded.filter(creep => this.defenseCostMatrix.get(creep.pos.x, creep.pos.y) < DANGER_TILE_COST)
             for (const tower of this.structures.tower) {
                 tower.heal(tower.pos.findClosestByRange(safeWounded))
             }
@@ -355,10 +356,14 @@ Room.prototype.assignDefenders = function () {
             if (defender) {
                 defender.memory.assign = packed
                 status.requiredDamageMax -= defender.attackPower
+                status.numAssignedDefender++
                 continue
             }
 
-            // check if we need boost  defender
+            console.log(status.requiredDamageMax)
+            console.log(status.numAssignedDefender)
+
+            // check if we need defender
 
             if (!this._requestedRoomDefender) {
                 const boost = Math.ceil(status.requiredDamageMax / this.meleeDefenderMaxAttackPower)
@@ -366,6 +371,7 @@ Room.prototype.assignDefenders = function () {
                     data.recordLog(`${this.name} need boosted attacker`, this.name)
                 }
                 this.requestRoomDefender(boost)
+                status.numAssignedDefender++
                 this._requestedRoomDefender = true
             }
             break outer
@@ -435,7 +441,7 @@ Room.prototype.assignLaborers = function () {
                 status.totalAttackPower -= laborer.repairPower
                 continue
             }
-            if (!this._requestedLaborer) {
+            if (!this._requestedLaborer && this.laborer.numWork < EMERGENCY_WORK_MAX) {
                 this._requestedLaborer = true
                 this.requestLaborer(this.laborer.numWorkEach)
             }
@@ -470,7 +476,7 @@ Room.prototype.assignRampartAnchors = function () {
  * @returns {Object} returns[packed] - An object containing status of anchor
  * @returns {Array} returns[packed].intruders - Array of intruders
  * @returns {RoomPosition} returns[packed].pos - position of anchor
- * @returns {number} returns[packed].requiredDamageMax - largest required damage to harm intruders
+ * @returns {number} returns[packed].requiredDamageMax - largest required damage of active defenders to harm intruders
  * @returns {number} returns[packed].closestRange - closest range to intruders
  * @returns {number} returns[packed].closestIntruder - the intruder closest to ramparts
  * @returns {number} returns[packed].threatValue - (requiredDamageMax/closestRange).
@@ -531,7 +537,7 @@ Room.prototype.getRampartAnchorsStatus = function () {
             status.requiredDamageMax = 200
         }
         status.closestRange = closestRange
-        status.threatValue = Math.ceil(requiredDamageMax / closestRange)
+        status.threatValue = Math.ceil(totalAttackPower / closestRange)
         status.totalAttackPower = totalAttackPower
         status.numAssignedDefender = 0
 
@@ -705,7 +711,6 @@ Room.prototype.getRequiredDamageFor = function (target, options = {}) {
 Room.prototype.getTowersDamageFor = function (target) {//target은 hostile creep
     let damage = target.pos.getTowerDamageAt()
     let netDamage = target.getNetDamage(damage)
-    this.visual.text(netDamage, target.pos.x, target.pos.y + 1, { font: 0.5, align: 'left', color: 'magenta' })
     return netDamage
 }
 
@@ -782,10 +787,10 @@ Object.defineProperties(Room.prototype, {
     },
     defenseCostMatrix: {
         get() {
-            if (!this._visualizeDefenseCostMatrix) {
+            if (VISUALIZE_DANGER_AREA && !this._visualizeDefenseCostMatrix) {
                 for (let x = 0; x < 50; x++) {
                     for (let y = 0; y < 50; y++) {
-                        if (this.defensiveAssessment.costs.get(x, y) === 255) {
+                        if (this.defensiveAssessment.costs.get(x, y) === DANGER_TILE_COST) {
                             this.visual.rect(x - 0.5, y - 0.5, 1, 1, { fill: 'red', opacity: 0.15 })
                         }
                     }
@@ -839,7 +844,7 @@ Object.defineProperties(Room.prototype, {
             const nearSpawnPositions = spawn.pos.getAtRange(1)
             const defenseCostMatrix = this.defenseCostMatrix
             for (const pos of nearSpawnPositions) {
-                if (defenseCostMatrix.get(pos.x, pos.y) < 255) {
+                if (defenseCostMatrix.get(pos.x, pos.y) < DANGER_TILE_COST) {
                     // spawn 주변 위치에 하나라도 defenseCostMatrix cost 낮은 위치 있으면 막혀있는거
                     return this.heap._isWalledUp = this._isWalledUp = true
                 }
@@ -885,7 +890,7 @@ Object.defineProperties(Room.prototype, {
  * normally use cached results.
  * 
  * @returns {Object} an object containing belows
- * @returns {CostMatrix} returns.costs - a CostMatrix which has safe zone as cost < 255 and danger zone as cost === 255
+ * @returns {CostMatrix} returns.costs - a CostMatrix which has safe zone as cost < DANGER_TILE_COST and danger zone as cost === DANGER_TILE_COST
  * @returns {Array} returns.frontLine - an array of outer positions adjacent to ramparts
  * @returns {Array} returns.frontRampartPosition - an array of positions of outermost ramparts
  */
@@ -902,15 +907,21 @@ Room.prototype.getDefensiveAssessment = function () {
         return this.heap._defensiveAssessment
     }
 
-    const RESULT_COST = 255
     const costMatrix = this.basicCostmatrix.clone()
-    const sources = this.find(FIND_EXIT) // exit에서 시작해서 닿을 수 있는 곳은 모두 outer
+
+    const sources = []
+
+    // positions of creeps which can kill mine are sources
+    const killerCreeps = this.find(FIND_HOSTILE_CREEPS).filter(creep => creep.checkBodyParts(['attack', 'ranged_attack']))
+    for (const creep of killerCreeps) {
+        sources.push(creep.pos)
+    }
 
     const queue = [];
 
-    // Set the cost to RESULT_COST for each source position and add them to the queue
+    // Set the cost to DANGER_TILE_COST for each source position and add them to the queue
     for (const source of sources) {
-        costMatrix.set(source.x, source.y, RESULT_COST);
+        costMatrix.set(source.x, source.y, DANGER_TILE_COST);
         queue.push(source);
     }
 
@@ -952,8 +963,8 @@ Room.prototype.getDefensiveAssessment = function () {
                 frontRampart.add(packCoord(neighbor.x, neighbor.y))
                 return
             }
-            if (costMatrix.get(x, y) < RESULT_COST) {
-                costMatrix.set(x, y, RESULT_COST)
+            if (costMatrix.get(x, y) < DANGER_TILE_COST) {
+                costMatrix.set(x, y, DANGER_TILE_COST)
                 queue.push(neighbor)
             }
         })
@@ -961,6 +972,9 @@ Room.prototype.getDefensiveAssessment = function () {
             leafNodes.push(currentPos)
         }
         if (isFront) {
+            if (costMatrix.get(currentPos.x, currentPos.y) < RAMPART_COST) {
+                costMatrix.set(currentPos.x, currentPos.y, RAMPART_COST)
+            }
             frontLine.push(currentPos)
         }
     }
@@ -970,16 +984,16 @@ Room.prototype.getDefensiveAssessment = function () {
             if (pos.isWall) {
                 continue
             }
-            if (!pos.isRampart && costMatrix.get(pos.x, pos.y) < RESULT_COST) {
-                costMatrix.set(pos.x, pos.y, RESULT_COST)
+            if (!pos.isRampart && costMatrix.get(pos.x, pos.y) < DANGER_TILE_COST) {
+                costMatrix.set(pos.x, pos.y, DANGER_TILE_COST)
             }
         }
         for (const pos of leafPos.getAtRange(2)) {
             if (pos.isWall) {
                 continue
             }
-            if (!pos.isRampart && costMatrix.get(pos.x, pos.y) < RESULT_COST) {
-                costMatrix.set(pos.x, pos.y, RESULT_COST)
+            if (!pos.isRampart && costMatrix.get(pos.x, pos.y) < DANGER_TILE_COST) {
+                costMatrix.set(pos.x, pos.y, DANGER_TILE_COST)
             }
         }
     }
@@ -1392,6 +1406,5 @@ Room.prototype.getTotalHealPower = function (target) { //target은 hostile creep
         }
         result += (creep.healPower / 3) // short range 아니면 효율 1/3 됨
     }
-    this.visual.text(result, target.pos.x, target.pos.y + 2, { font: 0.5, align: 'left', color: 'lime' })
     return result
 }

@@ -30,13 +30,6 @@ Room.prototype.depositCheck = function (roomName) {
 
         const maxCooldown = WORKER_SIZE * (1500 - depositRequest.distance * 2.2) * Business.getMaxBuyOrder(deposit.depositType, this.name).finalPrice / (RETURN_RATIO * WORKER_ENERGY_COST * Business.energyPrice)
 
-        // check spawnCapacity
-        let spawnCapacity = this.memory.spawnCapacity
-        spawnCapacity += depositRequest.available * 50 * 3
-        if (spawnCapacity / this.memory.spawnCapacityAvailable > 0.9) {
-            continue
-        }
-
         // check cooldown
         if (depositRequest.lastCooldown >= maxCooldown) {
             continue
@@ -44,7 +37,6 @@ Room.prototype.depositCheck = function (roomName) {
 
         depositRequest.maxCooldown = maxCooldown
         this.memory.depositRequests[depositRequest.depositId] = depositRequest
-        data.recordLog(`DEPOSIT: ${deposit.depositType}(lastCooldown ${depositRequest.lastCooldown}, maxCooldown ${depositRequest.maxCooldown}) in ${roomName}`, this.name)
     }
 }
 
@@ -86,19 +78,21 @@ Room.prototype.runDepositWork = function (depositRequest) {
     const numDepositWorker = depositWorkers.length
 
     if (depositRequest.lastCooldown > depositRequest.maxCooldown && numDepositWorker === 0) {
-        data.recordLog(`DEPOSIT: retreat from deposit ${depositRequest.depositId}. cooldown exceeded max cooldown`, depositRequest.roomName)
         delete this.memory.depositRequests[depositRequest.depositId]
         return
     }
 
     if (depositRequest.threatLevel > THREAT_LEVEL_THRESHOLD) {
+        if (depositWorkers.length > 0) {
+            for (const worker of depositWorkers) {
+                worker.getRecycled()
+            }
+            return
+        }
+
         data.recordLog(`DEPOSIT: retreat from deposit ${depositRequest.depositId} because of threat.`, depositRequest.roomName)
         delete this.memory.depositRequests[depositRequest.depositId]
         return
-    }
-
-    if (depositRequest.lastCooldown <= depositRequest.maxCooldown) {
-        this.spawnCapacity += depositRequest.available * 50 * 3
     }
 
     for (const worker of depositWorkers) {

@@ -1,3 +1,5 @@
+global.SPAWN_CAPACITY_THRESHOLD = 0.8
+
 Room.prototype.runRoomManager = function () {
     if (this.abandon) {
         this.abandonRoom()
@@ -34,16 +36,15 @@ Room.prototype.runRoomManager = function () {
         this.manageFactory()
         this.managePowerSpawn()
         this.manageScout()
-        this.manageSource()
         this.manageClaim()
     }
 
     this.manageEnergy()
     this.manageLab() // boosting이 우선이라 밑에 둠
 
+    this.manageSource()
     this.manageSpawn()
     this.manageVisual()
-    // this.getDefenseCostMatrix(254, { checkResult: true })
 }
 
 Room.prototype.checkTombstone = function () {
@@ -59,10 +60,10 @@ Room.prototype.checkTombstone = function () {
     map[this.name] = map[this.name] || {}
 
     // 있으면 여러가지 확인
-    const hostileStructures = this.structures.tower
+    const hostileStructures = this.structures.tower.filter(tower => tower.RCLActionable)
     // tower 있다는건 다른 사람 방이거나 InvaderCore 있다는 뜻.
     if (hostileStructures.length) {
-        map[this.name].inaccessible = Game.time + 20000
+        map[this.name].inaccessible = Game.time + 10000
         map[this.name].lastScout = Game.time
         return
     }
@@ -114,13 +115,25 @@ Room.prototype.checkTombstone = function () {
 
         // user한테 죽은 경우 colony 버리고 확인 멈추고 return.
         if (username !== 'Invader') {
-            map[this.name].threat = true
-            if (Overlord.remotes.includes(this.name) && this.memory.host) {
-                const hostRoom = Game.rooms[this.memory.host]
-                if (hostRoom) {
-                    data.recordLog(`REMOTE: Abandon ${this.name}. defender is killed.`, this.name)
-                    hostRoom.abandonRemote(this.name)
+            if (Overlord.remotes.includes(this.name)) {
+                if (!deadCreep) {
+                    continue
                 }
+                if (!deadCreep.name) {
+                    continue
+                }
+                if (!Memory.creeps[deadCreep.name]) {
+                    continue
+                }
+                if (!Memory.creeps[deadCreep.name].base) {
+                    continue
+                }
+                const hostRoom = Game.rooms[Memory.creeps[deadCreep.name].base]
+                if (!hostRoom) {
+                    continue
+                }
+                data.recordLog(`REMOTE: Abandon ${this.name}. defender is killed.`, this.name)
+                hostRoom.abandonRemote(this.name)
             }
             return
         }
@@ -132,7 +145,7 @@ Room.prototype.manageSource = function () {
     for (const source of this.sources) {
         if (this.memory.militaryThreat) {
             const container = source.container
-            if (!container || this.defenseCostMatrix.get(container.pos.x, container.pos.y) === 255) {
+            if (!container || this.defenseCostMatrix.get(container.pos.x, container.pos.y) >= DANGER_TILE_COST) {
                 continue
             }
         }
@@ -142,14 +155,10 @@ Room.prototype.manageSource = function () {
             { font: 0.5, align: 'left' }
         )
 
-        this.spawnCapacity += 10
-
         this.visual.text(`🚚${source.info.numCarry}/${source.info.maxCarry}`,
             source.pos.x + 0.5, source.pos.y + 0.5,
             { font: 0.5, align: 'left' }
         )
-
-        this.spawnCapacity += Math.ceil(source.info.maxCarry * 1.5)
 
         // source 근처 energy 저장량 (container + dropped energy)
         this.visual.text(` 🔋${source.energyAmountNear}/2000`,
@@ -174,7 +183,7 @@ Room.prototype.manageSource = function () {
         sourceUtilizationRate += Math.min(minerRatio, haulerRatio)
 
         if (minerRatio === 0) {
-            this.requestMiner(source, 2)
+            this.requestMiner(source, 1)
             continue
         }
 
@@ -184,7 +193,7 @@ Room.prototype.manageSource = function () {
         }
 
         if (minerRatio < 1 && source.info.numMiner < source.available) {
-            this.requestMiner(source, 3)
+            this.requestMiner(source, 2)
             continue
         }
 
@@ -308,8 +317,8 @@ Room.prototype.manageLink = function () {
 Room.prototype.manageLab = function () {
     const boostRequests = Object.values(this.boostQueue)
     if (boostRequests.length > 0) {
-        const targetRequest = getMinObject(boostRequests, (request) => request.time)
-        return this.operateBoost(targetRequest)
+        this.manageBoost(boostRequests)
+        return
     }
 
     if (!data.okCPU) {

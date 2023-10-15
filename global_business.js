@@ -73,6 +73,9 @@ Business.getMinSellOrder = function (resourceType, roomName) {
         order.finalPrice = Business.getFinalPrice(order, roomName)
         return order.finalPrice
     })
+    if (minSellOrder === undefined) {
+        return { order: undefined, finalPrice: undefined }
+    }
     return { order: minSellOrder, finalPrice: minSellOrder.finalPrice }
 }
 
@@ -110,7 +113,6 @@ Business.getPriceRange = function (resourceType) {
     history = Array.isArray(history) ? history : []
 
     if (history.length < 2) {
-
         return Game._priceRange[resourceType] = undefined
     }
 
@@ -125,6 +127,7 @@ Business.buy = function (resourceType, amount, roomName) {
     const priceRange = this.getPriceRange(resourceType)
 
     if (priceRange === undefined) {
+        Business.panicBuy(resourceType, amount, roomName)
         return ERR_NOT_FOUND
     }
     const startPrice = priceRange.avgPrice
@@ -162,7 +165,8 @@ Business.buy = function (resourceType, amount, roomName) {
     //deal at private server
     if (order && priceRange.max - priceRange.min === 0) {
         const dealAmount = Math.min(amount, order.amount)
-        if (Game.market.deal(order.id, amount, roomName) === OK && dealAmount === amount) {
+        const dealResult = Game.market.deal(order.id, amount, roomName)
+        if (dealResult === OK && dealAmount === amount) {
             this.cancelAllOrder(resourceType, roomName, ORDER_BUY)
             return OK
         }
@@ -184,6 +188,21 @@ Business.buy = function (resourceType, amount, roomName) {
     if (currentOrder.price < priceNow) {
         Game.market.changeOrderPrice(currentOrder.id, priceNow)
     }
+}
+
+Business.panicBuy = function (resourceType, amount, roomName) {
+    const minSellOrder = this.getMinSellOrder(resourceType, roomName)
+    const order = minSellOrder !== undefined ? minSellOrder.order : undefined
+    if (!order) {
+        return false
+    }
+
+    const dealAmount = Math.min(amount, order.amount)
+    const dealResult = Game.market.deal(order.id, amount, roomName)
+    if (dealResult === OK) {
+        return true
+    }
+    return dealResult
 }
 
 Business.sell = function (resourceType, amount, roomName = undefined) {
@@ -255,12 +274,13 @@ Business.sell = function (resourceType, amount, roomName = undefined) {
 Business.dump = function (resourceType, amount, roomName) {
 
     const maxBuyOrder = this.getMaxBuyOrder(resourceType, roomName)
-    const order = maxBuyOrder.order
+    const order = maxBuyOrder !== undefined ? maxBuyOrder.order : undefined
     if (!order) {
         return false
     }
     const sellAmount = Math.min(order.amount, amount)
     const result = Game.market.deal(order.id, sellAmount, roomName)
+
     if (result === OK) {
         return true
     }

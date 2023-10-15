@@ -152,10 +152,6 @@ Creep.prototype.getPathToAttackImportantStructures = function () {
         if (netHeal < 0) {
             costArray[i] = 0
         }
-        if (VISUALIZE === true) {
-            const paresd = parseCoord(i)
-            this.room.visual.text(netHeal, paresd.x, paresd.y, { font: 0.3 })
-        }
     }
 
     const dijkstra = this.room.dijkstra(this.pos, goals, costArray)
@@ -164,7 +160,7 @@ Creep.prototype.getPathToAttackImportantStructures = function () {
 
 /**
  * 
- * @returns Uint32Array with packed coord as keys and costs as values
+ * @returns Uint32Array with packed coord as keys and costs as values. 0 means cannot be passed
  */
 Room.prototype.getCostArrayForBulldoze = function (attackPower) {
     const result = new Uint32Array(2500)
@@ -172,12 +168,8 @@ Room.prototype.getCostArrayForBulldoze = function (attackPower) {
 
     for (let x = 0; x < 50; x++) {
         for (let y = 0; y < 50; y++) {
-            if (!isValidCoord(x, y)) {
-                continue
-            }
 
             const packed = packCoord(x, y)
-
             const pos = new RoomPosition(x, y, this.name)
             const structures = pos.lookFor(LOOK_STRUCTURES)
 
@@ -190,6 +182,11 @@ Room.prototype.getCostArrayForBulldoze = function (attackPower) {
                 result[packed] = 5
             } else {
                 result[packed] = 1
+            }
+
+            if (!isValidCoord(x, y)) {
+                result[packed] = 100
+                continue
             }
 
             result[packed] += Math.ceil(pos.getTotalHits() / attackPower)

@@ -3,81 +3,12 @@ const MINERAL_AMOUNT_TO_SELL = 100000
 const MINERAL_AMOUNT_BUFFER = 30000
 const BOOST_RCL_ENERGY_LEVEL_GOAL = 3
 
-StructureTerminal.prototype.gatherResource = function (resourceType, amount, options = {}) {
-    const defaultOptions = { threshold: 1000, RCLthreshold: 6 }
-    const { threshold, RCLthreshold } = { ...defaultOptions, ...options }
-
-    if (this.store[resourceType] >= amount) {
-        return OK
-    }
-
-    const terminals = Overlord.structures.terminal.sort((a, b) => b.store[resourceType] - a.store[resourceType])
-    for (const terminal of terminals) {
-        if (terminal.room.name === this.room.name) {
-            continue
-        }
-
-        if (terminal.room.controller.level < RCLthreshold) {
-            continue
-        }
-
-        if (terminal.cooldown) {
-            continue
-        }
-        if (terminal.store[resourceType] < threshold) {
-            break
-        }
-        const amountToSend = Math.min(terminal.store[resourceType], amount - this.store[resourceType])
-
-        if (terminal.send(resourceType, amountToSend, this.room.name) === OK) {
-            Overlord.structures.terminal.filter(element => element.id !== terminal.id)
-            if (amountToSend + this.store[resourceType] >= amount) {
-                return OK
-            }
-        }
-    }
-    return ERR_NOT_ENOUGH_RESOURCES
-}
-
-StructureTerminal.prototype.manageMinerals = function () {
-    for (const resourceType of BASIC_MINERALS) {
-        const roomName = this.room.name
-        const storeAmount = this.store[resourceType]
-        // sell if amount excess threshold
-
-        if (!this.room.memory[`sell${resourceType}`] && storeAmount > MINERAL_AMOUNT_TO_SELL) {
-            this.room.memory[`sell${resourceType}`] = true
-        } else if (this.room.memory[`sell${resourceType}`] && storeAmount <= MINERAL_AMOUNT_TO_SELL - MINERAL_AMOUNT_BUFFER) {
-            this.room.memory[`sell${resourceType}`] = false
-        }
-
-        if (this.room.memory[`sell${resourceType}`]) {
-            const amount = storeAmount - MINERAL_AMOUNT_TO_SELL + MINERAL_AMOUNT_BUFFER
-            Business.sell(resourceType, amount, roomName)
-            continue
-        }
-
-        // continue if sufficient
-        if (storeAmount >= MINERAL_AMOUNT_TO_KEEP) {
-            Business.cancelAllOrder(resourceType, roomName, ORDER_BUY)
-            continue
-        }
-
-        const amountNeeded = MINERAL_AMOUNT_TO_KEEP - storeAmount
-
-        //try gather. continue if success
-        if (this.gatherResource(resourceType, MINERAL_AMOUNT_TO_KEEP, { threshold: MINERAL_AMOUNT_TO_KEEP + amountNeeded }) === OK) {
-            Business.cancelAllOrder(resourceType, roomName, ORDER_BUY)
-            continue
-        }
-
-        //try buy
-        Business.buy(resourceType, amountNeeded, roomName)
-    }
-}
-
 StructureTerminal.prototype.run = function () {
     if (Memory.abandon && Memory.abandon.includes(this.room.name)) {
+        return
+    }
+
+    if (this.cooldown) {
         return
     }
 
@@ -128,6 +59,7 @@ StructureTerminal.prototype.run = function () {
             }
             const amount = Math.floor(room.terminal.store[RESOURCE_ENERGY] / 2)
             if (room.terminal.send(RESOURCE_ENERGY, amount, this.room.name) === OK) {
+                break
             }
         }
     }
@@ -136,5 +68,80 @@ StructureTerminal.prototype.run = function () {
         if (COMMODITIES_TO_SELL.includes(resourceType)) {
             Business.sell(resourceType, this.store[resourceType], this.room.name)
         }
+    }
+}
+
+StructureTerminal.prototype.gatherResource = function (resourceType, amount, options = {}) {
+    const defaultOptions = { threshold: 1000, RCLthreshold: 6 }
+    const { threshold, RCLthreshold } = { ...defaultOptions, ...options }
+
+    if (this.store[resourceType] >= amount) {
+        return OK
+    }
+
+    const terminals = Overlord.structures.terminal.sort((a, b) => b.store[resourceType] - a.store[resourceType])
+    for (const terminal of terminals) {
+        if (terminal.room.name === this.room.name) {
+            continue
+        }
+
+        if (terminal.room.controller.level < RCLthreshold) {
+            continue
+        }
+
+        if (terminal.cooldown) {
+            continue
+        }
+        if (terminal.store[resourceType] < threshold) {
+            break
+        }
+        const amountToSend = Math.min(terminal.store[resourceType], amount - this.store[resourceType])
+
+        if (terminal.send(resourceType, amountToSend, this.room.name) === OK) {
+            Overlord.structures.terminal.filter(element => element.id !== terminal.id)
+            if (amountToSend + this.store[resourceType] >= amount) {
+                return OK
+            }
+        }
+    }
+    return ERR_NOT_ENOUGH_RESOURCES
+}
+
+StructureTerminal.prototype.manageMinerals = function () {
+    const resourceTypes = [...BASIC_MINERALS].sort((a, b) => this.store[a] - this.store[b])
+    for (const resourceType of resourceTypes) {
+        const roomName = this.room.name
+        const storeAmount = this.store[resourceType]
+        const energyAmount = this.store[RESOURCE_ENERGY]
+        // sell if amount excess threshold
+
+        if (!this.room.memory[`sell${resourceType}`] && storeAmount > MINERAL_AMOUNT_TO_SELL) {
+            this.room.memory[`sell${resourceType}`] = true
+        } else if (this.room.memory[`sell${resourceType}`] && storeAmount <= MINERAL_AMOUNT_TO_SELL - MINERAL_AMOUNT_BUFFER) {
+            this.room.memory[`sell${resourceType}`] = false
+        }
+
+        if (this.room.memory[`sell${resourceType}`]) {
+            const amount = Math.min(energyAmount, storeAmount - MINERAL_AMOUNT_TO_SELL + MINERAL_AMOUNT_BUFFER)
+            Business.sell(resourceType, amount, roomName)
+            continue
+        }
+
+        // continue if sufficient
+        if (storeAmount >= MINERAL_AMOUNT_TO_KEEP) {
+            Business.cancelAllOrder(resourceType, roomName, ORDER_BUY)
+            continue
+        }
+
+        const amountNeeded = Math.min(1000, MINERAL_AMOUNT_TO_KEEP - storeAmount)
+
+        //try gather. continue if success
+        if (this.gatherResource(resourceType, MINERAL_AMOUNT_TO_KEEP, { threshold: MINERAL_AMOUNT_TO_KEEP + amountNeeded }) === OK) {
+            Business.cancelAllOrder(resourceType, roomName, ORDER_BUY)
+            continue
+        }
+
+        //try buy
+        Business.buy(resourceType, amountNeeded, roomName)
     }
 }

@@ -1,6 +1,6 @@
 require('constants')
-require('global_overlord')
 require('data')
+require('global_overlord')
 require('function_visualizeRoomInfo')
 require('global_business')
 require('global_function')
@@ -65,6 +65,10 @@ module.exports.loop = () => {
 
     profiler.wrap(function () {
         // bucket check. 8000 5000 2000
+        if (Game.cpu.bucket < 100) {
+            return
+        }
+
         if (data.enoughCPU && Game.cpu.bucket < 5000) { // stop market, highwaymining
             data.enoughCPU = false
         } else if (!data.enoughCPU && Game.cpu.bucket > 8000) {
@@ -227,7 +231,7 @@ module.exports.loop = () => {
             Overlord.observeRoom(data.observe.roomName, data.observe.tick)
         }
 
-        if (Game.time % 1 === 0 && data.enoughCPU) {
+        if (data.enoughCPU) {
             const terminal = Overlord.structures.terminal.sort()[data.terminalOrder]
             data.terminalOrder = (data.terminalOrder + 1) % (Overlord.structures.terminal.length)
             if (terminal && (!Memory.abandon || !Memory.abandon.includes(terminal.room.name))) {
@@ -236,8 +240,12 @@ module.exports.loop = () => {
         }
 
         if (data.info) {
-            Overlord.visualizeRoomInfo()
-            Overlord.mapInfo()
+            try {
+                Overlord.visualizeRoomInfo()
+                Overlord.mapInfo()
+            } catch (err) {
+                console.log(err)
+            }
         } else {
             Overlord.purgeMapInfo()
             new RoomVisual().text('time: ' + Game.time, 0, 46, { align: 'left' })

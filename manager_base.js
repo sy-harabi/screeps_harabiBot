@@ -1,6 +1,6 @@
 Room.prototype.manageConstruction = function () {
-    if (!this.memory.level || Game.time % 16000 === 0) { // 16000 tick은 대략 하루
-        this.memory.level = 0
+    if (!this.memory.level || Game.time % 5000 === 0) { // 16000 tick은 대략 하루
+        this.memory.level = this.controller.level - 1
     }
 
     if (this.controller.level < this.memory.level) {
@@ -28,10 +28,13 @@ Room.prototype.manageConstruction = function () {
 Room.prototype.constructByBasePlan = function (level) {
     const basePlan = this.basePlan
     if (!basePlan) {
+        if (Game.cpu.bucket < 2000) {
+            return false
+        }
         const spawn = this.structures.spawn[0]
         if (!spawn) {
             this.memory.doOptimizeBasePlan = true
-            return
+            return false
         }
         if (!this.getBasePlanBySpawn(spawn)) {
             return false
@@ -42,8 +45,10 @@ Room.prototype.constructByBasePlan = function (level) {
     let numConstructionSitesThisRoom = this.constructionSites.length
 
     if (this.controller.level < 5) { // rcl 5 이전에는 controller container
-        const linkPos = this.parsePos(this.memory.basePlan.linkPositions.controller)
-        linkPos.createConstructionSite('container')
+        if (this.controller.level > 1) {
+            const linkPos = this.parsePos(this.memory.basePlan.linkPositions.controller)
+            linkPos.createConstructionSite('container')
+        }
     } else {
         const controllerContainer = this.controller.container
         if (controllerContainer) {
@@ -54,7 +59,7 @@ Room.prototype.constructByBasePlan = function (level) {
     for (let i = 1; i <= level; i++) {
         basePlan[`lv${i}`].sort((a, b) => BUILD_PRIORITY[a.structureType] - BUILD_PRIORITY[b.structureType])
         for (const structure of basePlan[`lv${i}`]) {
-            if (numConstructionSitesThisRoom >= 5) {
+            if (numConstructionSitesThisRoom >= 10) {
                 return false
             }
             if (structure.structureType === 'spawn') {
@@ -66,7 +71,7 @@ Room.prototype.constructByBasePlan = function (level) {
                 continue
             }
             if (structure.structure === 'rampart') {
-                if (!this.storage || this.storage[RESOURCE_ENERGY] < 11000) {
+                if (!this.storage || this.storage[RESOURCE_ENERGY] < 10000) {
                     return false
                 }
             }

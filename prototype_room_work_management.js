@@ -30,7 +30,7 @@ Room.prototype.manageReinforce = function () {
     const rampartAnchorsStatus = this.getRampartAnchorsStatus()
     for (const laborer of this.creeps.laborer) {
         // 위험한 곳에 있으면 즉시 탈출해라
-        if (costs.get(laborer.pos.x, laborer.pos.y) >= 254 && spawn) {
+        if (costs.get(laborer.pos.x, laborer.pos.y) >= DANGER_TILE_COST && spawn) {
             laborer.moveMy({ pos: spawn.pos, range: 1 }, { staySafe: false })
         }
         const status = rampartAnchorsStatus[laborer.memory.assign]
@@ -125,16 +125,13 @@ Room.prototype.manageBuild = function () {
 Room.prototype.manageUpgrade = function () {
     // laborer 동작 및 이용가능한 laborer 찾기
     let laborers = this.creeps.laborer
-    let controllerLink = undefined
-    if (this.controller.link && this.controller.link.RCLActionable) {
-        controllerLink = this.controller.link
-    }
+    const controllerLink = this.controller.linked ? this.controller.link : undefined
+
     const container = this.controller.container
 
     const tombstones = this.controller.pos.findInRange(FIND_TOMBSTONES, 3).filter(tombstone => tombstone.store[RESOURCE_ENERGY] > 0)
     const droppedEnergies = this.controller.pos.findInRange(FIND_DROPPED_RESOURCES, 3).filter(droppedResource => droppedResource.resourceType === RESOURCE_ENERGY)
     const droppedEnergy = droppedEnergies[0]
-
     for (const laborer of laborers) {
         if (laborer.memory.boosted === false && laborer.ticksToLive > 0.8 * CREEP_LIFE_TIME) { // boost 예약이 안되어있으면 undefined. boost 되었으면 true
             continue
@@ -154,7 +151,7 @@ Room.prototype.manageUpgrade = function () {
                 }
                 continue
             }
-            if (this.controller.linked) {
+            if (controllerLink) {
                 if (controllerLink.store[RESOURCE_ENERGY] > 0) {
                     laborer.getEnergyFrom(controllerLink.id)
                 }
@@ -162,6 +159,17 @@ Room.prototype.manageUpgrade = function () {
             }
             laborer.needDelivery = true
         }
+
+        if (controllerLink && laborer.pos.getRangeTo(controllerLink) === 1) {
+            if (controllerLink.store[RESOURCE_ENERGY] > 0) {
+                laborer.getEnergyFrom(controllerLink.id)
+            }
+        } else if (container && laborer.pos.getRangeTo(container) <= 1) {
+            if (container.store[RESOURCE_ENERGY] > 0) {
+                laborer.getEnergyFrom(container.id)
+            }
+        }
+
         laborer.upgradeRCL()
     }
 }
@@ -234,7 +242,7 @@ Room.prototype.parsePos = function (packedPos) {
 
 Creep.prototype.repairMy = function (target) {
     const costs = this.room.memory.militaryThreat ? this.room.defenseCostMatrix : this.room.basicCostmatrix
-    if (costs.get(this.pos.x, this.pos.y) >= 255) {
+    if (costs.get(this.pos.x, this.pos.y) >= DANGER_TILE_COST) {
         this.heap.run = 3
     } else {
         delete this.heap.run
@@ -243,7 +251,7 @@ Creep.prototype.repairMy = function (target) {
     if (this.heap.run > 0) {
         const spawn = this.room.structures.spawn[0]
         this.heap.run--
-        if (spawn && costs.get(this.pos.x, this.pos.y) >= 255) {
+        if (spawn && costs.get(this.pos.x, this.pos.y) >= DANGER_TILE_COST) {
             return this.moveMy({ pos: spawn.pos, range: 1 })
         }
     }
@@ -257,7 +265,7 @@ Creep.prototype.repairMy = function (target) {
     }
 
     if (this.pos.getRangeTo(target) > 3) {
-        const workingSpot = this.pos.findClosestByRange(target.pos.getInRange(3).filter(pos => !pos.isWall && costs.get(pos.x, pos.y) < 255 && (this.checkEmpty(pos) === OK)))
+        const workingSpot = this.pos.findClosestByRange(target.pos.getInRange(3).filter(pos => !pos.isWall && costs.get(pos.x, pos.y) < DANGER_TILE_COST && (this.checkEmpty(pos) === OK)))
         if (workingSpot) {
             this.heap.workingSpot = {}
             this.heap.workingSpot.targetId = target.id

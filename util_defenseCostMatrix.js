@@ -2,7 +2,7 @@
 // rampart 바깥쪽을 모두 구해서 cost를 높이는 method
 // dismantleRoom 때문에 남겨둠
 
-Room.prototype.getDefenseCostMatrix = function (resultCost = 254, option = {}) { //option = {checkResult:false, exitDirection:FIND_EXIT}
+Room.prototype.getDefenseCostMatrix = function (resultCost = DANGER_TILE_COST, option = {}) { //option = {checkResult:false, exitDirection:FIND_EXIT}
   let { checkResult, exitDirection } = option
 
   if (checkResult === undefined) {

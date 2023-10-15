@@ -6,7 +6,6 @@ Flag.prototype.dismantleRoom = function () {
 
     if (this.memory.completeDismantle === true) {
         closestMyRoom.resetScout()
-        this.pos.createFlag(`clear ${this.pos.roomName}`)
         Game.notify(`${this.pos.roomName} dismantle completed`)
         for (const dismantler of dismantlers) {
             dismantler.suicide()
@@ -50,7 +49,51 @@ Flag.prototype.dismantleRoom = function () {
 
     if (targetRoom) {
         // 내 방으로 가는 출구 찾기
-        const exitDirection = targetRoom.findExitTo(closestMyRoom)
+
+        // route 찾기
+        const route = Game.map.findRoute(targetRoomName, closestMyRoom.name, {
+            routeCallback(roomName, fromRoomName) {
+                // 현재 creep이 있는 방이면 무조건 쓴다
+                if (roomName === targetRoomName) {
+                    return 1
+                }
+
+                //목적지는 무조건 간다
+                if (roomName === closestMyRoom.name) {
+                    return 1
+                }
+
+                // inaccessible로 기록된 방은 쓰지말자
+                if (Memory.map[roomName] && Memory.map[roomName].inaccessible > Game.time) {
+                    return 25
+                }
+
+                // 막혀있거나, novice zone이거나, respawn zone 이면 쓰지말자
+                if (Game.map.getRoomStatus(roomName).status !== 'normal') {
+                    return Infinity
+                }
+
+                const roomCoord = roomName.match(/[a-zA-Z]+|[0-9]+/g)
+                roomCoord[1] = Number(roomCoord[1])
+                roomCoord[3] = Number(roomCoord[3])
+                const x = roomCoord[1]
+                const y = roomCoord[3]
+                // highway면 cost 1
+                if (x % 10 === 0 || y % 10 === 0) {
+                    return 1
+                }
+
+                // 내가 쓰고 있는 방이면 cost 1
+                const isMy = Game.rooms[roomName] && (Game.rooms[roomName].isMy || Game.rooms[roomName].isMyRemote)
+                if (isMy) {
+                    return 1
+                }
+
+                // 다른 경우에는 cost 2.5
+                return 2.5;
+            }
+        })
+        const exitDirection = route[0].exit
         const exits = targetRoom.find(exitDirection)
 
         // controller에서 내 방으로 가는 출구로 가는 길 찾기

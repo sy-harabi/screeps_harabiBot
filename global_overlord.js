@@ -1,4 +1,4 @@
-const EXPIRATION_PERIOD = 40000
+const EXPIRATION_PERIOD = 20000
 
 global.Overlord = {
   get map() {

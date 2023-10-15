@@ -72,8 +72,11 @@ Object.defineProperties(RoomPosition.prototype, {
                     break
                 }
                 if (lookObject.type === LOOK_CONSTRUCTION_SITES) {
-                    this._walkable = false
-                    break
+                    const structureType = lookObject.constructionSite.structureType
+                    if (OBSTACLE_OBJECT_TYPES.includes(structureType)) {
+                        this._walkable = false
+                        break
+                    }
                 }
             }
             return this._walkable
