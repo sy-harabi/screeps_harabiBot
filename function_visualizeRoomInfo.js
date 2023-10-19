@@ -173,14 +173,15 @@ const remoteIncome = new VisualItem('Remote', 5, (room) => {
         if (status.construction === 'proceed') {
             continue
         }
-        const remoteIncome = ((status.lastProfit || 0) + status.profit - (status.lastCost || 0) - status.cost) / (Game.time - (status.lastTick || status.tick))
+        const numSource = room.getRemoteNumSource(remoteName)
+        const remoteIncome = room.getRemoteNetIncomePerTick(remoteName)
         if (isNaN(remoteIncome)) {
             continue
         }
 
         const visualPos = new RoomPosition(25, 5, remoteName)
 
-        const color = remoteIncome > 5 ? '#000000' : '#740001'
+        const color = remoteIncome / numSource > 5 ? '#000000' : '#740001'
         Game.map.visual.text(`📊${remoteIncome.toFixed(1)}e/t`, visualPos, { fontSize: 5, backgroundColor: color, opacity: 1 })
 
         income += remoteIncome

@@ -184,13 +184,17 @@ Room.prototype.manageWallMakerSpawn = function () {
     }
 
     // 일단 에너지 남으면 생산
-    const maxWallMakerWork = Math.min(WALLMAKER_NUM_WORK_MAX, Math.max(0, 10 * Math.ceil(this.energyLevel / 2)))
     const numWorkEachWallMaker = Math.min(16, Math.floor(this.energyAvailable / 200))
-
     const wallMakerWork = this.creeps.wallMaker.map(creep => creep.getActiveBodyparts(WORK)).reduce((acc, curr) => acc + curr, 0)
-    if (wallMakerWork < maxWallMakerWork) {
-        this.requestWallMaker(numWorkEachWallMaker)
-        return
+
+    // RCL8이고 에너지 남으면 생산
+    if (this.controller.level === 8) {
+        const maxWallMakerWork = Math.min(WALLMAKER_NUM_WORK_MAX, Math.max(0, 10 * Math.ceil(this.energyLevel / 2)))
+
+        if (wallMakerWork < maxWallMakerWork) {
+            this.requestWallMaker(numWorkEachWallMaker)
+            return
+        }
     }
 
     // 제일 약한 rampart가 threshold를 넘는지 확인
@@ -296,7 +300,7 @@ Room.prototype.requestMiner = function (source, priority) {
     if (this.memory.militaryThreat) {
         priority = 6
     }
-    const maxEnergy = this.energyAvailable
+    const maxEnergy = this.heap.sourceUtilizationRate > 0 ? this.energyCapacityAvailable : this.energyAvailable
     let body = []
     if (source.linked) {
         if (maxEnergy >= 800) {
@@ -493,7 +497,7 @@ Room.prototype.requestColonyHaulerForConstruct = function (colonyName, sourceId,
     this.spawnQueue.push(request)
 }
 
-Room.prototype.requestColonyMiner = function (colonyName, sourceId) {
+Room.prototype.requestColonyMiner = function (colonyName, sourceId, containerId) {
     let cost = 0
     const body = []
     for (let i = 0; i < Math.min(Math.floor((this.energyCapacityAvailable) / 150), 6); i++) {
@@ -512,6 +516,7 @@ Room.prototype.requestColonyMiner = function (colonyName, sourceId) {
         base: this.name,
         colony: colonyName,
         sourceId: sourceId,
+        containerId: containerId,
         ignoreMap: 1
     }
 

@@ -4,8 +4,9 @@ Object.defineProperties(Source.prototype, {
             if (this.heap.waitingArea) {
                 return this.heap.waitingArea
             }
-            const floodFill = this.room.floodFill([this.pos], { maxLevel: 3 }).positions
-            return this.heap.waitingArea = [...floodFill[2], ...floodFill[3]]
+            const costs = this.room.basicCostmatrix
+            const floodFill = this.room.floodFill([this.pos], { maxLevel: 3, costMatrix: costs }).positions
+            return this.heap.waitingArea = [...floodFill[2], ...floodFill[3]].filter(pos => costs.get(pos.x, pos.y) < 5)
         }
     },
     available: {

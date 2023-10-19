@@ -145,12 +145,6 @@ Room.prototype.manageUpgrade = function () {
                 laborer.getEnergyFrom(droppedEnergy.id)
                 continue
             }
-            if (container) {
-                if (container.store[RESOURCE_ENERGY] > 0) {
-                    laborer.getEnergyFrom(container.id)
-                }
-                continue
-            }
             if (controllerLink) {
                 if (controllerLink.store[RESOURCE_ENERGY] > 0) {
                     laborer.getEnergyFrom(controllerLink.id)
@@ -158,6 +152,12 @@ Room.prototype.manageUpgrade = function () {
                 continue
             }
             laborer.needDelivery = true
+            if (container) {
+                if (container.store[RESOURCE_ENERGY] > 0) {
+                    laborer.getEnergyFrom(container.id)
+                }
+                continue
+            }
         }
 
         if (controllerLink && laborer.pos.getRangeTo(controllerLink) === 1) {
