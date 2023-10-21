@@ -73,7 +73,6 @@ global.CREEP_ROELS = [
     'wallMaker',
     'attacker',
     'healer',
-    'highwayMiner',
     'depositWorker',
     'looter',
     'scouter',

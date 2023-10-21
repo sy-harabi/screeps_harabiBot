@@ -481,6 +481,23 @@ RoomVisual.prototype.connectRoads = function (opts = {}) {
   return this;
 }
 
+RoomVisual.prototype.arrow = function (pos1, pos2, opts = {}) {
+  let color = !!opts.color ? opts.color : 'blue'
+  let opacity = !!opts.opacity ? opts.opacity : 0.5
+  this.line(pos1, pos2, { width: 0.1, color, opacity })
+  const x1 = pos1.x
+  const y1 = pos1.y
+  const x2 = pos2.x
+  const y2 = pos2.y
+  const point1x = (x1 + 3 * x2 + y1 - y2) / 4
+  const point1y = (y1 + 3 * y2 + x2 - x1) / 4
+  const point1 = [point1x, point1y]
+  const point2x = (x1 + 3 * x2 - y1 + y2) / 4
+  const point2y = (y1 + 3 * y2 - x2 + x1) / 4
+  const point2 = [point2x, point2y]
+  this.poly([pos2, point1, point2, pos2], { fill: color, opacity })
+}
+
 
 RoomVisual.prototype.speech = function (text, x, y, opts = {}) {
   var background = !!opts.background ? opts.background : colors.speechBackground

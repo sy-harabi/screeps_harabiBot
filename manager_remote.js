@@ -274,9 +274,7 @@ Room.prototype.extractRemote = function (remoteName) {
         status.lastCost = status.cost
         status.lastTick = status.tick
         this.checkRemoteEfficiency(remoteName)
-        if (!status) {
-            return true
-        }
+        return
     }
 
     const sourceIds = Object.keys(status.infraPlan)
@@ -341,7 +339,8 @@ Room.prototype.extractRemote = function (remoteName) {
                     }
                 } else if (status.construction === 'complete') {
                     enoughHauler = false
-                    this.requestColonyHauler(remoteName, id, spawnCarryEach, pathLength)
+                    this.requestColonyHauler(remoteName, id, 1, pathLength)
+                    // this.requestColonyHauler(remoteName, id, spawnCarryEach, pathLength)
                 } else {
                     enoughHauler = false
                     this.requestFastColonyHauler(remoteName, id, spawnCarryEach, pathLength)

@@ -35,6 +35,13 @@ Room.prototype.depositCheck = function (roomName) {
             continue
         }
 
+        const spawnCapacityAvailable = this.structures.spawn.length * 500
+        const spawnCapacity = this.getSpawnCapacity()
+        const depositSpawnCapacity = this.getDepositSpawnCapacity(depositRequest)
+        if (spawnCapacity + depositSpawnCapacity > spawnCapacityAvailable) {
+            break
+        }
+
         depositRequest.maxCooldown = maxCooldown
         this.memory.depositRequests[depositRequest.depositId] = depositRequest
     }
@@ -157,5 +164,6 @@ Creep.prototype.depositWork = function (depositRequest) {
         return
     }
 
+    this.setWorkingInfo(deposit.pos, 1)
     this.harvest(deposit)
 }

@@ -297,7 +297,7 @@ Object.defineProperties(Room.prototype, {
             }
 
             if (this.energyLevel < 0) {
-                return this.heap.maxWork = numWorkEach
+                return this.heap.maxWork = 10
             }
 
             const rangeFromControllerToStorage = this.controller.pos.getRangeTo(this.storage)

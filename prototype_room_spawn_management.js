@@ -76,9 +76,14 @@ Room.prototype.manageSpawn = function () {
     const maxNumLaborer = Math.ceil(maxWork / this.laborer.numWorkEach)
     const numLaborer = this.creeps.laborer.filter(creep => (creep.ticksToLive || 1500) > 3 * creep.body.length).length
     // source 가동률만큼만 생산 
-    if (numLaborer < maxNumLaborer && this.laborer.numWork < maxWork) {
-        this.requestLaborer(Math.min(maxWork - this.laborer.numWork, this.laborer.numWorkEach))
+
+    if (this.laborer.numWork < maxWork) {
+        this.requestLaborer(1)
     }
+
+    // if (numLaborer < maxNumLaborer && this.laborer.numWork < maxWork) {
+    //     this.requestLaborer(Math.min(maxWork - this.laborer.numWork, this.laborer.numWorkEach))
+    // }
 
     this.visual.text(`🛠️${this.laborer.numWork}/${maxWork}`, this.controller.pos.x + 0.75, this.controller.pos.y - 0.5, { align: 'left' })
 
@@ -124,14 +129,13 @@ Room.prototype.manageSpawn = function () {
             continue
         }
         if (spawning.remainingTime === 0) {
-            const creeps = spawn.pos.findInRange(FIND_MY_CREEPS, 1)
-
-            for (const creep of creeps) {
-                const direction = Math.floor(Math.random() * 8) + 1
-                creep.move(direction)
+            const adjacentCreeps = spawn.pos.findInRange(FIND_MY_CREEPS, 1)
+            for (const creep of adjacentCreeps) {
+                const nextPos = creep.pos.getAtRange(1).find(pos => pos.walkable && creep.checkEmpty(pos))
+                if (nextPos) {
+                    creep.moveMy(nextPos)
+                }
             }
-
-            console.log('get Out')
         }
         const name = spawning.name
         const role = name.split(' ')[1]
@@ -192,7 +196,8 @@ Room.prototype.manageWallMakerSpawn = function () {
         const maxWallMakerWork = Math.min(WALLMAKER_NUM_WORK_MAX, Math.max(0, 10 * Math.ceil(this.energyLevel / 2)))
 
         if (wallMakerWork < maxWallMakerWork) {
-            this.requestWallMaker(numWorkEachWallMaker)
+            this.requestWallMaker(1)
+            // this.requestWallMaker(numWorkEachWallMaker)
             return
         }
     }
@@ -219,7 +224,8 @@ Room.prototype.manageWallMakerSpawn = function () {
     }
 
     // 에너지 있고 충분히 없으면 스폰
-    this.requestWallMaker(numWorkEachWallMaker)
+    this.requestWallMaker(1)
+    // this.requestWallMaker(numWorkEachWallMaker)
     return
 
 }

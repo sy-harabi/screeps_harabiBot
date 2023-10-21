@@ -1,25 +1,28 @@
 Room.prototype.manageTraffic = function () {
   const beforeCPU = Game.cpu.getUsed()
+  const creeps = this.find(FIND_MY_CREEPS)
+  const popularityCosts = new PathFinder.CostMatrix;
 
-  const creeps = this.find(FIND_MY_CREEPS).sort((a, b) => b.getStuckTick() - a.getStuckTick())
-  const movingCreepIndexes = []
+  for (const creep of creeps) {
+    const moveIntent = creep.getMoveIntent()
 
-  const costs = barrierCosts.clone(); // CostMatrix which is filled with 255
-  for (let a = 0; a < creeps.length; a++) {
-    const creep = creeps[a]
-    costs.set(creep.pos.x, creep.pos.y, a)
-    if (creep.getNextPos()) {
-      movingCreepIndexes.push(a)
+    for (const pos of moveIntent) {
+      const delta = pos.isEqualTo(creep.pos) ? 8 : 1
+
+      const cost = popularityCosts.get(pos.x, pos.y) + delta
+      popularityCosts.set(pos.x, pos.y, cost)
     }
   }
 
+  creeps.sort((a, b) => popularityCosts.get(b.pos.x, b.pos.y) - popularityCosts.get(a.pos.x, a.pos.y))
   const visited = new Uint8Array(creeps.length);
+  const costs = barrierCosts.clone(); // CostMatrix which is filled with 255
 
-  for (const a of movingCreepIndexes) {
+  for (let a = 0; a < creeps.length; a++) {
     const creep = creeps[a]
     if (!creep._matchedPos) {
       visited.fill(0)
-      dfs(a, creeps, visited, costs)
+      dfs(a, creeps, visited, costs, popularityCosts)
     }
   }
 
@@ -39,10 +42,6 @@ Room.prototype.manageTraffic = function () {
   }
 };
 
-Creep.prototype.getStuckTick = function () {
-  return this.heap.stuck || 0
-}
-
 
 /**
  *
@@ -51,32 +50,29 @@ Creep.prototype.getStuckTick = function () {
  * @param {array} visited - array which represent if a creep is checked
  * @param {array} costs - costMatrix which represent index of the creep which is occupying that position
  */
-function dfs(a, creeps, visited, costs) {
+function dfs(a, creeps, visited, costs, popularityCosts) {
   visited[a] = 1;
   const creep = creeps[a]
 
-  if (creep._matchedPos) {
-    return false
-  }
+  const moveIntent = creep.getMoveIntent().sort((aPos, bPos) => {
+    if (creep.pos.isEqualTo(aPos)) {
+      return -1
+    }
+    if (creep.pos.isEqualTo(bPos)) {
+      return 1
+    }
+    return popularityCosts.get(aPos.x, aPos.y) - popularityCosts.get(bPos.x, bPos.y)
+  });
 
-  const moveIntent = [...creep.getMoveIntent()]
-
-  if (creep.getNextPos()) {
-    costs.set(creep.pos.x, creep.pos.y, 255)
-  }
-
-  while (moveIntent.length > 0) {
-    const pos = moveIntent.shift()
+  for (let i = 0; i < moveIntent.length; i++) {
+    const pos = moveIntent[i];
     const before = costs.get(pos.x, pos.y);
-    if (before === 255 || (visited[before] === 0 && dfs(before, creeps, visited, costs))) {
+    if (before === 255 || (visited[before] === 0 && dfs(before, creeps, visited, costs, popularityCosts))) {
       creeps[a]._matchedPos = pos
       costs.set(pos.x, pos.y, a)
       return true
     }
   }
-
-  costs.set(creep.pos.x, creep.pos.y, a)
-
   return false
 }
 
@@ -109,16 +105,16 @@ Creep.prototype.getMoveIntent = function () {
     return this._moveIntent = result
   }
 
+  result.push(this.pos)
+
   const costs = (!this.room.memory.militaryThreat || !this.room.isWalledUp) ? this.room.basicCostmatrix : this.room.defenseCostMatrix
 
-  const adjacents = this.pos.getAtRange(1).sort((a, b) => Math.random() - 0.5)
+  const adjacents = this.pos.getAtRange(1);
 
   const workingInfo = this.getWorkingInfo()
-
   if (workingInfo) {
     const targetPos = workingInfo.pos;
     const range = workingInfo.range;
-    const positionsOutOfRange = []
 
     for (const pos of adjacents) {
       if (pos.isWall) {
@@ -133,13 +129,11 @@ Creep.prototype.getMoveIntent = function () {
       }
 
       if (pos.getRangeTo(targetPos) > range) {
-        positionsOutOfRange.push(pos)
         continue;
       }
 
       result.push(pos);
     }
-    // result.push(...positionsOutOfRange)
 
     return this._moveIntent = result
   }

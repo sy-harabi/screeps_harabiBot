@@ -72,6 +72,7 @@ Creep.prototype.getEnergyFrom = function (id) {
         this.moveMy({ pos: target.pos, range: 1 })
         return ERR_NOT_IN_RANGE
     }
+    this.setWorkingInfo(target.pos, 1)
     if (this.withdraw(target, RESOURCE_ENERGY) === OK) {
         return OK
     }
@@ -252,34 +253,6 @@ Creep.prototype.searchBattlePath = function (target, range = 1, maxRooms = 16) {
     return result
 }
 
-Creep.prototype.swapPos = function (targetCreep) {
-    // 뭔가 잘못된 상황
-    if (this.pos.getRangeTo(targetCreep) !== 1) {
-        this.move(this.pos.getDirectionTo(targetCreep))
-        return ERR_NOT_IN_RANGE
-    }
-
-    if (!targetCreep.my) {
-        this.heap.stuck++
-        return ERR_INVALID_TARGET
-    }
-    this.move(this.pos.getDirectionTo(targetCreep))
-    this.say('🙏', true)
-    if (targetCreep._swaped || targetCreep._moved) {
-        targetCreep.say(`❌`, true)
-        return
-    }
-    if (targetCreep.move(targetCreep.pos.getDirectionTo(this)) === OK) {
-        this.heap.stuck = 0
-        this._moved = true
-        targetCreep.heap.stuck = 0
-        targetCreep._swaped = true
-        targetCreep.say('👌', true)
-        return OK
-    }
-    return ERR_INVALID_TARGET
-}
-
 Creep.prototype.resetPath = function () {
     delete this.heap.path
     delete this.heap.stuck
@@ -421,54 +394,37 @@ Creep.prototype.moveMy = function (goals, options = {}) { //option = {avoidEnemy
         this.heap.stuck++
         this.heap.lastPos = this.pos
         this.heap.lastPosTick = Game.time
-        this.say(`🚧${this.heap.stuck}`, true)
     } else {
         this.heap.stuck = 0
     }
 
-    this.heap.lastPos = this.pos
-    this.heap.lastPosTick = Game.time
+    if (this.heap.stuck > 2) {
+        // const stuckedPath = [...this.heap.path]
+        // stuckedPath.unshift(this.pos)
+        // visualizePath(stuckedPath)
+        // const ignoreCreeps = this.heap.noPath > 0 ? (Math.random() > 0.5) : false
+        // const result = this.searchPath(goals, { ignoreCreeps, avoidEnemy, staySafe, ignoreMap })
 
-    // stuck이 5이상인 경우 (지난 5tick이 제자리였던 경우)
-    if (this.heap.stuck > 4) {
-        const ignoreCreeps = this.heap.noPath > 0 ? true : false
-        const result = this.searchPath(goals, { ignoreCreeps, avoidEnemy, staySafe, ignoreMap })
+        // if (result === ERR_NO_PATH) {
+        //     this.heap.noPath = this.heap.noPath || 0
+        //     this.heap.noPath++
+        //     this.say(`❓${this.heap.noPath}`, true)
+        //     if (this.heap.noPath > 1) {
+        //         this.heap.stay = Game.time + 10
+        //     }
+        //     return ERR_NO_PATH
+        // }
 
-        // 도착지까지 길이 안찾아지는 경우
-        if (result === ERR_NO_PATH) {
-            this.heap.noPath = this.heap.noPath || 0
-            this.heap.noPath++
-            this.say(`❓${this.heap.noPath}`, true)
-            if (this.heap.noPath > 1) {
-                this.resetPath()
-                this.heap.stay = Game.time + 10
-            }
-            return ERR_NO_PATH
-        }
-        this.heap.stuck = 0
-        this.heap.path = result.path
-    } else if (this.heap.stuck > 0) { // stuck이 1이상인 경우 (지난 1tick이 제자리였던 경우)
-        const obstacleCreep = Game.rooms[this.heap.path[0].roomName] ? this.heap.path[0].creep : undefined
-        if (obstacleCreep && !obstacleCreep._moved && !obstacleCreep._swaped) {
-            if (this.heap.path.length >= 5) { // 아직 갈 길이 멀면 무조건 swapPos
-                return this.swapPos(obstacleCreep)
-            }
-
-            // 갈 길이 먼거 아니면 일단 우회로 찾아보자
-            const result = this.searchPath(goals, { ignoreCreeps: false, avoidEnemy, staySafe, ignoreMap })
-
-            if (result === ERR_NO_PATH) { //길이 안찾아져도 swapPos
-                return this.swapPos(obstacleCreep)
-            }
-
-            if (result.path.length > (this.heap.path.length + 3) || result.cost > 200) {  //너무 돌아가야되면 swapPos
-                return this.swapPos(obstacleCreep)
-            }
-
-            // 전부 아니면 우회하자
-            this.heap.path = result.path
+        // this.heap.stuck = 0
+        // this.heap.path = result.path
+        // this.say(`🚧${this.getStuckTick()}`, true)
+        const nextPos = this.heap.path[0]
+        if (nextPos) {
+            this.room.visual.arrow(this.pos, nextPos, { color: 'red', opacity: 1 })
         }
     }
+    this.heap.lastPos = this.pos
+    this.heap.lastPosTick = Game.time
 
     // path의 첫번째에 도착했으면 첫 번째를 지우자
     if (this.heap.path[0] && this.pos.isEqualTo(this.heap.path[0])) {
@@ -491,7 +447,7 @@ Creep.prototype.moveMy = function (goals, options = {}) { //option = {avoidEnemy
         return ERR_NOT_FOUND
     }
 
-    this.move(this.pos.getDirectionTo(nextPos))
+    this.setNextPos(nextPos)
 
     // 움직였으니까 _moved 체크
     this._moved = true
@@ -515,6 +471,10 @@ Creep.prototype.needNewPath = function (goals) {
     }
 
     if (this.heap.path.length === 0) {
+        return true
+    }
+
+    if (this.pos.getRangeTo(this.heap.path[0]) > 1) {
         return true
     }
 

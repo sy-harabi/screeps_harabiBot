@@ -372,6 +372,15 @@ Room.prototype.manageHighWay = function () {
     if (!this.memory.depositRequests) {
         return
     }
+
+    const spawnCapacityAvailable = this.structures.spawn.length * 500
+    const spawnCapacity = this.getSpawnCapacity()
+
+    if (spawnCapacity > spawnCapacityAvailable) {
+        delete this.memory.depositRequests
+        return
+    }
+
     for (const depositRequest of Object.values(this.memory.depositRequests)) {
         Game.map.visual.text('deposit', new RoomPosition(25, 25, depositRequest.roomName))
         this.runDepositWork(depositRequest)

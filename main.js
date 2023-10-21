@@ -174,6 +174,12 @@ module.exports.loop = () => {
             room.runRoomManager()
         }
 
+        for (const room of Object.values(Game.rooms)) {
+            room.manageTraffic()
+        }
+
+
+
         // powerCreep 실행
         for (const powerCreep of Object.values(Game.powerCreeps)) {
             const roomName = powerCreep.name.split(' ')[0]

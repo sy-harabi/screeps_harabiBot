@@ -256,57 +256,24 @@ Creep.prototype.repairMy = function (target) {
         }
     }
 
-    if (this.heap.workingSpot) {
-        if (this.heap.workingSpot.targetId !== target.id || this.pos.isEqualTo(this.heap.workingSpot.pos)) {
-            delete this.heap.workingSpot
-        } else {
-            return this.moveMy(this.heap.workingSpot.pos)
-        }
-    }
-
     if (this.pos.getRangeTo(target) > 3) {
-        const workingSpot = this.pos.findClosestByRange(target.pos.getInRange(3).filter(pos => !pos.isWall && costs.get(pos.x, pos.y) < DANGER_TILE_COST && (this.checkEmpty(pos) === OK)))
-        if (workingSpot) {
-            this.heap.workingSpot = {}
-            this.heap.workingSpot.targetId = target.id
-            this.heap.workingSpot.pos = workingSpot
-            return this.moveMy(workingSpot)
-        }
-        return this.say('no spot')
+        this.moveMy({ pos: target.pos, range: 3 })
+        return
     }
 
+    this.setWorkingInfo(target.pos, 3)
     this.repair(target)
 }
 
 Creep.prototype.upgradeRCL = function () {
     const controller = Game.getObjectById(this.memory.controller) || this.room.controller
 
-    if (this.heap.workingSpot) {
-        if (this.heap.workingSpot.id !== controller.id || this.pos.isEqualTo(this.heap.workingSpot.pos)) {
-            delete this.heap.workingSpot
-        } else {
-            this.upgradeController(controller)
-            return this.moveMy(this.heap.workingSpot.pos)
-        }
-    }
 
     if (this.pos.getRangeTo(controller) > 3) {
-        const workingSpot = this.pos.findClosestByRange(this.getWorkingSpots(controller.pos))
-        if (workingSpot) {
-            this.heap.workingSpot = { id: controller.id, pos: workingSpot }
-            return this.moveMy(workingSpot)
-        }
-        return this.moveMy({ pos: controller.pos, range: 3 })
+        this.moveMy({ pos: controller.pos, range: 3 })
+        return
     }
-
-    if (!this.isWorkable(this.pos)) {
-        const workingSpot = this.pos.getClosestByPath(this.getWorkingSpots(controller.pos))
-        if (workingSpot !== undefined) {
-            this.heap.workingSpot = { id: controller.id, pos: workingSpot }
-            this.moveMy(workingSpot)
-        }
-    }
-
+    this.setWorkingInfo(controller.pos, 3)
     this.upgradeController(controller)
 }
 
@@ -318,32 +285,10 @@ Creep.prototype.buildTask = function () {
         return
     }
 
-    if (this.heap.workingSpot) {
-        if (this.heap.workingSpot.id !== this.memory.task || this.pos.isEqualTo(this.heap.workingSpot.pos)) {
-            delete this.heap.workingSpot
-        } else {
-            this.build(constructionSite)
-            this.moveMy(this.heap.workingSpot.pos)
-            return
-        }
-    }
-
     if (this.pos.getRangeTo(constructionSite) > 3) {
-        const workingSpot = this.pos.getClosestByPath(this.getWorkingSpots(constructionSite.pos))
-        if (workingSpot) {
-            this.heap.workingSpot = { id: this.memory.task, pos: workingSpot }
-            return this.moveMy(workingSpot)
-        }
-        return this.moveMy({ pos: constructionSite.pos, range: 3 })
+        this.moveMy({ pos: constructionSite.pos, range: 3 })
+        return
     }
-
-    if (!this.isWorkable(this.pos)) {
-        const workingSpot = this.pos.findClosestByRange(this.getWorkingSpots(constructionSite.pos))
-        if (workingSpot) {
-            this.heap.workingSpot = { id: this.memory.task, pos: workingSpot }
-            this.moveMy(workingSpot)
-        }
-    }
-
+    this.setWorkingInfo(constructionSite.pos, 3)
     this.build(constructionSite)
 }
