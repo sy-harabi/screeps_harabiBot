@@ -339,8 +339,7 @@ Room.prototype.extractRemote = function (remoteName) {
                     }
                 } else if (status.construction === 'complete') {
                     enoughHauler = false
-                    this.requestColonyHauler(remoteName, id, 1, pathLength)
-                    // this.requestColonyHauler(remoteName, id, spawnCarryEach, pathLength)
+                    this.requestColonyHauler(remoteName, id, spawnCarryEach, pathLength)
                 } else {
                     enoughHauler = false
                     this.requestFastColonyHauler(remoteName, id, spawnCarryEach, pathLength)

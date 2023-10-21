@@ -69,6 +69,10 @@ function dfs(a, creeps, visited, costs) {
     const pos = moveIntent.shift()
     const before = costs.get(pos.x, pos.y);
     if (before === 255 || (visited[before] === 0 && dfs(before, creeps, visited, costs))) {
+      const newBefore = costs.get(pos.x, pos.y)
+      if (newBefore !== 255 && creeps[newBefore].getNextPos()) {
+        continue
+      }
       creeps[a]._matchedPos = pos
       costs.set(pos.x, pos.y, a)
       return true
@@ -139,7 +143,7 @@ Creep.prototype.getMoveIntent = function () {
 
       result.push(pos);
     }
-    // result.push(...positionsOutOfRange)
+    result.push(...positionsOutOfRange)
 
     return this._moveIntent = result
   }

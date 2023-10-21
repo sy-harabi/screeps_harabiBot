@@ -77,13 +77,9 @@ Room.prototype.manageSpawn = function () {
     const numLaborer = this.creeps.laborer.filter(creep => (creep.ticksToLive || 1500) > 3 * creep.body.length).length
     // source 가동률만큼만 생산 
 
-    if (this.laborer.numWork < maxWork) {
-        this.requestLaborer(1)
+    if (numLaborer < maxNumLaborer && this.laborer.numWork < maxWork) {
+        this.requestLaborer(Math.min(maxWork - this.laborer.numWork, this.laborer.numWorkEach))
     }
-
-    // if (numLaborer < maxNumLaborer && this.laborer.numWork < maxWork) {
-    //     this.requestLaborer(Math.min(maxWork - this.laborer.numWork, this.laborer.numWorkEach))
-    // }
 
     this.visual.text(`🛠️${this.laborer.numWork}/${maxWork}`, this.controller.pos.x + 0.75, this.controller.pos.y - 0.5, { align: 'left' })
 
@@ -196,8 +192,7 @@ Room.prototype.manageWallMakerSpawn = function () {
         const maxWallMakerWork = Math.min(WALLMAKER_NUM_WORK_MAX, Math.max(0, 10 * Math.ceil(this.energyLevel / 2)))
 
         if (wallMakerWork < maxWallMakerWork) {
-            this.requestWallMaker(1)
-            // this.requestWallMaker(numWorkEachWallMaker)
+            this.requestWallMaker(numWorkEachWallMaker)
             return
         }
     }
@@ -224,8 +219,7 @@ Room.prototype.manageWallMakerSpawn = function () {
     }
 
     // 에너지 있고 충분히 없으면 스폰
-    this.requestWallMaker(1)
-    // this.requestWallMaker(numWorkEachWallMaker)
+    this.requestWallMaker(numWorkEachWallMaker)
     return
 
 }
