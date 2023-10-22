@@ -36,6 +36,8 @@ const WORKSPACE_COST = 5
 const ROAD_COST = 1
 const INSIDE_COST = 0
 
+const RAMPART_BUILD_LEVEL = 5
+
 const CLUSTER_STAMP = [
   { x: -1, y: -1, structureType: 'spawn' },
   { x: 0, y: -1, structureType: 'spawn' },
@@ -1056,8 +1058,8 @@ Room.prototype.getBasePlanAfterMincut = function (pos, inputCosts, mincut, costs
         break
       }
     }
-    if (connected) {
-      basePlan['lv4'].push(pos.packStructurePlan('road'))
+    if (!connected) {
+      costsForRoad.set(pos.x, pos.y, 0)
     }
   }
 
@@ -1112,7 +1114,7 @@ Room.prototype.getBasePlanAfterMincut = function (pos, inputCosts, mincut, costs
 
     structures.rampart.push(pos)
     if (DOUBLE_LAYER === false) {
-      basePlan[`lv5`].push(pos.packStructurePlan('road'))
+      basePlan[`lv${RAMPART_BUILD_LEVEL}`].push(pos.packStructurePlan('road'))
       costs.set(pos.x, pos.y, ROAD_COST)
       costsForRoad.set(pos.x, pos.y, ROAD_COST)
     }
@@ -1233,7 +1235,7 @@ Room.prototype.getBasePlanAfterMincut = function (pos, inputCosts, mincut, costs
 
       for (const vector of CROSS) {
         if (checkRampart.get(pos.x + vector.x, pos.y + vector.y) === 0) {
-          basePlan[`lv5`].push(pos.packStructurePlan('road'))
+          basePlan[`lv${RAMPART_BUILD_LEVEL}`].push(pos.packStructurePlan('road'))
           costs.set(pos.x, pos.y, ROAD_COST)
           costsForRoad.set(pos.x, pos.y, ROAD_COST)
           break
@@ -1315,7 +1317,6 @@ Room.prototype.getBasePlanAfterMincut = function (pos, inputCosts, mincut, costs
 
     structures.road.push(...path)
     for (const pos of path) {
-      basePlan[`lv4`].push(pos.packStructurePlan('road'))
       costs.set(pos.x, pos.y, ROAD_COST)
       costsForRoad.set(pos.x, pos.y, ROAD_COST)
     }
@@ -1333,6 +1334,8 @@ Room.prototype.getBasePlanAfterMincut = function (pos, inputCosts, mincut, costs
   // packStructurePlan
   basePlan.linkPositions = linkPositions
 
+  // structure level map
+  const levelMap = new PathFinder.CostMatrix
   for (const structureType of Object.keys(CONTROLLER_STRUCTURES)) {
     const structurePositions = structures[structureType]
 
@@ -1342,7 +1345,7 @@ Room.prototype.getBasePlanAfterMincut = function (pos, inputCosts, mincut, costs
 
     if (structureType === 'rampart') {
       for (const pos of structurePositions) {
-        basePlan[`lv4`].push(pos.packStructurePlan('rampart'))
+        basePlan[`lv${RAMPART_BUILD_LEVEL}`].push(pos.packStructurePlan('rampart'))
       }
       continue
     }
@@ -1360,8 +1363,28 @@ Room.prototype.getBasePlanAfterMincut = function (pos, inputCosts, mincut, costs
           if (!pos) {
             continue
           }
+          levelMap.set(pos.x, pos.y, i)
           basePlan[`lv${i}`].push(pos.packStructurePlan(structureType))
         }
+      }
+    }
+  }
+
+  for (let x = 0; x < 50; x++) {
+    for (let y = 0; y < 50; y++) {
+      if (costsForRoad.get(x, y) !== ROAD_COST) {
+        continue
+      }
+      const pos = new RoomPosition(x, y, this.name)
+      const adjacents = pos.getAtRange(1)
+      let level = 8
+      for (const adjacent of adjacents) {
+        const adjacentLevel = levelMap.get(adjacent.x, adjacent.y) > 0 ? levelMap.get(adjacent.x, adjacent.y) : 8
+        level = Math.min(level, adjacentLevel)
+      }
+      level = Math.max(3, level)
+      if (level < 8) {
+        basePlan[`lv${level}`].push(pos.packStructurePlan('road'))
       }
     }
   }
@@ -1431,6 +1454,7 @@ Room.prototype.visualizeBasePlan = function () {
   for (let i = 1; i <= 8; i++) {
     for (const structure of basePlan[`lv${i}`]) {
       this.visual.structure(structure.pos.x, structure.pos.y, structure.structureType)
+      this.visual.text(i, structure.pos)
     }
   }
   this.visual.connectRoads()

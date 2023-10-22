@@ -30,6 +30,14 @@ Creep.prototype.checkEmpty = function (pos) {
     return creep
 }
 
+Creep.prototype.moveRandom = function () {
+    const costs = this.room.basicCostmatrix
+    const adjacents = this.pos.getAtRange(1).filter(pos => costs.get(pos.x, pos.y) < 255)
+    const index = Math.floor(Math.random() * adjacents.length)
+    const targetPos = adjacents[index]
+    this.moveMy(targetPos)
+}
+
 Creep.prototype.getMobility = function () {
     let burden = 0
     let move = 0
@@ -399,25 +407,21 @@ Creep.prototype.moveMy = function (goals, options = {}) { //option = {avoidEnemy
     }
 
     if (this.heap.stuck > 2) {
-        // const stuckedPath = [...this.heap.path]
-        // stuckedPath.unshift(this.pos)
-        // visualizePath(stuckedPath)
-        // const ignoreCreeps = this.heap.noPath > 0 ? (Math.random() > 0.5) : false
-        // const result = this.searchPath(goals, { ignoreCreeps, avoidEnemy, staySafe, ignoreMap })
+        this.say(`🚧${this.getStuckTick()}`, true)
 
-        // if (result === ERR_NO_PATH) {
-        //     this.heap.noPath = this.heap.noPath || 0
-        //     this.heap.noPath++
-        //     this.say(`❓${this.heap.noPath}`, true)
-        //     if (this.heap.noPath > 1) {
-        //         this.heap.stay = Game.time + 10
-        //     }
-        //     return ERR_NO_PATH
-        // }
+        const result = this.searchPath(goals, { avoidEnemy, staySafe, ignoreMap })
+        if (result === ERR_NO_PATH) {
+            this.heap.noPath = this.heap.noPath || 0
+            this.heap.noPath++
+            this.say(`❓${this.heap.noPath}`, true)
+            if (this.heap.noPath > 1) {
+                this.heap.stay = Game.time + 10
+            }
+            return ERR_NO_PATH
+        }
 
-        // this.heap.stuck = 0
-        // this.heap.path = result.path
-        // this.say(`🚧${this.getStuckTick()}`, true)
+        this.heap.stuck = 0
+        this.heap.path = result.path
         const nextPos = this.heap.path[0]
         if (nextPos) {
             this.room.visual.arrow(this.pos, nextPos, { color: 'red', opacity: 1 })

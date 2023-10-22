@@ -1,5 +1,4 @@
 Room.prototype.manageTraffic = function () {
-  const beforeCPU = Game.cpu.getUsed()
 
   const creeps = this.find(FIND_MY_CREEPS).sort((a, b) => b.getStuckTick() - a.getStuckTick())
   const movingCreepIndexes = []
@@ -32,10 +31,6 @@ Room.prototype.manageTraffic = function () {
         numMoved++
       }
     }
-  }
-
-  if (this.isMy) {
-    console.log(`${this.name} used ${(Game.cpu.getUsed() - beforeCPU - 0.2 * numMoved).toFixed(2)} to manage traffic with ${numMoved} of move intent at tick ${Game.time}`)
   }
 };
 
@@ -106,14 +101,35 @@ Creep.prototype.getMoveIntent = function () {
   }
 
   const result = [];
+  const costs = (!this.room.memory.militaryThreat || !this.room.isWalledUp) ? this.room.basicCostmatrix : this.room.defenseCostMatrix
 
   const nextPos = this.getNextPos()
   if (nextPos) {
     result.push(nextPos);
+
+    if (this.getStuckTick() > 0) {
+      const adjacents = this.pos.getAtRange(1)
+      for (const pos of adjacents) {
+        if (pos.isWall) {
+          continue
+        }
+        if (!isValidCoord(pos.x, pos.y)) {
+          continue
+        }
+
+        if (costs.get(pos.x, pos.y) > 1) {
+          continue;
+        }
+        if (pos.getRangeTo(nextPos) > 1) {
+          continue
+        }
+        result.push(pos)
+      }
+    }
+
     return this._moveIntent = result
   }
 
-  const costs = (!this.room.memory.militaryThreat || !this.room.isWalledUp) ? this.room.basicCostmatrix : this.room.defenseCostMatrix
 
   const adjacents = this.pos.getAtRange(1).sort((a, b) => Math.random() - 0.5)
 

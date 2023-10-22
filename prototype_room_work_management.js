@@ -289,6 +289,9 @@ Creep.prototype.buildTask = function () {
         this.moveMy({ pos: constructionSite.pos, range: 3 })
         return
     }
+    if (this.pos.lookFor(LOOK_CONSTRUCTION_SITES).length > 0) {
+        this.moveRandom()
+    }
     this.setWorkingInfo(constructionSite.pos, 3)
     this.build(constructionSite)
 }

@@ -1,5 +1,5 @@
 const RAMPART_HIT_THRESHOLD = 5000000
-const MAX_WORK = 40
+const MAX_WORK = 50
 Object.defineProperties(Room.prototype, {
     GRCL: {
         get() {
@@ -101,7 +101,7 @@ Object.defineProperties(Room.prototype, {
             }
             this._laborer = {}
             this._laborer.numWork = 0
-            this._laborer.numWorkEach = Math.min(Math.floor(this.energyCapacityAvailable / 200), 16)
+            this._laborer.numWorkEach = Math.min(Math.floor(this.energyCapacityAvailable / 300), 12) * 2
             for (const laborer of this.creeps.laborer.filter(creep => (creep.ticksToLive || 1500) > 3 * creep.body.length)) {
                 this._laborer.numWork += laborer.body.filter(part => part.type === WORK).length
             }
@@ -300,11 +300,8 @@ Object.defineProperties(Room.prototype, {
                 return this.heap.maxWork = 10
             }
 
-            const rangeFromControllerToStorage = this.controller.pos.getRangeTo(this.storage)
-            const maxWorkByLinkCooldown = Math.ceil(LINK_CAPACITY / rangeFromControllerToStorage)
-
             const extra = Math.max(0, Math.floor(this.energyLevel))
-            return this.heap.maxWork = Math.min(maxWorkByLinkCooldown, numWorkEach * (1 + extra))
+            return this.heap.maxWork = Math.min(MAX_WORK, numWorkEach * (1 + extra))
         }
     },
     terrain: {
@@ -412,8 +409,8 @@ Room.prototype.getSpawnCapacity = function () {
 
     result += this.getBasicSpawnCapacity()
 
-    if (this.memory.remotes) {
-        for (const remoteName in this.memory.remotes) {
+    if (this.memory.activeRemotes) {
+        for (const remoteName of this.memory.activeRemotes) {
             result += this.getRemoteSpawnCapacity(remoteName)
         }
     }

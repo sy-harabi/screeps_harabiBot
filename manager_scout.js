@@ -244,13 +244,6 @@ Room.prototype.tryRemote = function (roomName) {
       return
     }
 
-    const spawnCapacityRatio = this.getSpawnCapacityRatio()
-    if (spawnCapacityRatio > SPAWN_CAPACITY_THRESHOLD) {
-      data.recordLog(`REMOTE: spawn capacity is full. do not remote ${roomName}`, roomName)
-      this.abandonRemote(roomName)
-      return
-    }
-
     data.recordLog(`REMOTE: Not my remote. Colonize ${roomName} with distance ${info.distance}`, this.name)
     colonize(roomName, this.name)
     return
@@ -271,20 +264,13 @@ Room.prototype.tryRemote = function (roomName) {
     return
   }
 
-  const spawnCapacityRatio = this.getSpawnCapacityRatio()
-  if (spawnCapacityRatio > SPAWN_CAPACITY_THRESHOLD) {
-    data.recordLog(`REMOTE: spawn capacity is full. do not remote ${roomName}`, roomName)
-    this.abandonRemote(roomName)
-    return
-  }
-
   if (!statusBefore || !statusBefore.infraPlan) {
     console.log(`no status before`)
 
-    data.recordLog(`REMOTE: No competition. Abandon remote ${roomName}`, roomName)
+    data.recordLog(`REMOTE: No status. Abandon remote ${roomName}`, roomBefore.name)
     roomBefore.abandonRemote(roomName)
 
-    data.recordLog(`REMOTE: Colonize ${roomName} with distance ${info.distance}`, roomName)
+    data.recordLog(`REMOTE: Colonize ${roomName} with distance ${info.distance}`, this.name)
     colonize(roomName, this.name)
     return
   }

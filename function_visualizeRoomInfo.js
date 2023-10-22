@@ -146,7 +146,8 @@ const remoteIncome = new VisualItem('Remote', 5, (room) => {
             return 0
         }
         let result = 0
-        for (const remoteStatus of Object.values(room.memory.remotes)) {
+        for (const remoteName of room.memory.activeRemotes) {
+            remoteStatus = room.getRemoteStatus(remoteName)
             const numSource =
                 remoteStatus.infraPlan
                     ? Object.keys(remoteStatus.infraPlan).length
@@ -165,7 +166,7 @@ const remoteIncome = new VisualItem('Remote', 5, (room) => {
     }
 
     let income = 0
-    for (const remoteName in room.memory.remotes) {
+    for (const remoteName of room.memory.activeRemotes) {
         const status = room.memory.remotes[remoteName]
         if (!status) {
             continue

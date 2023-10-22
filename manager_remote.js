@@ -34,19 +34,27 @@ Room.prototype.manageRemotes = function () {
     let remotesSpawnCapacity = 0
 
     let i = 1
+
+    this.memory.activeRemotes = []
+    this.memory.coreRemotes = []
+
     for (const remoteName of remoteNames) {
         const pos = new RoomPosition(5, 5, remoteName)
         Game.map.visual.text(i, pos, { fontSize: 5, opacity: 1 })
         i++
         remotesSpawnCapacity += this.getRemoteSpawnCapacity(remoteName)
+
         if (remotesSpawnCapacity > spawnCapacityForRemotes) {
-            data.recordLog(`REMOTE: spawn capacity is full. abandon remote ${remoteName}`, remoteName)
-            this.abandonRemote(remoteName)
+            break
         }
+
+        if (((remotesSpawnCapacity + basicSpawnCapacity) / spawnCapacityAvailable) < SPAWN_CAPACITY_THRESHOLD) {
+            this.memory.coreRemotes.push(remoteName)
+        }
+        this.memory.activeRemotes.push(remoteName)
     }
 
-
-    for (const remoteName of remoteNames) {
+    for (const remoteName of this.memory.activeRemotes) {
         if (!this.operateRemote(remoteName)) {
             this._remoteSpawnRequested = true
         }
@@ -60,7 +68,7 @@ Room.prototype.manageRemotes = function () {
         return
     }
 
-    for (const remoteName of remoteNames) {
+    for (const remoteName of this.memory.coreRemotes) {
         const status = this.getRemoteStatus(remoteName)
 
         if (!status || status.state !== 'normal') {

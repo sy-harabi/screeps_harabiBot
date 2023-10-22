@@ -377,8 +377,9 @@ Room.prototype.requestHauler = function (numCarry, option = { isUrgent: false, o
 
 Room.prototype.requestLaborer = function (numWork) {
     let body = []
-    for (let i = 0; i < numWork; i++) {
-        body.push(MOVE, CARRY, WORK)
+    const maxWork = Math.min(2 * Math.ceil(numWork / 2), this.laborer.numWorkEach)
+    for (let i = 0; i < maxWork / 2; i++) {
+        body.push(MOVE, CARRY, WORK, WORK)
     }
 
     const name = `${this.name} laborer ${Game.time}_${this.spawnQueue.length}`
@@ -550,8 +551,16 @@ Room.prototype.requestColonyDefender = function (colonyName, options = {}) {
     cost += 300
 
     if (bodyLength < 1) {
-        body = [TOUGH, RANGED_ATTACK, MOVE, MOVE]
-        cost = 260
+        if (this.energyCapacityAvailable >= 800) {
+            body = [RANGED_ATTACK, RANGED_ATTACK, RANGED_ATTACK, RANGED_ATTACK, MOVE, MOVE, MOVE, MOVE]
+            cost = 800
+        } else if (this.energyCapacityAvailable >= 520) {
+            body = [TOUGH, TOUGH, RANGED_ATTACK, RANGED_ATTACK, MOVE, MOVE, MOVE, MOVE]
+            cost = 520
+        } else {
+            body = [TOUGH, RANGED_ATTACK, MOVE, MOVE]
+            cost = 260
+        }
     }
 
     const name = `${colonyName} colonyDefender ${Game.time}_${this.spawnQueue.length}`
