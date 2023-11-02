@@ -267,7 +267,8 @@ Object.defineProperties(Room.prototype, {
                 // former is spawn limit. latter is income limit
                 const basicNumWork = (this.storage ? 1 : (this.heap.sourceUtilizationRate || 0)) * 16
                 const remoteSurplusNumWork = Math.max(0, (this.heap.remoteIncome || 0))
-                return this.heap.maxWork = Math.floor(basicNumWork + remoteSurplusNumWork)
+                const numUpgradeSpot = this.controller.available
+                return this.heap.maxWork = Math.min(numUpgradeSpot * numWorkEach, Math.floor(basicNumWork + remoteSurplusNumWork))
             }
 
             const level = this.controller.level

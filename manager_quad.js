@@ -140,10 +140,13 @@ Flag.prototype.manageQuad = function () {
 Room.prototype.requestQuadMember = function (name, isFirst = false) {
 
   let body = []
+  for (let i = 0; i < 2; i++) {
+    body.push(TOUGH)
+  }
   for (let i = 0; i < 15; i++) {
     body.push(RANGED_ATTACK)
   }
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < 3; i++) {
     body.push(TOUGH)
   }
   for (let i = 0; i < 5; i++) {
@@ -294,7 +297,7 @@ Quad.prototype.attackRoom = function () {
     return
   }
 
-  if (this.room.controller.safeMode > 0) {
+  if (this.room.controller && this.room.controller.safeMode > 0) {
     this.leader.say('🏰', true)
     this.retreat()
     return

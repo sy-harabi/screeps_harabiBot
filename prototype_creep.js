@@ -1,4 +1,5 @@
 const VISUALIZE_GOAL = false
+const VISUALIZE_MOVE = false
 
 Object.defineProperties(Creep.prototype, {
     assignedRoom: {
@@ -406,9 +407,8 @@ Creep.prototype.moveMy = function (goals, options = {}) { //option = {avoidEnemy
         this.heap.stuck = 0
     }
 
-    if (this.heap.stuck > 2) {
-        this.say(`🚧${this.getStuckTick()}`, true)
-
+    if (this.heap.stuck > 5) {
+        this.say(`🚧`, true)
         const result = this.searchPath(goals, { avoidEnemy, staySafe, ignoreMap })
         if (result === ERR_NO_PATH) {
             this.heap.noPath = this.heap.noPath || 0
@@ -422,10 +422,6 @@ Creep.prototype.moveMy = function (goals, options = {}) { //option = {avoidEnemy
 
         this.heap.stuck = 0
         this.heap.path = result.path
-        const nextPos = this.heap.path[0]
-        if (nextPos) {
-            this.room.visual.arrow(this.pos, nextPos, { color: 'red', opacity: 1 })
-        }
     }
     this.heap.lastPos = this.pos
     this.heap.lastPosTick = Game.time
@@ -437,6 +433,10 @@ Creep.prototype.moveMy = function (goals, options = {}) { //option = {avoidEnemy
 
     // 다음꺼한테 가자
     const nextPos = this.heap.path[0]
+
+    if ((VISUALIZE_MOVE || TRAFFIC_TEST) && nextPos) {
+        this.room.visual.arrow(this.pos, nextPos, { color: 'red', opacity: 1 })
+    }
 
     // 다음꺼 없거나 다음꺼가 멀면 뭔가 잘못된거니까 리셋
     if (!nextPos) {

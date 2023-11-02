@@ -124,7 +124,7 @@ global.checkCPU = function (name) {
     }
     const cpu = Game.cpu.getUsed()
     const cpuUsed = cpu - Game._cpu
-    if (cpuUsed > 1) {
+    if (cpuUsed > 0) {
         console.log(`tick: ${Game.time} | name: ${name} | used: ${cpuUsed} at `)
     }
     Game._cpu = cpu

@@ -77,9 +77,17 @@ Room.prototype.manageSpawn = function () {
     const numLaborer = this.creeps.laborer.filter(creep => (creep.ticksToLive || 1500) > 3 * creep.body.length).length
     // source 가동률만큼만 생산 
 
-    if (numLaborer < maxNumLaborer && this.laborer.numWork < maxWork) {
-        this.requestLaborer(Math.min(maxWork - this.laborer.numWork, this.laborer.numWorkEach))
+    if (TRAFFIC_TEST) {
+        if (this.laborer.numWork < maxWork) {
+            this.requestLaborer(1)
+        }
+    } else {
+        if (numLaborer < maxNumLaborer && this.laborer.numWork < maxWork) {
+            this.requestLaborer(Math.min(maxWork - this.laborer.numWork, this.laborer.numWorkEach))
+        }
     }
+
+
 
     this.visual.text(`🛠️${this.laborer.numWork}/${maxWork}`, this.controller.pos.x + 0.75, this.controller.pos.y - 0.5, { align: 'left' })
 
@@ -402,6 +410,10 @@ Room.prototype.requestLaborer = function (numWork) {
 }
 
 Room.prototype.requestWallMaker = function (numWorkEachWallMaker) {
+    if (TRAFFIC_TEST) {
+        numWorkEachWallMaker = 1
+    }
+
     let body = []
     for (let i = 0; i < numWorkEachWallMaker; i++) {
         body.push(MOVE, CARRY, WORK)
@@ -599,10 +611,18 @@ Room.prototype.requestColonyCoreDefender = function (colonyName) {
     this.spawnQueue.push(request)
 }
 
-Room.prototype.requestColonyHauler = function (colonyName, sourceId, maxCarry, sourcePathLength) {
-    const body = [WORK, MOVE]
+Room.prototype.requestColonyHauler = function (colonyName, sourceId, maxCarry, sourcePathLength, isRepairer = false) {
+    const body = []
     let cost = 0
-    for (let i = 0; i < Math.min(Math.floor((this.energyCapacityAvailable - 150) / 150), 16, Math.ceil(maxCarry / 2)); i++) {
+
+    if (isRepairer) {
+        body.push(WORK, MOVE)
+        cost += 150
+    }
+
+    const energyCapacity = this.energyCapacityAvailable - (isRepairer ? 150 : 0)
+
+    for (let i = 0; i < Math.min(Math.floor(energyCapacity / 150), 16, Math.ceil(maxCarry / 2)); i++) {
         body.push(CARRY, CARRY, MOVE)
         cost += 150
     }
@@ -614,7 +634,8 @@ Room.prototype.requestColonyHauler = function (colonyName, sourceId, maxCarry, s
         colony: colonyName,
         sourceId: sourceId,
         sourcePathLength: sourcePathLength,
-        ignoreMap: 1
+        ignoreMap: 1,
+        isRepairer: isRepairer
     }
 
     const request = new RequestSpawn(body, name, memory, { priority: SPAWN_PRIORITY['colonyHauler'], cost: cost })

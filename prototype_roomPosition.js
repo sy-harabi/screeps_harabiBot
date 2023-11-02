@@ -149,11 +149,6 @@ Room.prototype.parsePos = function (packed) {
     return new RoomPosition(x, y, this.name)
 }
 
-RoomPosition.prototype.isEqualTo = function (target) {
-    const pos = target.pos || target
-    return this.x === pos.x && this.y === pos.y && this.roomName === pos.roomName
-}
-
 RoomPosition.prototype.getAtRange = function (range) {
     const result = []
     for (let i = -range; i <= range; i++) {

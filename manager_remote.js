@@ -330,15 +330,14 @@ Room.prototype.extractRemote = function (remoteName) {
 
                 const spawnCarryEach = 2 * Math.ceil(stat.maxHaulerCarry / 2 / maxNumHauler)
 
+                const haulers = Overlord.getCreepsByRole(remoteName, 'colonyHauler').filter(creep => creep.memory.sourceId === id)
+
+                let numWork = 0;
+                for (const hauler of haulers) {
+                    numWork += hauler.getNumParts('work')
+                }
+
                 if (status.construction === 'proceed' && constructionSites.length > 0) {
-
-                    const haulers = Overlord.getCreepsByRole(remoteName, 'colonyHauler').filter(creep => creep.memory.sourceId === id)
-
-                    let numWork = 0;
-                    for (const hauler of haulers) {
-                        numWork += hauler.getNumParts('work')
-                    }
-
                     const maxWork = Math.ceil(NUM_WORK_TO_CONSTRUCT * (reserving ? 1 : 0.5))
                     if (numWork < maxWork) {
                         enoughHauler = false
@@ -347,7 +346,12 @@ Room.prototype.extractRemote = function (remoteName) {
                     }
                 } else if (status.construction === 'complete') {
                     enoughHauler = false
-                    this.requestColonyHauler(remoteName, id, spawnCarryEach, pathLength)
+                    const needRepairer = (numWork === 0)
+                    if (TRAFFIC_TEST) {
+                        this.requestColonyHauler(remoteName, id, 1, pathLength, false)
+                    } else {
+                        this.requestColonyHauler(remoteName, id, spawnCarryEach, pathLength, needRepairer)
+                    }
                 } else {
                     enoughHauler = false
                     this.requestFastColonyHauler(remoteName, id, spawnCarryEach, pathLength)

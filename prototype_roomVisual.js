@@ -482,6 +482,9 @@ RoomVisual.prototype.connectRoads = function (opts = {}) {
 }
 
 RoomVisual.prototype.arrow = function (pos1, pos2, opts = {}) {
+  if (pos1.getRangeTo(pos2) > 1) {
+    return
+  }
   let color = !!opts.color ? opts.color : 'blue'
   let opacity = !!opts.opacity ? opts.opacity : 0.5
   this.line(pos1, pos2, { width: 0.1, color, opacity })

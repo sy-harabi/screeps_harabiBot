@@ -56,7 +56,7 @@ Room.prototype.manageDefense = function () {
         }
     }
 
-    if (strong.length > 0 && !this.isWalledUp && this.controller.level >= 3 && !this.controller.safeMode) {
+    if (strong.length > 0 && !this.isWalledUp && this.controller.level >= 3 && !this.controller.safeMode && !this.controller.safeModeCooldown) {
         const invaderName = strong[0].owner.username
         data.recordLog(`WAR: Emergency occured by ${invaderName}. safemode activated`, this.name, 0)
         this.controller.activateSafeMode()
@@ -367,9 +367,6 @@ Room.prototype.assignDefenders = function () {
 
             if (!this._requestedRoomDefender) {
                 const boost = Math.ceil(status.requiredDamageMax / this.meleeDefenderMaxAttackPower)
-                if (boost > 1) {
-                    data.recordLog(`${this.name} need boosted attacker`, this.name)
-                }
                 this.requestRoomDefender(boost)
                 status.numAssignedDefender++
                 this._requestedRoomDefender = true

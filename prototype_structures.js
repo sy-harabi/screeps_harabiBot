@@ -18,16 +18,17 @@ Object.defineProperties(Structure.prototype, {
 Object.defineProperties(StructureController.prototype, {
     available: {
         get() {
-            if (this._available) {
-                return this._available
+            if (Game.time % 127 === 0) {
+                delete this.room.memory.controllerAvailable
             }
-            if (this.link) {
-                return this._available = this.link.pos.available - 1
+
+            if (this.room.memory.controllerAvailable) {
+                return this.room.memory.controllerAvailable
             }
-            if (this.container) {
-                return this._available = this.container.pos.available
-            }
-            return this._available = 9
+
+            const area = this.pos.getInRange(3)
+            const filteredArea = area.filter(pos => pos.workable)
+            return this.room.memory.controllerAvailable = filteredArea.length
         }
     },
     container: {

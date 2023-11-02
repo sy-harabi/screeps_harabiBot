@@ -1,4 +1,7 @@
+global.TRAFFIC_TEST = false
+
 Room.prototype.manageTraffic = function () {
+  const CPUbefore = Game.cpu.getUsed()
 
   const creeps = this.find(FIND_MY_CREEPS).sort((a, b) => b.getStuckTick() - a.getStuckTick())
   const movingCreepIndexes = []
@@ -32,6 +35,9 @@ Room.prototype.manageTraffic = function () {
       }
     }
   }
+
+  console.log(`use ${(Game.cpu.getUsed() - CPUbefore - numMoved * 0.2).toFixed(2)} cpu for ${numMoved} moves`)
+  console.log(`use ${((Game.cpu.getUsed() - CPUbefore - numMoved * 0.2) / numMoved).toFixed(2)} cpu for each move`)
 };
 
 Creep.prototype.getStuckTick = function () {
