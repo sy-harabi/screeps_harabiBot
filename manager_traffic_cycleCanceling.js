@@ -1,4 +1,4 @@
-global.TRAFFIC_TEST = true
+global.TRAFFIC_TEST = false
 
 let Graph = require('./util_graph')
 

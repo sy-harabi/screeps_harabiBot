@@ -1,5 +1,81 @@
 const IMPORTANT_STRUCTURE_TYPES = ['spawn', 'tower']
 
+const SEIZE_NEXT_QUAD_INTERVAL = 500
+
+Flag.prototype.seizeRoom = function () {
+  if (this.memory.endTick && Game.time > this.memory.endTick) {
+    this.remove()
+  }
+
+  if (this.memory.wait > 0) {
+    this.memory.wait--
+    return
+  }
+
+  const flags = Object.values(Game.flags)
+
+  const quadFlags = flags.filter(flag => {
+    if (flag.pos.roomName !== this.pos.roomName) {
+      return false
+    }
+    const name = flag.name.toLowerCase()
+    if (!name.includes('quad')) {
+      return false
+    }
+    return true
+  })
+
+  const activeQuadFlag = quadFlags.find(flag => {
+    const ticksToLive = flag.memory.ticksToLive || 1500
+    if (ticksToLive < (CREEP_LIFE_TIME - SEIZE_NEXT_QUAD_INTERVAL)) {
+      return false
+    }
+    return true
+  })
+
+  if (activeQuadFlag) {
+    return
+  }
+
+  if (quadFlags[0] && quadFlags[0].memory.quadBoosted !== true) {
+    this.remove()
+  }
+
+  if (!this.room) {
+    Overlord.observeRoom(this.pos.roomName)
+    return
+  }
+
+  if (this.room.controller.safeMode > 300) {
+    this.memory.wait = 100
+    return
+  }
+
+  const spawn = this.room.find(FIND_HOSTILE_STRUCTURES).find(structure => structure.structureType === 'spawn')
+
+  if (!spawn) {
+    this.pos.createFlag(`${this.pos.roomName} harass ${Game.time}`)
+    this.remove()
+  }
+
+  for (let y = 25; y < 50; y++) {
+    const pos = new RoomPosition(25, y, this.pos.roomName)
+
+    const found = pos.lookFor(LOOK_FLAGS)
+
+    if (found.length) {
+      continue
+    }
+
+    const flagName = `${this.pos.roomName} Quad ${Game.time}`
+
+    pos.createFlag(flagName, COLOR_RED)
+    return
+  }
+
+
+}
+
 Flag.prototype.conductWar = function () {
   const roomName = this.pos.roomName
   const closestMyRoom = this.findClosestMyRoom(8)

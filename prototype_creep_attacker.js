@@ -87,7 +87,7 @@ Creep.prototype.attackRoom = function (roomName) {
         }
 
         if (healer.fatigue === 0) {
-            this.move(this.pos.getDirectionTo(path[0]))
+            this.setNextPos(path[0])
         }
 
         return
@@ -95,7 +95,7 @@ Creep.prototype.attackRoom = function (roomName) {
 
     // attack is almost over.
     for (const flag of this.room.find(FIND_FLAGS)) {
-        if (flag.name.toLowerCase().includes('attack')) {
+        if (flag.name.toLowerCase().includes('attack') && !flag.memory.end) {
             flag.memory.end = true
             data.recordLog(`ATTACK: Mission complted.`, roomName, 0)
         }
@@ -131,7 +131,10 @@ Creep.prototype.getPathToAttackImportantStructures = function () {
     }
 
     const hostileStructures = this.room.find(FIND_HOSTILE_STRUCTURES)
-    const importantStructures = hostileStructures.filter(structure => IMPORTANT_STRUCTURE_TYPES.includes(structure.structureType))
+    const importantStructureTypes = this.room.controller && this.room.controller.level < 8
+        ? ['spawn']
+        : IMPORTANT_STRUCTURE_TYPES
+    const importantStructures = hostileStructures.filter(structure => importantStructureTypes.includes(structure.structureType))
 
     const goals = importantStructures.map(structure => {
         return { pos: structure.pos, range: 0 }
@@ -281,6 +284,52 @@ Creep.prototype.attackNear = function () {
     }
 }
 
+Creep.prototype.harasserRangedAttack = function () {
+
+    let rangedMassAttackTotalDamage = 0
+
+    const positions = this.pos.getInRange(3)
+    const rangedAttackPower = this.rangedAttackPower
+
+    let rangedAttackTarget = undefined
+
+    for (const pos of positions) {
+        const priorityTarget = pos.lookFor(LOOK_CREEPS).find(creep => !creep.my)
+
+        if (!priorityTarget) {
+            continue
+        }
+
+        if (rangedAttackTarget === undefined || priorityTarget.hits < rangedAttackTarget.hits) {
+            rangedAttackTarget = priorityTarget
+        }
+
+        if (priorityTarget.my === false) {
+            const range = this.pos.getRangeTo(pos)
+
+            if (range <= 1) {
+                this.rangedMassAttack()
+                return
+            }
+
+            const rangeConstant = range <= 1 ? 1 : range <= 2 ? 0.4 : 0.1
+            const damage = rangedAttackPower * rangeConstant
+
+            rangedMassAttackTotalDamage += damage
+            continue
+        }
+    }
+
+    if (rangedMassAttackTotalDamage >= rangedAttackPower) {
+        this.rangedMassAttack()
+        return
+    }
+
+    if (rangedAttackTarget) {
+        this.rangedAttack(rangedAttackTarget)
+    }
+}
+
 Creep.prototype.retreat = function () {
     const base = new RoomPosition(25, 25, this.memory.base)
     const healer = Game.creeps[this.memory.healer]
@@ -351,10 +400,53 @@ Creep.prototype.care = function (target) {
     }
 }
 
-Creep.prototype.fleeFrom = function (target) {
-    const path = PathFinder.search(this.pos, { pos: target.pos, range: 10 }, { maxRooms: 1, flee: true }).path
+Creep.prototype.fleeFrom = function (target, range = 10) {
+    const room = this.room
+    const thisCreep = this
+    const mobility = this.getMobility()
+    const map = Overlord.map
+    const search = PathFinder.search(this.pos, { pos: target.pos, range }, {
+        plainCost: Math.max(1, Math.ceil(2 * mobility)),
+        swampCost: Math.max(1, Math.ceil(10 * mobility)),
+        maxRooms: 2,
+        flee: true,
+        roomCallback: function (roomName) {
+            if (map[roomName] && map[roomName].numTower) {
+                return false
+            }
+            const costs = room.basicCostmatrix.clone()
+            for (const creep of room.find(FIND_HOSTILE_CREEPS)) {
+                if (thisCreep.pos.getRangeTo(creep.pos) <= 3) {
+                    for (const pos of creep.pos.getInRange(2)) {
+                        if (!pos.isWall) {
+                            costs.set(pos.x, pos.y, 254)
+                        }
+                    }
+                }
+            }
+
+            return costs
+        }
+    })
+    const path = search.path
     if (!path) {
         return
     }
-    this.moveByPath(path)
+    visualizePath(path)
+    const nextPos = path[0]
+
+    if (nextPos) {
+        this.setNextPos(nextPos)
+    }
+}
+
+Creep.prototype.activeHeal = function () {
+    if (this.hits < this.hitsMax) {
+        this.heal(this)
+        return
+    }
+
+    const myCreepsInRange = this.pos.findInRange(FIND_MY_CREEPS, 1)
+    const weakest = getMinObject(myCreepsInRange, creep => creep.hits / creep.hitsMax)
+    this.heal(weakest)
 }

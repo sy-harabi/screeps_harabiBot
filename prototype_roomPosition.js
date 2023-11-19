@@ -150,6 +150,9 @@ Room.prototype.parsePos = function (packed) {
 }
 
 RoomPosition.prototype.getAtRange = function (range) {
+    if (i = 0) {
+        return [this]
+    }
     const result = []
     for (let i = -range; i <= range; i++) {
         if (isValidCoord(this.x + i, this.y + range)) {

@@ -1,11 +1,13 @@
-const RAMPART_HITS_MAX = 100000000 //100M
+const RAMPART_HITS_THRESHOLD = 50000000 //50M
 
-const WALLMAKER_NUM_WORK_BASIC = 18
+const WALLMAKER_NUM_WORK_BASIC = 10
 const WALLMAKER_NUM_WORK_MAX = 120
 
-const ENERGY_TO_SPAWN_WALLMAKER = 30000
+const ENERGY_TO_SPAWN_WALLMAKER = 50000
 
 const MANAGER_MAX_CARRY = 24
+
+const ENERGY_LEVEL_TO_REPAIR_RAMPARTS = 10
 
 global.EMERGENCY_WORK_MAX = 60
 global.WALL_HITS_PER_RCL = 200000
@@ -17,11 +19,14 @@ global.SPAWN_PRIORITY = {
 
     'attacker': 2,
     'healer': 2,
+    'powerBankAttacker': 2,
+    'powerBankHealer': 2,
 
     'manager': 3,
     'scouter': 3,
     'laborer': 3,
     'wallMaker': 3,
+    'distributor': 3,
 
     'colonyDefender': 4,
 
@@ -64,6 +69,14 @@ Room.prototype.manageSpawn = function () {
         this.visual.text(`📤${managers.length + researchers.length}/${maxNumManager}`, this.storage.pos.x - 2.9, this.storage.pos.y + 1.75, { font: 0.5, align: 'left' })
     }
 
+    // distributor
+    if (this.controller.level >= 5) {
+        const numDistributor = this.creeps.distributor.filter(creep => (creep.ticksToLive || 1500) > (3 * creep.body.length - 2)).length
+        if (numDistributor === 0) {
+            this.requestDistributor()
+        }
+    }
+
     // laborer 생산
 
     let maxWork = 0
@@ -73,12 +86,12 @@ Room.prototype.manageSpawn = function () {
         maxWork = this.maxWork
     }
 
-    const maxNumLaborer = Math.ceil(maxWork / this.laborer.numWorkEach)
+    const maxNumLaborer = Math.min(this.controller.available, Math.ceil(maxWork / this.laborer.numWorkEach))
     const numLaborer = this.creeps.laborer.filter(creep => (creep.ticksToLive || 1500) > 3 * creep.body.length).length
     // source 가동률만큼만 생산 
 
     if (TRAFFIC_TEST) {
-        if (this.laborer.numWork < maxWork) {
+        if (numLaborer < this.controller.available && this.laborer.numWork < maxWork) {
             this.requestLaborer(1)
         }
     } else {
@@ -87,14 +100,12 @@ Room.prototype.manageSpawn = function () {
         }
     }
 
-
-
     this.visual.text(`🛠️${this.laborer.numWork}/${maxWork}`, this.controller.pos.x + 0.75, this.controller.pos.y - 0.5, { align: 'left' })
 
     // 여기서부터는 전시에는 생산 안함
     if (!this.memory.militaryThreat) {
         // extractor 생산
-        if (this.terminal && this.structures.extractor.length && this.mineral.mineralAmount > 0 && this.terminal.store.getFreeCapacity() > 50000) {
+        if (this.terminal && this.structures.extractor.length && this.mineral.mineralAmount > 0 && this.terminal.store.getFreeCapacity() > 10000) {
             if (this.creeps.extractor.filter(creep => (creep.ticksToLive || 1500 > 3) * creep.body.length).length === 0) {
                 this.requestExtractor()
             }
@@ -137,7 +148,7 @@ Room.prototype.manageSpawn = function () {
             for (const creep of adjacentCreeps) {
                 const nextPos = creep.pos.getAtRange(1).find(pos => pos.walkable && creep.checkEmpty(pos))
                 if (nextPos) {
-                    creep.moveMy(nextPos)
+                    creep.moveMy(nextPos, { ignoreOrder: true })
                 }
             }
         }
@@ -187,11 +198,17 @@ Room.prototype.manageWallMakerSpawn = function () {
 
     // MAX_HITS면 멈춤
     const weakestRampart = this.weakestRampart
-    if (weakestRampart.hits > RAMPART_HITS_MAX) {
+
+    const maxHits = RAMPART_HITS_MAX[this.controller.level]
+
+    if (weakestRampart.hits > maxHits - 10000) {
         return
     }
 
-    // 일단 에너지 남으면 생산
+    if (weakestRampart.hits > RAMPART_HITS_THRESHOLD && this.energyLevel < ENERGY_LEVEL_TO_REPAIR_RAMPARTS) {
+        return
+    }
+
     const numWorkEachWallMaker = Math.min(16, Math.floor(this.energyAvailable / 200))
     const wallMakerWork = this.creeps.wallMaker.map(creep => creep.getActiveBodyparts(WORK)).reduce((acc, curr) => acc + curr, 0)
 
@@ -222,7 +239,7 @@ Room.prototype.manageWallMakerSpawn = function () {
     }
 
     // 에너지 없으면 끝
-    if (!this.storage || this.storage.store[RESOURCE_ENERGY] < ENERGY_TO_SPAWN_WALLMAKER) {
+    if (this.savingMode) {
         return
     }
 
@@ -285,7 +302,14 @@ function BoostRequest(creepName, body, resourceTypes, boostMultiplier) {
 }
 
 Spawn.prototype.spawnRequest = function (request) {
-    const result = this.spawnCreep(request.body, request.name, { memory: request.memory })
+    const directions = []
+    const hubCenterPos = this.room.getHubCenterPos()
+    if (request.memory.role === 'distributor' && hubCenterPos) {
+        directions.push(this.pos.getDirectionTo(hubCenterPos))
+    }
+    directions.push(1, 2, 3, 4, 5, 6, 7, 8)
+
+    const result = this.spawnCreep(request.body, request.name, { memory: request.memory, directions })
     if (result !== OK) {
         return result
     }
@@ -302,6 +326,26 @@ Spawn.prototype.spawnRequest = function (request) {
     }
 
     return result
+}
+
+Room.prototype.requestDistributor = function () {
+    let body = [MOVE]
+    const maxEnergy = this.energyCapacityAvailable - 50
+
+
+    for (let i = 0; i < Math.min(Math.floor(maxEnergy / 50), 16); i++) {
+        body.push(CARRY)
+    }
+
+    const name = `${this.name} distributor ${Game.time}_${this.spawnQueue.length}`
+
+    const memory = { role: 'distributor' }
+
+    let priority = SPAWN_PRIORITY['distributor']
+
+    const request = new RequestSpawn(body, name, memory, { priority: priority })
+
+    this.spawnQueue.push(request)
 }
 
 Room.prototype.requestMiner = function (source, priority) {
@@ -538,21 +582,21 @@ Room.prototype.requestColonyMiner = function (colonyName, sourceId, containerId)
 }
 
 Room.prototype.requestColonyDefender = function (colonyName, options = {}) {
-    const defaultOptions = { doCost: true, bodyLengthMax: 5 }
+    const defaultOptions = { doCost: true, bodyLengthMax: 5, wait: false }
     const mergedOptions = { ...defaultOptions, ...options }
-    const { doCost, bodyLengthMax } = mergedOptions
+    const { doCost, bodyLengthMax, wait } = mergedOptions
 
     let body = []
     let cost = 0
     const bodyLength = Math.min(Math.floor((this.energyCapacityAvailable) / 1100), bodyLengthMax, 5)
 
-    for (let i = 0; i < 5 * bodyLength - 1; i++) {
-        body.push(MOVE)
-        cost += 50
-    }
     for (let i = 0; i < bodyLength * 4; i++) {
         body.push(RANGED_ATTACK)
         cost += 150
+    }
+    for (let i = 0; i < 5 * bodyLength - 1; i++) {
+        body.push(MOVE)
+        cost += 50
     }
     for (let i = 0; i < bodyLength - 1; i++) {
         body.push(HEAL)
@@ -579,7 +623,8 @@ Room.prototype.requestColonyDefender = function (colonyName, options = {}) {
     const memory = {
         role: 'colonyDefender',
         base: this.name,
-        colony: colonyName
+        colony: colonyName,
+        wait: wait
     }
     if (!doCost) {
         cost = 0
@@ -677,6 +722,10 @@ Room.prototype.requestClaimer = function (targetRoomName) {
 
     const request = new RequestSpawn(body, name, memory, { priority: SPAWN_PRIORITY['claimer'] })
     this.spawnQueue.push(request)
+}
+
+Room.prototype.requestPowerBankAttacker = function () {
+
 }
 
 Room.prototype.requestDepositWorker = function (depositRequest) {

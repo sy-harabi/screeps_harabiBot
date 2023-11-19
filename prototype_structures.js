@@ -87,6 +87,21 @@ Object.defineProperties(StructureController.prototype, {
             return true
         }
     },
+    linkFlow: {
+        get() {
+            if (Game.time%41===0) {
+                delete this.room.heap.controllerLinkFlow
+            }
+            if (this.room.heap.controllerLinkFlow) {
+                return this.room.heap.controllerLinkFlow
+            }
+            if (!this.linked) {
+                return this.room.heap.controllerLinkFlow = 0
+            }
+            const range = this.link.pos.getRangeTo(this.room.storage.link.pos)
+            return this.room.heap.controllerLinkFlow = Math.floor(800/range)
+        }
+    },
     totalProgress: {
         get() {
             return CONTROLLER_PROGRESS_TO_LEVELS[this.level] + this.progress

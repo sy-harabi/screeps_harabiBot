@@ -1,4 +1,7 @@
-const SCOUT_INTERVAL = 3000 // scout 시작 후 얼마나 지나야 리셋할건지
+const SCOUT_INTERVAL_UNDER_RCL_8 = 3000 // scout 시작 후 얼마나 지나야 리셋할건지
+const SCOUT_INTERVAL_AT_RCL_8 = 500
+
+const SCOUT_DECAY = 5000
 
 const DISTANCE_TO_DEPOSIT_MINING = 5
 
@@ -24,8 +27,10 @@ Room.prototype.manageScout = function () {
     status.startTick = Game.time
   }
 
-  // 5000 tick 마다 새로 정찰
-  if (Game.time - status.startTick > SCOUT_INTERVAL) {
+  // SCOUT_INTERVAL 마다 새로 정찰
+  const scoutInterval = this.structures.observer.length > 0 ? SCOUT_INTERVAL_AT_RCL_8 : SCOUT_INTERVAL_UNDER_RCL_8
+
+  if (Game.time - status.startTick > scoutInterval) {
     delete this.memory.scout
   }
 
@@ -195,7 +200,7 @@ Room.prototype.scoutRoom = function (roomName, distance, lastScout) {
 
   // highway고 distance 5 이내면 deposit check.
   if (getRoomType(roomName) === 'highway' && distance <= DISTANCE_TO_DEPOSIT_MINING) {
-    this.depositCheck(roomName)
+    this.checkHighway(roomName)
   }
 
   const info = room.getInfo(this.name, distance, lastScout)
@@ -225,7 +230,6 @@ Room.prototype.tryRemote = function (roomName) {
 
   // already my remote
   if (this.memory.remotes && Object.keys(this.memory.remotes).includes(roomName)) {
-    console.log(`${roomName} is already my remote`)
     return
   }
 
@@ -239,7 +243,6 @@ Room.prototype.tryRemote = function (roomName) {
     const infraPlan = this.getRemoteInfraPlan(roomName)
 
     if (infraPlan === ERR_NOT_FOUND) {
-      data.recordLog(`FAIL: Cannot colonize ${roomName}. cannot find infraPlan.`, this.name)
       this.abandonRemote(roomName)
       return
     }
@@ -259,7 +262,6 @@ Room.prototype.tryRemote = function (roomName) {
 
   // cannot find infraPlan
   if (infraPlan === ERR_NOT_FOUND) {
-    data.recordLog(`FAIL: Cannot colonize ${roomName}. cannot find infraPlan.`, this.name)
     this.abandonRemote(roomName)
     return
   }
@@ -306,7 +308,7 @@ Room.prototype.tryRemote = function (roomName) {
   data.recordLog(`REMOTE: Abandon remote ${roomName}. Less efficient than ${this.name}`, roomBefore.name)
   roomBefore.abandonRemote(roomName)
 
-  data.recordLog(`REMOTE: Colonize ${roomName} with distance ${distance}`, roomName)
+  data.recordLog(`REMOTE: Colonize ${roomName} with distance ${distance}`, this.name)
   colonize(roomName, this.name)
 
   return
@@ -380,7 +382,7 @@ Room.prototype.getInfo = function (host, distance, lastScout) {
   const numTower = this.structures.tower.filter(tower => tower.RCLActionable).length
 
   const isAccessibleToContorller = this.getAccessibleToController()
-  const inaccessible = (((!this.isMy) && numTower > 0) || (isController && !isAccessibleToContorller)) ? (Game.time + 2 * SCOUT_INTERVAL) : 0
+  const inaccessible = (((!this.isMy) && numTower > 0) || (isController && !isAccessibleToContorller)) ? (Game.time + SCOUT_DECAY) : 0
 
   const isRemoteCandidate = isAccessibleToContorller && inaccessible < Game.time && !isClaimedByOther && (numSource > 0)
   const isClaimCandidate = isAccessibleToContorller && inaccessible < Game.time && !isClaimedByOther && (distance > 2) && (numSource > 1) && !Overlord.remotes.includes(this.name)

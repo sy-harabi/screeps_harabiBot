@@ -122,10 +122,10 @@ Room.prototype.requestHealer = function (flagName, boost = false) {
         for (let i = 0; i < 15; i++) {
             body.push(MOVE)
         }
-        for (let i = 0; i < 5; i++) {
+        for (let i = 0; i < 10; i++) {
             body.push(HEAL)
         }
-        for (let i = 0; i < 5; i++) {
+        for (let i = 0; i < 10; i++) {
             body.push(MOVE)
         }
     }

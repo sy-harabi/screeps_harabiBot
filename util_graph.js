@@ -1,22 +1,11 @@
 const profiler = require('screeps-profiler');
 
+let MinHeap = require('./util_min_heap')
+
 class Graph {
   constructor(vertices, edges) {
     this.vertices = vertices || new Set()
     this.edges = edges || new Map()
-  }
-
-  copy() {
-    const result = new Graph(new Set(this.vertices))
-    for (const vertice of result.vertices) {
-      const adjacents = this.getAdjacents(vertice)
-      for (const adjacent of adjacents) {
-        const edgeBefore = this.getEdge(vertice, adjacent)
-        const options = { flow: edgeBefore.flow, capacity: edgeBefore.capacity, cost: edgeBefore.cost }
-        result.setEdge(edgeBefore.start, edgeBefore.end, options)
-      }
-    }
-    return result
   }
 
   addVertex(x) {
@@ -32,22 +21,17 @@ class Graph {
   }
 
   setEdge(start, end, options) {
+    this.addVertex(start)
+    this.addVertex(end)
+
     const defaultOptions = { flow: 0, capacity: 1, cost: 0 }
     const mergedOptions = { ...defaultOptions, ...options }
-
-    if (!this.hasVertex(end)) {
-      throw new Error(`fail to set edge. there is no end ${end}`)
-    }
-
-    if (!this.hasVertex(start)) {
-      throw new Error(`fail to set edge. there is no start ${start}`)
-    }
 
     if (!this.edges.has(start)) {
       this.edges.set(start, new Map())
     }
 
-    this.edges.get(start).set(end, new Edge(start, end, mergedOptions))
+    this.edges.get(start).set(end, new Edge(mergedOptions))
   }
 
   removeEdge(start, end) {
@@ -59,16 +43,16 @@ class Graph {
 
   getEdge(start, end) {
     if (!this.edges.has(start)) {
-      return undefined
+      this.edges.set(start, new Map())
     }
     return this.edges.get(start).get(end)
   }
 
-  getAdjacents(start) {
+  getEdges(start) {
     if (!this.edges.has(start)) {
       this.edges.set(start, new Map())
     }
-    return this.edges.get(start).keys()
+    return this.edges.get(start)
   }
 
   getSize() {
@@ -77,7 +61,7 @@ class Graph {
 }
 
 class Edge {
-  constructor(start, end, options) {
+  constructor(options) {
     const defaultOptions = { flow: 0, capacity: 1, cost: 0 }
     const mergedOptions = { ...defaultOptions, ...options }
     const { flow, capacity, cost } = mergedOptions
@@ -85,282 +69,95 @@ class Edge {
     this.capacity = capacity
     this.cost = cost
   }
-  getStart() {
-    return this.start
-  }
-  getEnd() {
-    return this.end
-  }
-  getFlow() {
-    return this.flow
-  }
-  getCapacity() {
-    return this.capacity
-  }
-  getCost() {
-    return this.cost
-  }
-  setFlow(flow) {
-    this.flow = flow
-  }
-  setCapacity(capacity) {
-    this.capacity = capacity
-  }
-  setCost(cost) {
-    this.cost = cost
-  }
-  addFlow(flow) {
-    this.flow += flow
-  }
 }
 
-Graph.prototype.minimumCostMaximumFlowWithUnitCapacity = function (source, sink) {
-  const residual = this.getResidual()
+Graph.prototype.minimumCostMaximumFlowWithUnitCapacity = function (source, sink, log) {
+  let i = 0
+  const result = new Map()
 
   while (true) {
-    const flowPath = residual.shortestPathFasterAlgorithm(source, sink)
+    i++
+    const flowPath = this.dijkstra(source, sink)
 
     if (!flowPath) {
       break
     }
 
-    residual.sendFlow(flowPath, 1)
+    this.sendFlow(flowPath, result)
   }
 
-  const result = residual.getOptimal()
+  if (log) {
+    console.log(`num dijkstra:${i}`)
+  }
 
   return result
 }
 
-Graph.prototype.shortestPathFasterAlgorithm = function (source, sink) {
-  const predecessors = {}
+Graph.prototype.dijkstra = function (source, sink) {
+  const predecessors = new Map()
 
-  const distances = {}
+  const distances = new Map()
 
-  for (const vertice of this.vertices) {
-    distances[vertice] = Infinity
-  }
+  distances.set(source, 0)
 
-  distances[source] = 0
+  const queue = new MinHeap((vertex) => distances.get(vertex))
+  queue.insert(source)
 
-  const queue = []
+  while (queue.getSize() > 0) {
+    const current = queue.remove()
 
-  queue.push(source)
+    const currentDistance = distances.get(current)
 
-  while (queue.length > 0) {
+    const edges = this.getEdges(current)
 
-    const vertex = queue.shift()
-
-    const adjacents = this.getAdjacents(vertex)
-    for (const adjacent of adjacents) {
-      const edge = this.getEdge(vertex, adjacent)
-
-      const vertexDistance = distances[vertex]
-      const adjacentDistance = distances[adjacent]
-
-      if (vertexDistance + edge.cost < adjacentDistance) {
-        distances[adjacent] = vertexDistance + edge.cost
-        predecessors[adjacent] = vertex
-
-        if (!queue.includes(adjacent)) {
-          if (distances[adjacent] < distances[queue[0]]) {
-            queue.unshift(adjacent)
-          } else {
-            queue.push(adjacent)
-          }
-        }
+    for (const [adjacent, edge] of edges) {
+      const adjacentDistance = distances.get(adjacent)
+      if (adjacentDistance === undefined || currentDistance + edge.cost < adjacentDistance) {
+        distances.set(adjacent, currentDistance + edge.cost)
+        predecessors.set(adjacent, current)
+        queue.insert(adjacent)
       }
+    }
+
+    if (current === sink) {
+      break
     }
   }
 
-  if (!predecessors[sink]) {
+  if (!predecessors.get(sink)) {
     return false
   }
 
-  return retrievePath(predecessors, sink)
+  return this.retrievePath(predecessors, sink)
 }
 
-Graph.prototype.cycleCanceling = function (sink) {
+Graph.prototype.retrievePath = function (predecessors, vertice) {
+  const path = new Array()
 
-  const residual = this.getResidual()
-
-  checkCPU('residual')
-
-  let negativeCycle = residual.bellmanFord(sink)
-  let i = 0
-
-  checkCPU('bellmanFord')
-
-  while (negativeCycle && Array.isArray(negativeCycle)) {
-
-    negativeCycle.push(negativeCycle[0])
-
-    checkCPU('negativeCycle')
-
-    const capacity = residual.getPathCapacityAvailable(negativeCycle)
-
-    checkCPU('getCapacity')
-
-    residual.sendFlow(negativeCycle, capacity)
-
-    checkCPU('sendFlow')
-
-    negativeCycle = residual.bellmanFord(sink)
-
-    checkCPU('bellmanFord')
-    i++
-  }
-
-  console.log(`itrate ${i} times`)
-
-  const result = residual.getOptimal()
-
-  checkCPU('getOptimal')
-
-  return result
-
-}
-
-Graph.prototype.bellmanFord = function (source) {
-  const distances = {}
-  const predecessors = {}
-  for (const vertice of this.vertices) {
-    distances[vertice] = Infinity
-  }
-
-  distances[source] = 0
-
-  for (let i = 0; i < this.getSize() - 1; i++) {
-    for (const vertice of this.vertices) {
-      const adjacents = this.getAdjacents(vertice)
-      for (const adjacent of adjacents) {
-        const edge = this.getEdge(vertice, adjacent)
-        const verticeDistance = distances[vertice]
-        const adjacentDistance = distances[adjacent]
-        if (adjacentDistance > verticeDistance + edge.cost) {
-          distances[adjacent] = verticeDistance + edge.cost
-          predecessors[adjacent] = vertice
-        }
-      }
-    }
-  }
-
-  for (const vertice of this.vertices) {
-    const adjacents = this.getAdjacents(vertice)
-    for (const adjacent of adjacents) {
-      const edge = this.getEdge(vertice, adjacent)
-      const verticeDistance = distances[vertice]
-      const adjacentDistance = distances[adjacent]
-      if (adjacentDistance > verticeDistance + edge.cost) {
-        return retrievePath(predecessors, vertice)
-      }
-    }
-  }
-
-  const result = {}
-
-  for (const vertice of this.vertices) {
-    result[vertice] = { predecessor: predecessors[vertice], distance: distances[vertice] }
-  }
-
-  return result
-}
-
-Graph.prototype.getOptimal = function () {
-  const result = new Graph(this.vertices)
-  for (const vertice of this.vertices) {
-    for (const adjacent of this.getAdjacents(vertice)) {
-
-      const edge = this.getEdge(vertice, adjacent)
-      const reverseEdge = this.getEdge(adjacent, vertice)
-
-      const capacity = (edge ? edge.capacity : 0) + (reverseEdge ? reverseEdge.capacity : 0)
-
-      if (edge.cost < 0 || Object.is(edge.cost, -0)) {
-        const options = { flow: edge.capacity, capacity: capacity, cost: -edge.cost }
-        result.setEdge(adjacent, vertice, options)
-      } else if (!reverseEdge) {
-        const options = { flow: 0, capacity: capacity, cost: edge.cost }
-        result.setEdge(vertice, adjacent, options)
-      }
-    }
-  }
-  return result
-}
-
-Graph.prototype.getResidual = function () {
-  const result = new Graph(this.vertices)
-
-  for (const vertice of this.vertices) {
-    const adjacents = this.getAdjacents(vertice)
-    for (const adjacent of adjacents) {
-      const edge = this.getEdge(vertice, adjacent)
-      if (edge.flow > 0) {
-        const options = { flow: 0, capacity: edge.flow, cost: -edge.cost }
-        result.setEdge(adjacent, vertice, options)
-      }
-      if (edge.capacity - edge.flow > 0) {
-        const options = { flow: 0, capacity: edge.capacity - edge.flow, cost: edge.cost }
-        result.setEdge(vertice, adjacent, options)
-      }
-    }
-  }
-  return result
-}
-
-function retrievePath(predecessors, vertice) {
-
-  const pathSet = new Set([vertice])
-  let nextVertice = predecessors[vertice]
-  let path = new Array()
-  path.push(vertice)
-  while (nextVertice && !pathSet.has(nextVertice)) {
-    pathSet.add(nextVertice)
-    path.unshift(nextVertice)
-    nextVertice = predecessors[nextVertice]
-  }
-
-  if (pathSet.has(nextVertice)) {
-    path = path.slice(0, path.indexOf(nextVertice) + 1)
+  while (vertice) {
+    path.unshift(vertice)
+    vertice = predecessors.get(vertice)
   }
 
   return path
 }
 
-Graph.prototype.getPathCapacityAvailable = function (path) {
-  let result = Infinity
-  for (let i = 0; i < path.length - 1; i++) {
-    const edge = this.getEdge(path[i], path[i + 1])
-    const capacityAvailable = edge.capacity - edge.flow
-    if (capacityAvailable < result) {
-      result = capacityAvailable
-    }
-  }
-  return result
-}
-
-Graph.prototype.sendFlow = function (path, flow) {
+Graph.prototype.sendFlow = function (path, result) {
   for (let i = 0; i < path.length - 1; i++) {
     const start = path[i]
     const end = path[i + 1]
 
     const edge = this.getEdge(start, end)
-    if (edge.capacity === flow) {
-      this.removeEdge(start, end)
-    } else {
-      edge.capacity -= flow
-    }
+    this.removeEdge(start, end)
+    this.setEdge(end, start, { cost: -edge.cost })
 
-    const reverseEdge = this.getEdge(end, start)
-    if (!reverseEdge) {
-      const options = { capacity: flow, cost: -edge.cost }
-      this.setEdge(end, start, options)
-    } else {
-      reverseEdge.capacity += flow
-    }
+    result.set(start, end)
   }
 }
 
 profiler.registerClass(Graph, 'Graph');
+
+
+profiler.registerClass(Map, 'Map');
 
 module.exports = Graph

@@ -25,7 +25,7 @@ Room.prototype.manageDefense = function () {
         attackPowerTotal += target.attackPower
         attackPowerTotal += target.dismantlePower
 
-        if ((!this.controller.safeMode) && (target.totalHealPower - this.getTowersDamageFor(target) >= 0)) {
+        if ((!this.controller.safeMode) && target.owner.username !== 'Invader' && (target.totalHealPower - this.getTowersDamageFor(target) >= 0)) {
             strong.push(target)
             continue
         }

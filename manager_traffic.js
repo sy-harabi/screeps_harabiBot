@@ -1,7 +1,7 @@
 global.TRAFFIC_TEST = false
 
 Room.prototype.manageTraffic = function () {
-  const CPUbefore = Game.cpu.getUsed()
+  const CPUbefore = TRAFFIC_TEST ? Game.cpu.getUsed() : undefined
 
   const creeps = this.find(FIND_MY_CREEPS).sort((a, b) => b.getStuckTick() - a.getStuckTick())
   const movingCreepIndexes = []
@@ -36,8 +36,11 @@ Room.prototype.manageTraffic = function () {
     }
   }
 
-  console.log(`use ${(Game.cpu.getUsed() - CPUbefore - numMoved * 0.2).toFixed(2)} cpu for ${numMoved} moves`)
-  console.log(`use ${((Game.cpu.getUsed() - CPUbefore - numMoved * 0.2) / numMoved).toFixed(2)} cpu for each move`)
+  if (TRAFFIC_TEST && this.isMy) {
+    const usedCPU = Game.cpu.getUsed() - CPUbefore - numMoved * 0.2
+    console.log(`use ${usedCPU.toFixed(2)} cpu for ${numMoved} moves`)
+    console.log(`use ${(usedCPU / numMoved).toFixed(2)} cpu for each move`)
+  }
 };
 
 Creep.prototype.getStuckTick = function () {
@@ -112,27 +115,6 @@ Creep.prototype.getMoveIntent = function () {
   const nextPos = this.getNextPos()
   if (nextPos) {
     result.push(nextPos);
-
-    if (this.getStuckTick() > 0) {
-      const adjacents = this.pos.getAtRange(1)
-      for (const pos of adjacents) {
-        if (pos.isWall) {
-          continue
-        }
-        if (!isValidCoord(pos.x, pos.y)) {
-          continue
-        }
-
-        if (costs.get(pos.x, pos.y) > 1) {
-          continue;
-        }
-        if (pos.getRangeTo(nextPos) > 1) {
-          continue
-        }
-        result.push(pos)
-      }
-    }
-
     return this._moveIntent = result
   }
 

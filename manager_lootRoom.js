@@ -32,7 +32,6 @@ Flag.prototype.lootRoom = function () {
 
     const state = this.memory.state
 
-
     // init
 
     const scouterName = `${targetRoomName} scouter`
@@ -42,9 +41,6 @@ Flag.prototype.lootRoom = function () {
         if (!this.memory.findRouteLength) {
             const route = Game.map.findRoute(closestMyRoom, targetRoomName, {
                 routeCallback(roomName, fromRoomName) {
-                    if (ROOMNAMES_TO_AVOID.includes(roomName)) {
-                        return Infinity;
-                    }
                     const roomCoord = roomName.match(/[a-zA-Z]+|[0-9]+/g)
                     roomCoord[1] = Number(roomCoord[1])
                     roomCoord[3] = Number(roomCoord[3])

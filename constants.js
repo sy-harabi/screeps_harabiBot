@@ -76,10 +76,12 @@ global.CREEP_ROELS = [
     'depositWorker',
     'looter',
     'scouter',
-    'filler',
     'manager',
     'dismantler',
     'roomDefender',
+    'distributor',
+    'powerBankAttacker',
+    'powerBankHealer'
 ]
 
 global.SELF_DIRECTED_CREEP_ROELS = [
@@ -146,10 +148,6 @@ global.WORK_BY_CONTROLLER_LEVEL = [
     { min: 9, max: 27 },
     { min: 10, max: 33 },
     { min: 10, max: 32 },
-]
-
-global.ROOMNAMES_TO_AVOID = [
-
 ]
 
 global.BASIC_MINERALS = ['H', 'O', 'Z', 'K', 'U', 'L', 'X']
@@ -301,6 +299,7 @@ global.USEFULL_COMPOUNDS = [
     'XZHO2',
     'XGHO2',
     'XGH2O',
+    'G'
 ]
 
 global.COMPOUNDS_MANUFACTURING_TIME = {
@@ -485,3 +484,10 @@ global.RESOURCES_TO_TERMINAL = {
 }
 
 global.INVADER_BODY_PARTS = ['attack', 'ranged_attack', 'heal', 'work']
+
+global.COLOR_NEON_CYAN = '#4deeea'
+global.COLOR_NEON_GREEN = '#74ee15'
+global.COLOR_NEON_YELLOW = '#ffe700'
+global.COLOR_NEON_PURPLE = '#f000ff'
+global.COLOR_NEON_BLUE = '#001eff'
+global.COLOR_NEON_RED = '#fe0000'

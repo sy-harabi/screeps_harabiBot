@@ -122,6 +122,12 @@ global.checkCPU = function (name) {
     if (!Game._cpu) {
         Game._cpu = Game.cpu.getUsed()
     }
+
+    if (!name) {
+        Game._cpu = Game.cpu.getUsed()
+        return
+    }
+
     const cpu = Game.cpu.getUsed()
     const cpuUsed = cpu - Game._cpu
     if (cpuUsed > 0) {
@@ -162,6 +168,13 @@ global.claim = function (targetRoomName, baseName) {
     base.memory.claimRoom = base.memory.claimRoom || {}
     base.memory.claimRoom[targetRoomName] = base.memory.claimRoom[targetRoomName] || {}
     return `${baseName} starts claim protocol to ${targetRoomName}`
+}
+
+global.cancleAllClaim = function () {
+    const myRooms = Overlord.myRooms
+    for (const room of myRooms) {
+        delete room.memory.claimRoom
+    }
 }
 
 global.visual = function () {
@@ -219,6 +232,37 @@ global.mapInfo = function () {
     Memory.showMapInfo = (Memory.showMapInfo || 0) ^ 1
     if (Memory.showMapInfo === 1) {
         Memory.mapInfoTime = Game.time
+    }
+}
+
+global.sieze = function (roomName, ticks = 3000) {
+    roomName = roomName.toUpperCase()
+    const name = `${roomName} seize ${Game.time}`
+
+    const endTick = Game.time + ticks
+
+    const pos = new RoomPosition(25, 25, roomName)
+
+    if (!pos) {
+        return
+    }
+
+    pos.createFlag(name)
+
+    Memory.flags = Memory.flags || {}
+    Memory.flags[name].endTick = endTick
+
+    return
+}
+
+global.logSend = function (resourceType) {
+    const outgoingTransactions = Game.market.outgoingTransactions
+
+    for (const transaction of outgoingTransactions) {
+        if (resourceType && transaction.resourceType !== resourceType) {
+            continue
+        }
+        console.log(`${transaction.from} sent ${transaction.amount} of ${transaction.resourceType} to ${transaction.to}`)
     }
 }
 

@@ -1,5 +1,7 @@
 const RAMPART_HIT_THRESHOLD = 5000000
-const MAX_WORK = 50
+const MAX_WORK = 80
+const COST_FOR_HUB_CENTER = 30
+
 Object.defineProperties(Room.prototype, {
     GRCL: {
         get() {
@@ -143,34 +145,45 @@ Object.defineProperties(Room.prototype, {
     },
     basicCostmatrix: {
         get() {
-            if (!this._basicCostmatrix) {
-                const costs = new PathFinder.CostMatrix
-                for (const structure of this.structures[STRUCTURE_ROAD]) {
-                    costs.set(structure.pos.x, structure.pos.y, 1)
-                }
-                for (const source of this.sources) {
-                    for (const pos of source.pos.getAtRange(1)) {
-                        if (pos.terrain !== 1) {
-                            costs.set(pos.x, pos.y, 10)
-                        }
-                    }
-                }
-                for (const structure of this.structures.obstacles) {
-                    costs.set(structure.pos.x, structure.pos.y, 255)
-                }
-                for (const cs of this.constructionSites) {
-                    if (OBSTACLE_OBJECT_TYPES.includes(cs.structureType)) {
-                        costs.set(cs.pos.x, cs.pos.y, 255)
-                    }
-                }
-                for (const rampart of this.structures.rampart) {
-                    if (!rampart.my && !rampart.isPublic) {
-                        costs.set(rampart.pos.x, rampart.pos.y, 255)
-                    }
-                }
-                this._basicCostmatrix = costs
+            if (Game.time % 29 === 0) {
+                delete this.heap.basicCostmatrix
             }
-            return this._basicCostmatrix
+
+            if (this.heap.basicCostmatrix) {
+                return this.heap.basicCostmatrix
+            }
+
+            const costs = new PathFinder.CostMatrix
+            for (const structure of this.structures[STRUCTURE_ROAD]) {
+                costs.set(structure.pos.x, structure.pos.y, 1)
+            }
+            for (const source of this.sources) {
+                for (const pos of source.pos.getAtRange(1)) {
+                    if (pos.terrain !== 1) {
+                        costs.set(pos.x, pos.y, 10)
+                    }
+                }
+            }
+            for (const structure of this.structures.obstacles) {
+                costs.set(structure.pos.x, structure.pos.y, 255)
+            }
+            for (const cs of this.constructionSites) {
+                if (OBSTACLE_OBJECT_TYPES.includes(cs.structureType)) {
+                    costs.set(cs.pos.x, cs.pos.y, 255)
+                }
+            }
+            for (const rampart of this.structures.rampart) {
+                if (!rampart.my && !rampart.isPublic) {
+                    costs.set(rampart.pos.x, rampart.pos.y, 255)
+                }
+            }
+
+            const hubCenterPos = this.getHubCenterPos()
+            if (hubCenterPos && costs.get(hubCenterPos.x, hubCenterPos.y) < COST_FOR_HUB_CENTER) {
+                costs.set(hubCenterPos.x, hubCenterPos.y, COST_FOR_HUB_CENTER)
+            }
+
+            return this.heap.basicCostmatrix = costs
         }
     },
     basicCostMatrixWithCreeps: {
@@ -248,7 +261,7 @@ Object.defineProperties(Room.prototype, {
             if (this.controller.level === 1) {
                 return 4
             }
-            if (Game.time % 10 === 0) {
+            if (Game.time % 11 === 0) {
                 delete this.heap.maxWork
             }
 
@@ -275,15 +288,15 @@ Object.defineProperties(Room.prototype, {
 
             if (level === 8) {
                 // if downgrade is close, upgrade
-                if (this.controller.ticksToDowngrade < 10000) {
+                if (this.controller.ticksToDowngrade < 5000) {
                     this.heap.upgrading = true
                     return this.heap.maxWork = 15
                 }
 
-                // if constructing, maxWork 15
+                // if constructing, maxWork = energyLevel * 5
                 if (this.heap.constructing) {
                     this.heap.upgrading = false
-                    return this.heap.maxWork = 15
+                    return this.heap.maxWork = Math.max(0, 5 * Math.ceil(this.energyLevel))
                 }
 
                 // if savingMode, don't upgrade
@@ -298,11 +311,13 @@ Object.defineProperties(Room.prototype, {
             }
 
             if (this.energyLevel < 0) {
-                return this.heap.maxWork = 10
+                return this.heap.maxWork = 5
             }
 
-            const extra = Math.max(0, Math.floor(this.energyLevel))
-            return this.heap.maxWork = Math.min(MAX_WORK, numWorkEach * (1 + extra))
+            const max = this.controller.linkFlow || MAX_WORK
+
+            const extra = Math.max(0, Math.ceil(this.energyLevel))
+            return this.heap.maxWork = Math.min(max, numWorkEach * (1 + extra))
         }
     },
     terrain: {
@@ -359,8 +374,11 @@ Room.prototype.getBasicSpawnCapacity = function () {
     // manager + researcher
     const numManager = this.getMaxNumManager()
     result += 3 * Math.min(12, Math.floor(this.energyCapacityAvailable / 150), 16) * numManager
+
     //laborer
-    result += this.maxWork * 3
+    const basicNumWork = (this.storage ? 1 : (this.heap.sourceUtilizationRate || 0)) * 16
+    const remoteSurplusNumWork = Math.max(0, (this.heap.remoteIncome || 0))
+    result += Math.floor(basicNumWork + remoteSurplusNumWork) * 2
 
     //extractor
     if (level >= 6 && this.structures.extractor.length > 0) {
@@ -377,7 +395,7 @@ Room.prototype.getRemoteSpawnCapacity = function (remoteName) {
 
     const status = this.getRemoteStatus(remoteName)
 
-    if (!status.infraPlan) {
+    if (!status || !status.infraPlan) {
         return 0
     }
 
@@ -402,7 +420,7 @@ Room.prototype.getRemoteSpawnCapacity = function (remoteName) {
 }
 
 Room.prototype.getDepositSpawnCapacity = function (depositRequest) {
-    return depositRequest.available * 50 * 3
+    return depositRequest.available * 50 + 100
 }
 
 Room.prototype.getSpawnCapacity = function () {

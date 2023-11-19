@@ -19,6 +19,29 @@ Object.defineProperties(Creep.prototype, {
     }
 })
 
+Creep.prototype.getCost = function () {
+    const body = this.body
+
+    let result = 0
+
+    for (const part of body) {
+        let multiplier = 1
+        const boost = part.boost
+        if (boost) {
+            if (Object.values(TIER1_COMPOUNDS).includes(boost)) {
+                multiplier = 2
+            } else if (Object.values(TIER2_COMPOUNDS).includes(boost)) {
+                multiplier = 3
+            } else if (Object.values(TIER3_COMPOUNDS).includes(boost)) {
+                multiplier = 4
+            }
+        }
+        result += (BODYPART_COST[part.type] * multiplier)
+    }
+
+    return result
+}
+
 // pos is roomPosition
 Creep.prototype.checkEmpty = function (pos) {
     const creep = pos.lookFor(LOOK_CREEPS)[0]
@@ -69,7 +92,7 @@ Creep.prototype.moveToRoom = function (goalRoomName, ignoreMap) {
 
     const target = new RoomPosition(25, 25, goalRoomName)
 
-    return this.moveMy({ pos: target, range: 23 }, { ignoreMap, ignoreCreeps: false })
+    return this.moveMy({ pos: target, range: 23 }, { ignoreMap })
 }
 
 Creep.prototype.getEnergyFrom = function (id) {
@@ -407,7 +430,7 @@ Creep.prototype.moveMy = function (goals, options = {}) { //option = {avoidEnemy
         this.heap.stuck = 0
     }
 
-    if (this.heap.stuck > 5) {
+    if (this.heap.stuck > 10) {
         this.say(`🚧`, true)
         const result = this.searchPath(goals, { avoidEnemy, staySafe, ignoreMap })
         if (result === ERR_NO_PATH) {

@@ -47,6 +47,14 @@ global.Overlord = {
     }
     return Game._remotes
   },
+  get deposits() {
+    Memory._deposits = Memory._deposits || {}
+    return Memory._deposits
+  },
+  get powerBanks() {
+    Memory._powerBanks = Memory._powerBanks || {}
+    return Memory._powerBanks
+  }
 }
 
 Overlord.purgeMapInfo = function () {
@@ -96,7 +104,7 @@ Overlord.mapInfo = function () {
     if (room && room.isMy) {
       Game.map.visual.text(`${room.controller.level}`, new RoomPosition(center.x, center.y, center.roomName), { fontSize: 13, color: '#000000' })
       if (room.memory.scout) {
-        Game.map.visual.text(`⏰${room.memory.scout.nextScoutTime - Game.time}`, new RoomPosition(center.x + 23, center.y - 16, center.roomName), { align: 'right', fontSize: 5, color: '#74ee15' })
+        Game.map.visual.text(`⏰${Game.time - room.memory.scout.startTick}`, new RoomPosition(center.x + 23, center.y - 16, center.roomName), { align: 'right', fontSize: 5, color: '#74ee15' })
 
         Game.map.visual.text(`${room.memory.scout.state}`, new RoomPosition(center.x - 23, center.y - 18, center.roomName), { align: 'left', fontSize: 13, color: '#74ee15' })
         if (room.memory.scout.next) {
@@ -159,6 +167,11 @@ Overlord.classifyCreeps = function () {
     result[roomName].wounded = []
   }
   for (const creep of creeps) {
+    if (Game.time % 10 === 0 && !creep.memory.notify && creep.ticksToLive < CREEP_LIFE_TIME) {
+      creep.notifyWhenAttacked(false)
+      creep.memory.notify = true
+    }
+
     if (!result[creep.assignedRoom]) {
       result[creep.assignedRoom] = {}
     }
@@ -219,24 +232,70 @@ Overlord.getCreepsByAssignedRoom = function (roomName) {
 }
 
 Overlord.findClosestMyRoom = function (fromRoomName, level = 0) {
-  const closestRoomName = Object.keys(Game.rooms).filter(roomName => roomName !== fromRoomName && Game.rooms[roomName].isMy && Game.rooms[roomName].controller.level >= level).sort((a, b) => {
-    return Game.map.findRoute(fromRoomName, a, {
-      routeCallback(roomName) {
-        if (ROOMNAMES_TO_AVOID.includes(roomName)) {
-          return Infinity;
-        }
-        return 1;
+  const myRooms = this.myRooms
+  const myRoomsFiltered = myRooms.filter(room => {
+    if (room.controller.level < level) {
+      return false
+    }
+    if (Game.map.getRoomLinearDistance(fromRoomName, room.name) > 16) {
+      return false
+    }
+    return true
+  })
+  const myRoomsSorted = myRoomsFiltered.sort((a, b) => {
+    const routeA = getRoute(fromRoomName, a.name)
+    const routeB = getRoute(fromRoomName, b.name)
+    const lengthA = routeA.length || Infinity
+    const lengthB = routeB.length || Infinity
+    return lengthA - lengthB
+  })
+  return myRoomsSorted[0]
+}
+
+function getRoute(startRoomName, endRoomName) {
+  const route = Game.map.findRoute(startRoomName, endRoomName, {
+    routeCallback(roomName, fromRoomName) {
+      // 현재 creep이 있는 방이면 무조건 쓴다
+      if (roomName === startRoomName) {
+        return 1
       }
-    }).length - Game.map.findRoute(fromRoomName, b, {
-      routeCallback(roomName) {
-        if (ROOMNAMES_TO_AVOID.includes(roomName)) {
-          return Infinity;
-        }
-        return 1;
+
+      // ignoreMap이 1 이상이면 목적지는 무조건 간다
+      if (roomName === endRoomName) {
+        return 1
       }
-    }).length
-  })[0]
-  return Game.rooms[closestRoomName]
+
+      // defense 있는 방이면 쓰지말자
+      if (Memory.map[roomName] && Memory.map[roomName].inaccessible > Game.time && Memory.map[roomName].numTower > 0) {
+        return Infinity
+      }
+
+      // 막혀있거나, novice zone이거나, respawn zone 이면 쓰지말자
+      if (Game.map.getRoomStatus(roomName).status !== 'normal') {
+        return Infinity
+      }
+
+      const roomCoord = roomName.match(/[a-zA-Z]+|[0-9]+/g)
+      roomCoord[1] = Number(roomCoord[1])
+      roomCoord[3] = Number(roomCoord[3])
+      const x = roomCoord[1]
+      const y = roomCoord[3]
+      // highway면 cost 1
+      if (x % 10 === 0 || y % 10 === 0) {
+        return 1
+      }
+
+      // 내가 쓰고 있는 방이면 cost 1
+      const isMy = Game.rooms[roomName] && (Game.rooms[roomName].isMy || Game.rooms[roomName].isMyRemote)
+      if (isMy) {
+        return 1
+      }
+
+      // 다른 경우에는 cost 2.5
+      return 2.5;
+    }
+  })
+  return route
 }
 
 Overlord.memHack = {

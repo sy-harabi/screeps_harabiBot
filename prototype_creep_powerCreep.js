@@ -37,9 +37,6 @@ PowerCreep.prototype.searchPath = function (target, range = 0, maxRooms = 1, ign
         plainCost: 2,
         swampCost: 10,
         roomCallback: function (roomName) {
-            if (ROOMNAMES_TO_AVOID.includes(roomName)) {
-                return false
-            }
             if (Game.rooms[roomName]) {
                 const costs = Game.rooms[roomName].basicCostmatrix
                 if (!ignoreCreeps && thisCreep.room.name === roomName) {

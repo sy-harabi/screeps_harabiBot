@@ -6,6 +6,10 @@ const NUM_WORK_TO_CONSTRUCT = 6
 const RESERVE_TICK_THRESHOLD = 1000
 const NUM_CONSTRUCTION_SITES_PER_ROOM = 6
 
+const DEFENDER_LOST_ENERGY_LIMIT_PER_RCL = 2500
+
+const ENERGY_LEVEL_THRESHOLD_TO_DEFENSE = -5
+
 const VISUAL_OPTION = { font: 0.5, align: 'left' }
 
 Room.prototype.manageRemotes = function () {
@@ -13,45 +17,41 @@ Room.prototype.manageRemotes = function () {
         return
     }
 
-    const spawnCapacityAvailable = this.structures.spawn.length * 500
+    const remoteNames = this.getRemoteNamesSortedByRange()
 
-    const basicSpawnCapacity = this.getBasicSpawnCapacity()
+    if (remoteNames.length === 0) {
+        return
+    }
 
-    const spawnCapacityForRemotes = spawnCapacityAvailable - basicSpawnCapacity
+    if (!this.memory.activeRemotes || Game.time % 17 === 0) {
+        const spawnCapacityAvailable = this.structures.spawn.length * 500
 
-    const remoteNames = Object.keys(this.memory.remotes).sort((a, b) => {
-        let resultA = this.getRemotePathLengthAverage(a)
-        let resultB = this.getRemotePathLengthAverage(b)
-        if (this.getRemoteStatus(a).intermediate) {
-            resultA += 100
+        const basicSpawnCapacity = this.getBasicSpawnCapacity()
+
+        const spawnCapacityForRemotes = spawnCapacityAvailable - basicSpawnCapacity
+
+        let remotesSpawnCapacity = 0
+
+        let i = 1
+
+        this.memory.activeRemotes = []
+        this.memory.coreRemotes = []
+
+        for (const remoteName of remoteNames) {
+            const pos = new RoomPosition(5, 5, remoteName)
+            Game.map.visual.text(i, pos, { fontSize: 5, opacity: 1 })
+            i++
+            remotesSpawnCapacity += this.getRemoteSpawnCapacity(remoteName)
+
+            if (remotesSpawnCapacity > spawnCapacityForRemotes) {
+                break
+            }
+
+            if (((remotesSpawnCapacity + basicSpawnCapacity) / spawnCapacityAvailable) < SPAWN_CAPACITY_THRESHOLD) {
+                this.memory.coreRemotes.push(remoteName)
+            }
+            this.memory.activeRemotes.push(remoteName)
         }
-        if (this.getRemoteStatus(b).intermediate) {
-            resultB += 100
-        }
-        return resultA - resultB
-    })
-
-    let remotesSpawnCapacity = 0
-
-    let i = 1
-
-    this.memory.activeRemotes = []
-    this.memory.coreRemotes = []
-
-    for (const remoteName of remoteNames) {
-        const pos = new RoomPosition(5, 5, remoteName)
-        Game.map.visual.text(i, pos, { fontSize: 5, opacity: 1 })
-        i++
-        remotesSpawnCapacity += this.getRemoteSpawnCapacity(remoteName)
-
-        if (remotesSpawnCapacity > spawnCapacityForRemotes) {
-            break
-        }
-
-        if (((remotesSpawnCapacity + basicSpawnCapacity) / spawnCapacityAvailable) < SPAWN_CAPACITY_THRESHOLD) {
-            this.memory.coreRemotes.push(remoteName)
-        }
-        this.memory.activeRemotes.push(remoteName)
     }
 
     for (const remoteName of this.memory.activeRemotes) {
@@ -84,6 +84,30 @@ Room.prototype.manageRemotes = function () {
     return
 }
 
+Room.prototype.getRemoteNamesSortedByRange = function () {
+    if (Game.time % 37 === 0) {
+        delete this.heap.remoteNamesSortedByRange
+    }
+
+    if (this.heap.remoteNamesSortedByRange) {
+        return this.heap.remoteNamesSortedByRange
+    }
+
+    const remoteNames = Object.keys(this.memory.remotes).sort((a, b) => {
+        let resultA = this.getRemotePathLengthAverage(a)
+        let resultB = this.getRemotePathLengthAverage(b)
+        if (this.getRemoteStatus(a).intermediate) {
+            resultA += 100
+        }
+        if (this.getRemoteStatus(b).intermediate) {
+            resultB += 100
+        }
+        return resultA - resultB
+    })
+
+    return this.heap.remoteNamesSortedByRange = remoteNames
+}
+
 Room.prototype.operateRemote = function (remoteName) {
     const map = Overlord.map
 
@@ -109,50 +133,31 @@ Room.prototype.operateRemote = function (remoteName) {
 
     // defense department
 
-    // evacuate when there is threat(defender died)
-    let isThreat = false
-    if (map[remoteName] && map[remoteName].threat && Game.time < map[remoteName].threat) {
-        isThreat = true
-        if (status.state !== 'evacuate') {
-            status.state = 'evacuate'
-
-            // get recycled all the creeps
-            for (const creep of Overlord.getCreepsByAssignedRoom(remoteName)) {
-                creep.memory.getRecycled = true
-            }
-
-            data.recordLog(`REMOTE: Evacuate from ${remoteName}.`, remoteName)
-        }
-        new RoomVisual(remoteName).text(`⏱️${map[remoteName].threat - Game.time}`, visualPos.x, visualPos.y + 5)
-    }
-
     // check intermediate
-    let intermediateEvacuate = false
     const intermediateName = status.intermediate
     if (intermediateName) {
         const intermediateStatus = this.memory.remotes[intermediateName]
 
         // abandon when intermediate room is abandoned
         if (!intermediateStatus) {
-            data.recordLog(`REMOTE: abandon ${remoteName} since intermediate room is gone`, remoteName)
+            data.recordLog(`REMOTE: abandon ${remoteName} since intermediate room is gone`, this.name)
             this.abandonRemote(remoteName)
             return true
         }
+    }
 
-        // evacuate when intermediate room is in threat
-        if (intermediateStatus.state === 'evacuate') {
-            intermediateEvacuate = true
-            if (status.state !== 'evacuate') {
-                status.state = 'evacuate'
+    // abandon when threatLevel is high (defenders keep dying by users)
+    const threatLevel = this.getRemoteThreatLevel(remoteName)
+    const threshold = this.controller.level * DEFENDER_LOST_ENERGY_LIMIT_PER_RCL
 
-                // get recycled all the creeps
-                for (const creep of Overlord.getCreepsByAssignedRoom(remoteName)) {
-                    creep.memory.getRecycled = true
-                }
+    if (threatLevel > 0) {
+        new RoomVisual(remoteName).text(`⚠️${threatLevel}/${threshold}`, visualPos.x, visualPos.y - 2)
+    }
 
-                data.recordLog(`REMOTE: Evacuate from ${remoteName}.`, remoteName)
-            }
-        }
+    if (threatLevel > threshold) {
+        data.recordLog(`REMOTE: abandon ${remoteName} since defense faild.`, this.name)
+        this.abandonRemote(remoteName)
+        return
     }
 
     // abandon remote if room is claimed
@@ -162,37 +167,13 @@ Room.prototype.operateRemote = function (remoteName) {
         return true
     }
 
-    // evacuate state
-    if (status.state === 'evacuate') {
-        if (intermediateEvacuate) {
-            return true
-        }
-
-        if (isThreat) {
-            return true
-        }
-
-        // disable evacuate
-        status.state = 'normal'
-        status.isInvader = false
-        if (Memory.rooms[remoteName]) {
-            Memory.rooms[remoteName].isInvader = false
-            Memory.rooms[remoteName].isKiller = false
-        }
-        data.recordLog(`REMOTE: ${remoteName} Reactivated.`, remoteName)
-        return true
-    }
-
     // check invader or invaderCore
-    const bodyLengthTotal = this.checkRemoteInvader(remoteName)
-    const bodyLengthMax = Math.min(Math.ceil(bodyLengthTotal / 10) + 1, 5)
-    if (bodyLengthTotal) {
+    if (this.checkRemoteInvader(remoteName)) {
         new RoomVisual(remoteName).text(`👿Invader`, visualPos.x, visualPos.y - 1)
-        if (!Overlord.getNumCreepsByRole(remoteName, 'colonyDefender')) {
-            this.requestColonyDefender(remoteName, { bodyLengthMax })
-            return false
-        }
-        return true
+        const defenderTotalCost = (status.enemyTotalCost || 0) * 1.2
+        return this.sendTroops(remoteName, defenderTotalCost)
+    } else {
+        this.addRemoteThreatLevel(remoteName, -1)
     }
 
     if (this.checkRemoteInvaderCore(remoteName)) {
@@ -209,6 +190,94 @@ Room.prototype.operateRemote = function (remoteName) {
     const reserveRemoteResult = this.reserveRemote(remoteName)
     const extractRemoteResult = this.extractRemote(remoteName)
     return reserveRemoteResult && extractRemoteResult
+}
+
+Room.prototype.getEnemyCombatants = function () {
+    if (this._enemyCombatants !== undefined) {
+        return this._enemyCombatants
+    }
+    const enemyCreeps = this.find(FIND_HOSTILE_CREEPS)
+    const enemyCombatants = enemyCreeps.filter(creep => creep.checkBodyParts(['attack', 'ranged_attack']))
+    return this._enemyCombatants = enemyCombatants
+}
+
+Room.prototype.getIsDefender = function () {
+    if (this._isDefender !== undefined) {
+        return this._isDefender
+    }
+    const myCreeps = this.find(FIND_MY_CREEPS)
+    for (const creep of myCreeps) {
+        if (creep.memory.role === 'colonyDefender' && creep.memory.colony === this.name) {
+            return this._isDefender = true
+        }
+    }
+    return this._isDefender = false
+}
+
+Room.prototype.getRemoteThreatLevel = function (remoteName) {
+    const status = this.getRemoteStatus(remoteName)
+
+    if (!status) {
+        return 0
+    }
+
+    return status.threatLevel || 0
+}
+
+Room.prototype.addRemoteThreatLevel = function (remoteName, amount) {
+    const status = this.getRemoteStatus(remoteName)
+
+    if (!status) {
+        return
+    }
+
+    status.threatLevel = status.threatLevel || 0
+
+    status.threatLevel = Math.max(status.threatLevel + amount, 0)
+}
+
+/**
+ * 
+ * @param {string} roomName - roomName to send troops
+ * @param {*} cost - total cost to be used to spawn troops
+ * @returns whether there are enough troops or not
+ */
+Room.prototype.sendTroops = function (roomName, cost) {
+    const colonyDefenders = Overlord.getCreepsByRole(roomName, 'colonyDefender')
+
+    const requestedCost = cost
+
+    if (requestedCost === 0) {
+        if (colonyDefenders.length === 0) {
+            this.requestColonyDefender(roomName, { bodyLengthMax: 1 })
+            return false
+        }
+        for (const colonyDefender of colonyDefenders) {
+            colonyDefender.memory.wait = false
+        }
+        return true
+    }
+
+    let totalCost = 0
+
+    for (const colonyDefender of colonyDefenders) {
+        totalCost += colonyDefender.getCost()
+    }
+
+    if (totalCost >= requestedCost) {
+        if (colonyDefenders.find(colonyDefender => colonyDefender.spawning)) {
+            return true
+        }
+        for (const colonyDefender of colonyDefenders) {
+            colonyDefender.memory.wait = false
+        }
+        return true
+    }
+
+    const bodyLengthMax = Math.ceil(requestedCost / 1100)
+
+    this.requestColonyDefender(roomName, { bodyLengthMax, wait: true })
+    return false
 }
 
 Room.prototype.reserveRemote = function (remoteName) {
@@ -302,7 +371,10 @@ Room.prototype.extractRemote = function (remoteName) {
                 let containerId = undefined
                 if (remote) {
                     const structures = status.infraPlan[id].structures
-                    const containerPacked = structures[structures.length - 1]
+                    const containerPacked = structures.find(packed => {
+                        const parsed = parseInfraPos(packed)
+                        return parsed.structureType === 'container'
+                    })
                     const containerParsed = parseInfraPos(containerPacked)
                     const containerPos = containerParsed.pos
                     const container = containerPos.lookFor(LOOK_STRUCTURES).find(structure => structure.structureType === 'container')
@@ -785,29 +857,30 @@ Room.prototype.checkRemoteInvader = function (remoteName) {
     }
 
     const hostileCreeps = remote.find(FIND_HOSTILE_CREEPS).filter(creep => creep.checkBodyParts(['work', 'attack', 'ranged_attack', 'heal', 'claim']))
-    const killerCreeps = hostileCreeps.filter(creep => creep.checkBodyParts(['attack', 'ranged_attack', 'heal']))
+    const hostileAttackers = []
+    const hostileCombatants = []
 
-    let bodyLengthTotal = 0
-    for (const hostileCreep of hostileCreeps) {
-        if (hostileCreep.owner.username !== 'Invader') {
-            bodyLengthTotal += 50
-            continue
+    for (const creep of hostileCreeps) {
+        if (creep.checkBodyParts(['attack', 'ranged_attack', 'heal'])) {
+            hostileCombatants.push(creep)
         }
-        bodyLengthTotal += hostileCreep.body.length
+        if (creep.checkBodyParts(['attack', 'ranged_attack'])) {
+            hostileAttackers.push(creep)
+        }
     }
 
     if (!status.isInvader && hostileCreeps.length > 0) {
-        status.isInvader = bodyLengthTotal
-        remote.memory.isInvader = bodyLengthTotal
+        status.isInvader = true
+        remote.memory.isInvader = true
     } else if (status.isInvader && hostileCreeps.length === 0) {
         status.isInvader = false
         remote.memory.isInvader = false
     }
 
-    if (!remote.memory.isKiller && killerCreeps.length > 0) {
-        remote.memory.isKiller = bodyLengthTotal
-        status.isKiller = bodyLengthTotal
-    } else if (remote.memory.isKiller && killerCreeps.length === 0) {
+    if (!remote.memory.isKiller && hostileAttackers.length > 0) {
+        remote.memory.isKiller = true
+        status.isKiller = true
+    } else if (remote.memory.isKiller && hostileAttackers.length === 0) {
         status.isKiller = false
         remote.memory.isKiller = false
 
@@ -817,6 +890,15 @@ Room.prototype.checkRemoteInvader = function (remoteName) {
             delete roomInfo.threat
         }
     }
+
+    let totalCost = 0
+
+    for (const combatant of hostileCombatants) {
+        totalCost += combatant.getCost()
+    }
+
+    status.enemyTotalCost = totalCost
+
     return status.isInvader
 }
 

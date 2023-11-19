@@ -112,8 +112,6 @@ Room.prototype.operateBoost = function (boostRequest) {
                 continue
             }
 
-            console.log(resourceType)
-
             const result = terminal.gatherResource(resourceType, amount, { threshold: 0 })
 
             if (result !== OK) {

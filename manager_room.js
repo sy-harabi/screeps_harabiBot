@@ -1,4 +1,6 @@
-global.SPAWN_CAPACITY_THRESHOLD = 0.8
+global.SPAWN_CAPACITY_THRESHOLD = 0.9
+const POWER_BANK_DAMAGE_THRESHOLD = 1000
+const SHOW_RCL_HISTORY = false
 
 Room.prototype.runRoomManager = function () {
     if (this.abandon) {
@@ -37,6 +39,7 @@ Room.prototype.runRoomManager = function () {
         this.managePowerSpawn()
         this.manageScout()
         this.manageClaim()
+        this.fillNuker()
     }
 
     this.manageEnergy()
@@ -45,6 +48,30 @@ Room.prototype.runRoomManager = function () {
     this.manageSource()
     this.manageSpawn()
     this.manageVisual()
+}
+
+Room.prototype.fillNuker = function () {
+    const nuker = this.structures.nuker[0]
+    const terminal = this.terminal
+
+    if (!nuker || !terminal) {
+        return
+    }
+
+    if (nuker.store.getFreeCapacity(RESOURCE_ENERGY) > 0 || nuker.store.getFreeCapacity(RESOURCE_GHODIUM) === 0 || terminal.store[RESOURCE_GHODIUM] < 1000) {
+        return
+    }
+
+    const researcher = this.creeps.researcher[0]
+
+    if (!researcher) {
+        this.heap.needResearcher = true
+        return
+    }
+
+    researcher.getDeliveryRequest(terminal, nuker, RESOURCE_GHODIUM)
+
+    return
 }
 
 Room.prototype.checkTombstone = function () {
@@ -65,6 +92,7 @@ Room.prototype.checkTombstone = function () {
     if (hostileStructures.length) {
         map[this.name].inaccessible = Game.time + 10000
         map[this.name].lastScout = Game.time
+        map[this.name].numTower = hostileStructures.length
         return
     }
 
@@ -113,28 +141,29 @@ Room.prototype.checkTombstone = function () {
         map[this.name].threat = map[this.name].threat || Game.time
         map[this.name].threat = Math.max(map[this.name].threat, Game.time + TTL)
 
-        // user한테 죽은 경우 colony 버리고 확인 멈추고 return.
-        if (username !== 'Invader') {
-            if (Overlord.remotes.includes(this.name)) {
-                if (!deadCreep) {
-                    continue
-                }
-                if (!deadCreep.name) {
-                    continue
-                }
-                if (!Memory.creeps[deadCreep.name]) {
-                    continue
-                }
-                if (!Memory.creeps[deadCreep.name].base) {
-                    continue
-                }
-                const hostRoom = Game.rooms[Memory.creeps[deadCreep.name].base]
-                if (!hostRoom) {
-                    continue
-                }
-                data.recordLog(`REMOTE: Abandon ${this.name}. defender is killed.`, this.name)
-                hostRoom.abandonRemote(this.name)
+        if (username !== 'Invader' && Overlord.remotes.includes(this.name)) {
+            if (!deadCreep) {
+                continue
             }
+            if (!deadCreep.name) {
+                continue
+            }
+            if (!Memory.creeps[deadCreep.name]) {
+                continue
+            }
+
+            const baseName = Memory.creeps[deadCreep.name].base
+
+            if (!baseName) {
+                continue
+            }
+            const hostRoom = Game.rooms[baseName]
+            if (!hostRoom) {
+                continue
+            }
+            const cost = deadCreep.getCost()
+            data.recordLog(`${deadCreep.name} killed. add cost ${cost} to the remote ${this.name}`, baseName)
+            hostRoom.addRemoteThreatLevel(this.name, cost)
             return
         }
     }
@@ -383,7 +412,26 @@ Room.prototype.manageHighWay = function () {
 
     for (const depositRequest of Object.values(this.memory.depositRequests)) {
         Game.map.visual.text('deposit', new RoomPosition(25, 25, depositRequest.roomName))
+        Game.map.visual.text(`⏳${depositRequest.lastCooldown}/${Math.ceil(depositRequest.maxCooldown)}`, new RoomPosition(25, 35, depositRequest.roomName), { fontSize: 6 })
         this.runDepositWork(depositRequest)
+    }
+
+    if (!this.memory.powerBankRequests) {
+        return
+    }
+
+    for (const powerBankRequest of Object.values(this.memory.powerBankRequests)) {
+        if (Game.time > powerBankRequest.decayTime) {
+            this.deletePowerBank(powerBankRequest)
+            continue
+        }
+        Game.map.visual.text('powerBank', new RoomPosition(25, 5, powerBankRequest.roomName), { color: '#f000ff' })
+        const requiredAttackPower = this.getRequiredAttackPowerForPowerBank(powerBankRequest)
+        if (requiredAttackPower > POWER_BANK_DAMAGE_THRESHOLD) {
+            this.deletePowerBank(powerBankRequest)
+            continue
+        }
+        Game.map.visual.text(`⚔️:${requiredAttackPower} 💰:${powerBankRequest.amount}`, new RoomPosition(25, 15, powerBankRequest.roomName), { fontSize: 6, color: '#f000ff' })
     }
 }
 
@@ -402,7 +450,7 @@ Room.prototype.manageVisual = function () {
         this.visual.text(` 🔋${Math.floor(this.storage.store.getUsedCapacity(RESOURCE_ENERGY) / 1000)}K`, this.storage.pos.x - 2.9, this.storage.pos.y, { font: 0.5, align: 'left' })
     }
     const GRCLhistory = this.memory.GRCLhistory
-    if (GRCLhistory) {
+    if (SHOW_RCL_HISTORY && GRCLhistory) {
         let i = 2
         while (GRCLhistory[i] && GRCLhistory[1]) {
             this.visual.text(`got RCL${i} at tick ${GRCLhistory[i] - GRCLhistory[1]}`, 25, 25 - i)

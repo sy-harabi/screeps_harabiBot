@@ -11,62 +11,81 @@ const COST_STOP_WORK = 1
 
 Room.prototype.manageTraffic = function () {
 
-  const CPUbefore = Game.cpu.getUsed()
+  const CPUbefore = TRAFFIC_TEST ? Game.cpu.getUsed() : undefined
 
-  checkCPU(`manageTraffic`)
+  const isMy = this.isMy
+
+  if (TRAFFIC_TEST && isMy) {
+    console.log('------------------------------------------')
+    checkCPU()
+  }
 
   const creeps = this.find(FIND_MY_CREEPS)
 
   const initialFlow = new Graph(new Set([SOURCE, SINK]))
 
+  const posVertices = []
+
+  const costs = (!this.memory.militaryThreat || !this.isWalledUp) ? this.basicCostmatrix : this.defenseCostMatrix
+
   for (let i = 0; i < creeps.length; i++) {
     const creep = creeps[i]
     const vertice = packCreepIndexToVertice(i)
     initialFlow.addVertex(vertice)
-    initialFlow.setEdge(SOURCE, vertice)
 
-    const moveIntent = creep.getMoveIntent()
+    const currentPosVertex = packPosToVertice(creep.pos.x, creep.pos.y)
+    initialFlow.addVertex(currentPosVertex)
 
-    for (const intent of moveIntent) {
-      const adjacent = packPosToVertice(intent.pos.x, intent.pos.y)
-      initialFlow.addVertex(adjacent)
-
-      const options = { cost: intent.cost }
-      initialFlow.setEdge(vertice, adjacent, options)
-
-      initialFlow.setEdge(adjacent, SINK, { flow: 0 })
+    if (creep.getNextPos()) {
+      initialFlow.setEdge(SOURCE, vertice)
+      initialFlow.setEdge(vertice, currentPosVertex, { cost: COST_BLOCKED })
+      initialFlow.setEdge(currentPosVertex, SINK)
+    } else {
+      initialFlow.setEdge(SINK, currentPosVertex, { cost: -0 })
+      initialFlow.setEdge(currentPosVertex, vertice, { cost: -0 })
+      initialFlow.setEdge(vertice, SOURCE, { cost: -0 })
     }
+
+    creep.setMoveIntent(costs, initialFlow, vertice, posVertices)
   }
 
-  checkCPU(`set Graph`)
+  for (const posVertex of posVertices) {
+    if (initialFlow.getEdge(SINK, posVertex) || initialFlow.getEdge(posVertex, SINK)) {
+      continue
+    }
+    initialFlow.setEdge(posVertex, SINK)
+  }
 
-  const result = initialFlow.minimumCostMaximumFlowWithUnitCapacity(SOURCE, SINK)
+  if (TRAFFIC_TEST && isMy) {
+    checkCPU(`set Graph`)
+  }
 
-  checkCPU(`MCMF`)
+
+  const result = initialFlow.minimumCostMaximumFlowWithUnitCapacity(SOURCE, SINK, isMy)
+
+  if (TRAFFIC_TEST && isMy) {
+    checkCPU(`MCMF`)
+  }
+
 
   let numMoved = 0
 
   for (let i = 0; i < creeps.length; i++) {
     const vertice = packCreepIndexToVertice(i)
-    const adjacents = result.getAdjacents(vertice)
-    for (const adjacent of adjacents) {
-      const edge = result.getEdge(vertice, adjacent)
-      if (edge.flow > 0) {
-        const creep = creeps[i]
-        const pos = parseVerticeToPos(adjacent)
-        if (!creep.pos.isEqualTo(pos.x, pos.y)) {
-          const direction = creep.pos.getDirectionTo(pos.x, pos.y)
-          if (creep.move(direction) === OK) {
 
-            numMoved++
-          }
-        }
-        break
+    const posVertex = result.get(vertice)
+
+    if (posVertex) {
+      const creep = creeps[i]
+      const pos = parseVerticeToPos(posVertex)
+      const direction = creep.pos.getDirectionTo(pos.x, pos.y)
+      if (creep.move(direction) === OK) {
+        numMoved++
       }
     }
   }
 
-  if (this.isMy) {
+  if (TRAFFIC_TEST && isMy) {
     const usedCPU = Game.cpu.getUsed() - CPUbefore - numMoved * 0.2
     console.log(`use ${usedCPU.toFixed(2)} cpu for ${numMoved} moves`)
     console.log(`use ${(usedCPU / numMoved).toFixed(2)} cpu for each move`)
@@ -93,22 +112,16 @@ Creep.prototype.getWorkingInfo = function () {
   return this._workingInfo
 }
 
-Creep.prototype.getMoveIntent = function () {
-  if (this._moveIntent !== undefined) {
-    return this._moveIntent;
-  }
-
-  const result = [];
-  const costs = (!this.room.memory.militaryThreat || !this.room.isWalledUp) ? this.room.basicCostmatrix : this.room.defenseCostMatrix
+Creep.prototype.setMoveIntent = function (costs, graph, creepVertex, posVertices) {
 
   const nextPos = this.getNextPos()
   if (nextPos) {
-    result.push({ pos: this.pos, cost: COST_BLOCKED })
-    result.push({ pos: nextPos, cost: 0 });
-    return this._moveIntent = result
+    const nexPosVertex = packPosToVertice(nextPos.x, nextPos.y)
+    graph.addVertex(nexPosVertex)
+    graph.setEdge(creepVertex, nexPosVertex)
+    posVertices.push(nexPosVertex)
+    return
   }
-
-  result.push({ pos: this.pos, cost: 0 })
 
   const adjacents = this.pos.getAtRange(1)
 
@@ -136,14 +149,21 @@ Creep.prototype.getMoveIntent = function () {
         continue;
       }
 
-      result.push({ pos: pos, cost: COST_EXCUSE });
+      const posVertex = packPosToVertice(pos.x, pos.y)
+
+      graph.addVertex(posVertex)
+      graph.setEdge(creepVertex, posVertex, { cost: COST_EXCUSE })
+      posVertices.push(posVertex)
     }
 
     for (const pos of positionsOutOfRange) {
-      result.push({ pos: pos, cost: COST_STOP_WORK });
-    }
+      const posVertex = packPosToVertice(pos.x, pos.y)
 
-    return this._moveIntent = result
+      graph.addVertex(posVertex)
+      graph.setEdge(creepVertex, posVertex, { cost: COST_STOP_WORK })
+      posVertices.push(posVertex)
+    }
+    return
   }
 
   for (const pos of adjacents) {
@@ -156,22 +176,16 @@ Creep.prototype.getMoveIntent = function () {
     if (costs.get(pos.x, pos.y) > 1) {
       continue;
     }
-    result.push({ pos: pos, cost: COST_EXCUSE });
+    const posVertex = packPosToVertice(pos.x, pos.y)
+
+    graph.addVertex(posVertex)
+    graph.setEdge(creepVertex, posVertex, { cost: COST_EXCUSE })
+    posVertices.push(posVertex)
   }
-
-  return this._moveIntent = result
 };
-
-function isVerticePos(vertice) {
-  return vertice - (1 << 12)
-}
 
 function packCreepIndexToVertice(index) {
   return index + (1 << 12)
-}
-
-function parseVerticeToCreepIndex(vertice) {
-  return (vertice << 12) - 1
 }
 
 function packPosToVertice(x, y) {

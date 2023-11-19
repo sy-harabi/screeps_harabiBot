@@ -2,6 +2,8 @@ const MINERAL_AMOUNT_TO_KEEP = 3600
 const MINERAL_AMOUNT_TO_SELL = 100000
 const MINERAL_AMOUNT_BUFFER = 30000
 const BOOST_RCL_ENERGY_LEVEL_GOAL = 3
+const ENERGY_LEVEL_TO_BE_HELPED = -5
+const TERMINAL_ENERGY_THRESHOLD_TO_HELP = 20000
 
 StructureTerminal.prototype.run = function () {
     if (Memory.abandon && Memory.abandon.includes(this.room.name)) {
@@ -13,6 +15,12 @@ StructureTerminal.prototype.run = function () {
     }
 
     this.manageMinerals()
+
+    for (const resourceType of Object.keys(this.store)) {
+        if (COMMODITIES_TO_SELL.includes(resourceType)) {
+            Business.sell(resourceType, this.store[resourceType], this.room.name)
+        }
+    }
 
     // if (data.isEnoughCredit && this.room.structures.powerSpawn.length && this.store[RESOURCE_POWER] < 500) {
     //     Business.buy('power', 1000, this.room.name)
@@ -36,37 +44,35 @@ StructureTerminal.prototype.run = function () {
             if (room.savingMode) {
                 continue
             }
-            if (!room.terminal || room.terminal.cooldown || room.terminal.store[RESOURCE_ENERGY] < 40000) {
+            if (!room.terminal || room.terminal.cooldown || room.terminal.store[RESOURCE_ENERGY] < TERMINAL_ENERGY_THRESHOLD_TO_HELP) {
                 continue
             }
-            const amount = Math.floor(room.terminal.store[RESOURCE_ENERGY] / 2)
+            const amount = Math.floor(TERMINAL_ENERGY_THRESHOLD_TO_HELP / 2)
             if (room.terminal.send(RESOURCE_ENERGY, amount, this.room.name) === OK) {
+                return
             }
         }
-    } else if (this.room.storage && this.room.storage.store[RESOURCE_ENERGY] < 300000) {
-        for (const room of Object.values(Game.rooms)) {
+        return
+    }
+
+    if (this.room.storage && this.room.energyLevel < ENERGY_LEVEL_TO_BE_HELPED) {
+        for (const room of Overlord.myRooms) {
             if (room.name === this.room.name) {
                 continue
             }
-            if (!room.isMy || room.controller.level < 8) {
+            if (room.controller.level < 8) {
                 continue
             }
             if (room.savingMode) {
                 continue
             }
-            if (!room.terminal || room.terminal.cooldown || room.terminal.store[RESOURCE_ENERGY] < 40000) {
+            if (!room.terminal || room.terminal.cooldown || room.terminal.store[RESOURCE_ENERGY] < TERMINAL_ENERGY_THRESHOLD_TO_HELP) {
                 continue
             }
-            const amount = Math.floor(room.terminal.store[RESOURCE_ENERGY] / 2)
+            const amount = Math.floor(TERMINAL_ENERGY_THRESHOLD_TO_HELP / 2)
             if (room.terminal.send(RESOURCE_ENERGY, amount, this.room.name) === OK) {
                 break
             }
-        }
-    }
-
-    for (const resourceType of Object.keys(this.store)) {
-        if (COMMODITIES_TO_SELL.includes(resourceType)) {
-            Business.sell(resourceType, this.store[resourceType], this.room.name)
         }
     }
 }

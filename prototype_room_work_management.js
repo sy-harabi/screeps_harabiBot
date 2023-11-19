@@ -5,9 +5,9 @@ Room.prototype.manageWork = function () {
     }
 
     // downgrade가 너무 임박한 상태면 일단 upgrade부터
-    if (!this.heap.upgradeFirst && this.controller.ticksToDowngrade < 1000) {
+    if (!this.heap.upgradeFirst && this.controller.ticksToDowngrade < 5000) {
         this.heap.upgradeFirst = true
-    } else if (this.heap.upgradeFirst && this.controller.ticksToDowngrade > 5000) {
+    } else if (this.heap.upgradeFirst && this.controller.ticksToDowngrade >= 10000) {
         this.heap.upgradeFirst = false
     }
 
@@ -160,11 +160,7 @@ Room.prototype.manageUpgrade = function () {
             }
         }
 
-        if (controllerLink && laborer.pos.getRangeTo(controllerLink) === 1) {
-            if (controllerLink.store[RESOURCE_ENERGY] > 0) {
-                laborer.getEnergyFrom(controllerLink.id)
-            }
-        } else if (container && laborer.pos.getRangeTo(container) <= 1) {
+        if (container && laborer.pos.getRangeTo(container) <= 1) {
             if (container.store[RESOURCE_ENERGY] > 0) {
                 laborer.getEnergyFrom(container.id)
             }

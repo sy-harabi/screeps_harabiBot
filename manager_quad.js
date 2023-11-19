@@ -15,7 +15,7 @@ const FORMATION_VECTORS = [
   { x: 1, y: 1 }
 ]
 
-const FORMATION_VECTORS_REVERSE = [
+const FORMATION_VECTORS_REVERSED = [
   { x: 0, y: 0 },
   { x: -1, y: 0 },
   { x: 0, y: -1 },
@@ -42,6 +42,13 @@ Flag.prototype.manageQuad = function () {
     this.memory.quadSpawned = true
   }
 
+  // check ticksToLive
+  if (quad.creeps.length > 0) {
+    this.memory.ticksToLive = quad.ticksToLive
+  } else {
+    this.memory.ticksToLive = 1500
+  }
+
   // spawn creeps
   if (!this.memory.quadSpawned) {
     const creepCount = quad.creeps.length
@@ -62,7 +69,7 @@ Flag.prototype.manageQuad = function () {
   // check boost
   if (!this.memory.quadBoosted) {
     for (const creep of quad.creeps) {
-      if (creep.memory.boosted === false) {
+      if (creep.memory.boosted !== true) {
         return
       }
     }
@@ -122,7 +129,7 @@ Flag.prototype.manageQuad = function () {
   }
 
   if (this.memory.status === 'attack') {
-    if (this.room.name !== targetRoomName) {
+    if (quad.roomName !== targetRoomName) {
       quad.leader.say('🎺', true)
       const targetRoomCenterPos = new RoomPosition(25, 25, targetRoomName)
       quad.moveInFormation({ pos: targetRoomCenterPos, range: 22 })
@@ -133,9 +140,6 @@ Flag.prototype.manageQuad = function () {
     return
   }
 }
-
-
-
 
 Room.prototype.requestQuadMember = function (name, isFirst = false) {
 
@@ -229,15 +233,22 @@ class Quad {
     return this._roomName = this.room.name
   }
 
+  get ticksToLive() {
+    if (this._ticksToLive !== undefined) {
+      return this._ticksToLive
+    }
+    return this._ticksToLive = Math.max(...this.creeps.map(creep => creep.ticksToLive || 1500))
+  }
+
   get hitsMax() {
-    if (this._hitsMax) {
+    if (this._hitsMax !== undefined) {
       return this._hitsMax
     }
     return this._hitsMax = this.creeps.map(creep => creep.hitsMax).reduce((accumulator, currentValue) => accumulator + currentValue, 0)
   }
 
   get hits() {
-    if (this._hits) {
+    if (this._hits !== undefined) {
       return this._hits
     }
     return this._hits = this.creeps.map(creep => creep.hits).reduce((accumulator, currentValue) => accumulator + currentValue.hits, 0)
@@ -317,6 +328,10 @@ Quad.prototype.attackRoom = function () {
 
   const quadCostArray = this.getBulldozeQuadCostArray()
 
+  if (!quadCostArray) {
+    return
+  }
+
   const packed = packCoord(this.leader.pos.x, this.leader.pos.y)
   if (quadCostArray[packed] === 0) {
     this.leader.say('🚑', true)
@@ -336,12 +351,24 @@ Quad.prototype.attackRoom = function () {
   const nextPos = path[0]
 
   if (nextPos) {
+    const nextPosPacked = packCoord(nextPos.x, nextPos.y)
+    if (quadCostArray[nextPosPacked] === 0) {
+      if (Math.random() < 0.5) {
+        this.deleteCachedPath()
+      }
+      return
+    }
+
     if (this.isAbleToStep(nextPos)) {
       const direction = this.leader.pos.getDirectionTo(nextPos)
       this.move(direction)
     }
     return
   }
+}
+
+Quad.prototype.deleteCachedPath = function () {
+  delete this.leader.heap._path
 }
 
 Quad.prototype.getPathToAttack = function (quadCostArray) {
@@ -424,7 +451,7 @@ Quad.prototype.getBulldozePath = function (quadCostArray) {
 
   for (const structure of importantStructures) {
     const pos = structure.pos
-    for (const vector of FORMATION_VECTORS_REVERSE) {
+    for (const vector of FORMATION_VECTORS_REVERSED) {
       const newPos = new RoomPosition(pos.x + vector.x, pos.y + vector.y, this.roomName)
       const goal = { pos: newPos, range }
       goals.push(goal)
@@ -447,7 +474,7 @@ Quad.prototype.getSkirmishPath = function (quadCostArray) {
   const structureRange = 1
   for (const structure of hostileStructures) {
     const pos = structure.pos
-    for (const vector of FORMATION_VECTORS_REVERSE) {
+    for (const vector of FORMATION_VECTORS_REVERSED) {
       const newPos = new RoomPosition(pos.x + vector.x, pos.y + vector.y, this.roomName)
       const goal = { pos: newPos, range: structureRange }
       goals.push(goal)
@@ -457,7 +484,7 @@ Quad.prototype.getSkirmishPath = function (quadCostArray) {
   const creepRange = 2
   for (const creep of hostileCreeps) {
     const pos = creep.pos
-    for (const vector of FORMATION_VECTORS_REVERSE) {
+    for (const vector of FORMATION_VECTORS_REVERSED) {
       const newPos = new RoomPosition(pos.x + vector.x, pos.y + vector.y, this.roomName)
       const goal = { pos: newPos, range: creepRange }
       goals.push(goal)
@@ -476,10 +503,19 @@ Quad.prototype.getBulldozeQuadCostArray = function () {
   const power = this.rangedAttackPower
 
   if (power === 0) {
-    return
+    return undefined
   }
 
   const costArray = this.room.getCostArrayForBulldoze(power)
+
+  const myCreeps = this.room.find(FIND_MY_CREEPS)
+
+  for (const creep of myCreeps) {
+    if (!this.names.includes(creep.name)) {
+      const packed = packCoord(creep.pos.x, creep.pos.y)
+      costArray[packed] = 0
+    }
+  }
 
   const damageArray = this.room.getDamageArray()
 
@@ -597,7 +633,9 @@ Creep.prototype.getPriorityTarget = function (pos) {
 }
 
 Quad.prototype.retreat = function () {
-  delete this.leader.heap._path
+  if (Math.random() < 0.3) {
+    this.deleteCachedPath()
+  }
 
   const costs = this.costMatrix
   if (!this.isFormed) {

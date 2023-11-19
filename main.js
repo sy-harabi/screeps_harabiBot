@@ -163,6 +163,9 @@ module.exports.loop = () => {
             if (name.includes('quad')) {
                 flag.manageQuad()
             }
+            if (name.includes('seize')) {
+                flag.seizeRoom()
+            }
         }
 
         // creeps 방별로, 역할별로 분류

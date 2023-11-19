@@ -127,7 +127,7 @@ const nextRCL = new VisualItem('next RCL', 4, (room) => {
 const storedEnergy = new VisualItem('Storage', 3, (room) => {
     const energyStored = room.storage ? room.storage.store[RESOURCE_ENERGY] : 0
     const content = energyStored ? `${Math.floor(energyStored / 1000)}K` : '-'
-    const option = { color: room.memory.savingMode ? 'magenta' : 'lime' }
+    const option = { color: room.savingMode ? 'magenta' : 'lime' }
     return { content, option }
 })
 
@@ -149,7 +149,7 @@ const remoteIncome = new VisualItem('Remote', 5, (room) => {
         for (const remoteName of room.memory.activeRemotes) {
             remoteStatus = room.getRemoteStatus(remoteName)
             const numSource =
-                remoteStatus.infraPlan
+                remoteStatus && remoteStatus.infraPlan
                     ? Object.keys(remoteStatus.infraPlan).length
                     : 0
             result += numSource

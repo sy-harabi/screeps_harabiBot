@@ -1,14 +1,16 @@
 global.Heap = {
-  rooms: {},
-  creeps: {},
-  sources: {}
+  rooms: new Map(),
+  creeps: new Map(),
+  sources: new Map()
 }
 
 Object.defineProperties(Room.prototype, {
   heap: {
     get() {
-      Heap.rooms[this.name] = Heap.rooms[this.name] || {}
-      return Heap.rooms[this.name]
+      if (!Heap.rooms.has(this.name)) {
+        Heap.rooms.set(this.name, {})
+      }
+      return Heap.rooms.get(this.name)
     },
   }
 })
@@ -16,8 +18,10 @@ Object.defineProperties(Room.prototype, {
 Object.defineProperties(Creep.prototype, {
   heap: {
     get() {
-      Heap.creeps[this.name] = Heap.creeps[this.name] || {}
-      return Heap.creeps[this.name]
+      if (!Heap.creeps.has(this.name)) {
+        Heap.creeps.set(this.name, {})
+      }
+      return Heap.creeps.get(this.name)
     },
   }
 })
@@ -25,8 +29,10 @@ Object.defineProperties(Creep.prototype, {
 Object.defineProperties(Source.prototype, {
   heap: {
     get() {
-      Heap.sources[this.id] = Heap.sources[this.id] || {}
-      return Heap.sources[this.id]
+      if (!Heap.sources.has(this.id)) {
+        Heap.sources.set(this.id, {})
+      }
+      return Heap.sources.get(this.id)
     },
   }
 })
