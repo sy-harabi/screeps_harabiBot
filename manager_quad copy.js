@@ -395,66 +395,16 @@ Quad.prototype.attackRoom = function () {
     if (this.isAbleToStep(nextPos)) {
       const direction = this.pos.getDirectionTo(nextPos)
       this.move(direction)
+    } else {
+      this.aggroPingPong()
     }
     return
   }
+  this.aggroPingPong()
 }
 
-Quad.prototype.dismantleStructuresOnNextPos = function (pos) {
-  const structures = this.checkStructuresOnSquarePositions(pos)
-  const formation = this.formation
-  const creeps = [...this.creeps]
-}
-
-Quad.prototype.checkStructuresOnSquarePositions = function (pos) {
-  const result = []
-  const squarePositions = pos.getQuadSquarePositions()
-  for (const pos of squarePositions) {
-    const structuresOnPos = pos.lookFor(LOOK_STRUCTURES)
-    for (const structure of structuresOnPos) {
-      const structureType = structure.structureType
-      if (OBSTACLE_OBJECT_TYPES.includes(structureType)) {
-        result.push(structure)
-      }
-    }
-  }
-  return result
-}
-
-Quad.prototype.getFirstStructuresOnPath = function (path) {
-  const result = []
-  for (const pos of path) {
-    const squarePositions = pos.getQuadSquarePositions()
-    for (const pos of squarePositions) {
-      const structuresOnPos = pos.lookFor(LOOK_STRUCTURES)
-      for (const structure of structuresOnPos) {
-        const structureType = structure.structureType
-        if (OBSTACLE_OBJECT_TYPES.includes(structureType)) {
-          result.push(structure)
-        }
-      }
-    }
-    if (result.length > 0) {
-      break
-    }
-  }
-  return result
-}
-
-RoomPosition.prototype.getQuadSquarePositions = function () {
-  const result = []
-  for (const vector of FORMATION_VECTORS) {
-    const x = this.x + vector.x
-    if (x < 50 || x > 49) {
-      continue
-    }
-    const y = this.y + vector.y
-    if (y < 50 || y > 49) {
-      continue
-    }
-    result.push(new RoomPosition(x, y, this.roomName))
-  }
-  return result
+Quad.prototype.deleteCachedPath = function () {
+  delete this.heap._path
 }
 
 Quad.prototype.getPathToAttack = function (quadCostArray) {
@@ -498,10 +448,6 @@ Quad.prototype.getCachedPath = function () {
     return this.heap._path
   }
   return undefined
-}
-
-Quad.prototype.deleteCachedPath = function () {
-  delete this.heap._path
 }
 
 Quad.prototype.isAbleToStep = function (pos) {
@@ -1015,12 +961,11 @@ global.transformCostArrayForQuad = function (costArray, roomName) {
         }
         const newPacked = packCoord(newX, newY)
         const newCost = costArray[newPacked]
-
         if (cost === 0 || newCost === 0) {
           cost = 0
           break
         }
-        cost += newCost
+        cost = Math.max(cost, newCost)
       }
       result[packed] = cost
       if (BULLDOZE_COST_VISUAL) {
@@ -1174,6 +1119,11 @@ Quad.prototype.getIsCompact = function () {
 }
 
 Quad.prototype.aggroPingPong = function () {
+  if (!this.isFormed) {
+    this.formUp()
+    return
+  }
+
   const damageArray = this.room.getDamageArray()
   const creepsSorted = [...this.creeps].sort((a, b) => a.hits - b.hits)
   const formation = this.formation

@@ -38,12 +38,11 @@ global.Overlord = {
     }
     Game._remotes = []
     for (const myRoom of this.myRooms) {
-      if (!myRoom.memory.remotes) {
+      const activeRemotes = myRoom.memory.activeRemotes
+      if (!activeRemotes) {
         continue
       }
-      for (const remoteName of Object.keys(myRoom.memory.remotes)) {
-        Game._remotes.push(remoteName)
-      }
+      Game._remotes.push(...activeRemotes)
     }
     return Game._remotes
   },

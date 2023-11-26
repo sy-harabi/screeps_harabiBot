@@ -65,7 +65,7 @@ Room.prototype.prepareBoostResources = function () {
     }
 
     for (const resourceType of resourceTypes) {
-        const amount = requiredResourcesTotal[resourceType]
+        const amount = requiredResourcesTotal[resourceType].mineralAmount
 
         const targetLab = this.getTargetLabForBoost(resourceType, resourceTypes)
         if (targetLab === ERR_NOT_FOUND) {
@@ -111,7 +111,7 @@ Room.prototype.prepareBoostResources = function () {
  */
 Room.prototype.getTargetLabForBoost = function (resourceType, resourceTypes) {
     const labs = this.structures.lab
-    const availableLab = labs.find(lab => lab.store.getFreeCapacity(resourceType) || lab.store[resourceType] > 0)
+    const availableLab = labs.find(lab => lab.store.getFreeCapacity(resourceType))
 
     if (availableLab) {
         return availableLab
@@ -132,14 +132,13 @@ Room.prototype.gatherBoostResources = function () {
 
     const terminal = this.terminal
     for (const resourceType of resourceTypes) {
-        const amount = requiredResourcesTotal[resourceType]
+        const amount = requiredResourcesTotal[resourceType].mineralAmount
         const totalAmount = this.getResourceTotalAmount(resourceType)
         if (totalAmount >= amount) {
             continue
         }
         const result = terminal.gatherResource(resourceType, amount, { threshold: 0 })
         if (result !== OK) {
-            console.log(`need ${resourceType} ${amount}`)
             return ERR_NOT_ENOUGH_ENERGY
         }
     }
@@ -160,9 +159,6 @@ Room.prototype.getRequiredResourcesTotal = function () {
             requiredResourcesTotal[resourceType] = requiredResourcesTotal[resourceType] || 0
             requiredResourcesTotal[resourceType] += amount
         }
-    }
-    for (const resourceType in requiredResourcesTotal) {
-        console.log(`need ${resourceType} ${requiredResourcesTotal[resourceType]}`)
     }
     return this._requiredResourcesTotal = requiredResourcesTotal
 }
@@ -205,21 +201,69 @@ Room.prototype.operateBoost = function (boostRequest) {
     this.memory.boostState = this.memory.boostState || 'gather'
 
     if (this.memory.boostState === 'gather') {
-        const result = this.gatherBoostResources()
-        if (result !== OK) {
-            return result
+        for (let i = 0; i < resourceTypes.length; i++) {
+            const resourceType = resourceTypes[i]
+
+            const info = requiredResources[resourceType]
+            const amount = info.mineralAmount
+
+            const totalAmount = this.getResourceTotalAmount(resourceType)
+            if (totalAmount >= amount) {
+                continue
+            }
+
+            const result = terminal.gatherResource(resourceType, amount, { threshold: 0 })
+
+            if (result !== OK) {
+                if (!targetCreep.spawning) {
+                    delete targetCreep.memory.boosted
+                    delete this.memory.boostState
+                    delete this.boostQueue[boostRequest.creepName]
+                }
+                return ERR_NOT_ENOUGH_RESOURCES
+            }
         }
         this.memory.boostState = 'prepare'
         return
     }
 
     if (this.memory.boostState === 'prepare') {
-        const result = this.prepareBoostResources()
-
-        if (result !== OK) {
-            return result
+        for (let i = 0; i < resourceTypes.length; i++) {
+            const resourceType = resourceTypes[i]
+            const amountInfo = requiredResources[resourceType]
+            const lab = reactionLabs[i]
+            if (lab.mineralType && lab.mineralType !== resourceType && lab.store.getUsedCapacity(lab.mineralType) > 0) {
+                researcher.getDeliveryRequest(lab, terminal, lab.mineralType)
+                return
+            }
+            if (amountInfo.mineralAmount < 30) {
+                data.recordLog(`ERROR: boosting ${targetCreep.name} failed. request weird.`, this.name)
+                delete targetCreep.memory.boosted
+                delete this.boostQueue[boostRequest.creepName]
+                delete this.memory.boostState
+                return
+            }
+            if (lab.store[resourceType] < amountInfo.mineralAmount) {
+                if (this.getResourceTotalAmount(resourceType) < amountInfo.mineralAmount) {
+                    this.memory.boostState = 'gather'
+                    return
+                }
+                if (terminal.store[resourceType] > 0) {
+                    researcher.getDeliveryRequest(terminal, lab, resourceType)
+                    return
+                }
+                for (const otherLab of this.structures.lab) {
+                    if (otherLab.id === lab.id) {
+                        continue
+                    }
+                    if (otherLab.store[resourceType] === 0) {
+                        continue
+                    }
+                    researcher.getDeliveryRequest(otherLab, lab, resourceType)
+                    return
+                }
+            }
         }
-
         if (!targetCreep.spawning) {
             if (targetCreep.memory.wait === true) {
                 return 'wait'
@@ -249,9 +293,9 @@ Room.prototype.operateBoost = function (boostRequest) {
                 continue
             }
 
-            const lab = this.structures.lab.find(lab => lab.store[resourceType] >= LAB_BOOST_MINERAL)
+            const lab = reactionLabs[i]
 
-            if (!lab) {
+            if (lab.mineralType !== resourceType && lab.store.getUsedCapacity(lab.mineralType) > 0) {
                 this.memory.boostState = 'prepare'
                 return
             }
@@ -259,6 +303,11 @@ Room.prototype.operateBoost = function (boostRequest) {
             if (lab.store[resourceType] < requiredResources[resourceType].mineralAmount) {
                 this.memory.boostState = 'prepare'
                 return ERR_NOT_ENOUGH_RESOURCES
+            }
+
+            if (lab.store[RESOURCE_ENERGY] < requiredResources[resourceType].energyAmount) {
+                this.memory.boostState = 'prepare'
+                return ERR_NOT_ENOUGH_ENERGY
             }
 
             if (targetCreep.pos.getRangeTo(lab) > 1) {

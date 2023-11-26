@@ -412,7 +412,7 @@ Room.prototype.manageHighWay = function () {
 
     for (const depositRequest of Object.values(this.memory.depositRequests)) {
         Game.map.visual.text('deposit', new RoomPosition(25, 25, depositRequest.roomName))
-        Game.map.visual.text(`⏳${depositRequest.lastCooldown}/${Math.ceil(depositRequest.maxCooldown)}`, new RoomPosition(25, 35, depositRequest.roomName), { fontSize: 6 })
+        Game.map.visual.text(`⏳${depositRequest.lastCooldown}/${depositRequest.maxCooldown}`, new RoomPosition(25, 35, depositRequest.roomName), { fontSize: 6 })
         this.runDepositWork(depositRequest)
     }
 

@@ -147,7 +147,7 @@ Room.prototype.checkDeposits = function (targetRoom) {
         depositRequest.maxCooldown = maxCooldown
         this.registerDeposit(depositRequest)
 
-        data.recordLog(`DEPOSIT: start deposit mining at ${targetRoom.name}`, this.name)
+        data.recordLog(`DEPOSIT: start deposit mining at ${targetRoom.name} with max cooldown ${maxCooldown}`, this.name)
     }
 }
 
@@ -344,19 +344,9 @@ Room.prototype.runDepositWork = function (depositRequest) {
     const shouldEnd = depositRequest.lastCooldown > depositRequest.maxCooldown || isThreat
 
     if (shouldEnd && numDepositWorker === 0) {
-        this.deleteDeposit(depositRequest)
-        return
-    }
-
-    if (depositRequest.threatLevel > THREAT_LEVEL_THRESHOLD) {
-        if (depositWorkers.length > 0) {
-            for (const worker of depositWorkers) {
-                worker.getRecycled()
-            }
-            return
+        if (isThreat) {
+            data.recordLog(`DEPOSIT: retreat from deposit in ${depositRequest.roomName} because of threat.`, this.name)
         }
-
-        data.recordLog(`DEPOSIT: retreat from deposit ${depositRequest.depositId} because of threat.`, depositRequest.roomName)
         this.deleteDeposit(depositRequest)
         return
     }
@@ -369,7 +359,7 @@ Room.prototype.runDepositWork = function (depositRequest) {
 
     if (deposit) {
         depositRequest.lastCooldown = deposit.lastCooldown
-        new RoomVisual(depositRequest.roomName).text(`⏳${depositRequest.lastCooldown}/${Math.ceil(depositRequest.maxCooldown)}`, deposit.pos.x, deposit.pos.y - 1)
+        new RoomVisual(depositRequest.roomName).text(`⏳${depositRequest.lastCooldown}/${depositRequest.maxCooldown}`, deposit.pos.x, deposit.pos.y - 1)
     }
 
     const roomName = depositRequest.roomName
@@ -477,8 +467,14 @@ Creep.prototype.depositWork = function (depositRequest) {
         return
     }
 
-    if (this.pos.getRangeTo(deposit) > 1) {
-        this.moveMy({ pos: deposit.pos, range: 1 })
+    const range = this.pos.getRangeTo(deposit)
+    if (range > 1) {
+        const targetPos = deposit.pos.getAtRange(1).find(pos => pos.walkable && (!pos.creep || (pos.creep.my && pos.creep.memory.role !== this.memory.role)))
+        if (!targetPos) {
+            this.moveMy({ pos: deposit.pos, range: 3 })
+            return
+        }
+        this.moveMy({ pos: targetPos, range: 0 })
         return
     }
 

@@ -233,6 +233,7 @@ global.mapInfo = function () {
     if (Memory.showMapInfo === 1) {
         Memory.mapInfoTime = Game.time
     }
+    return `show map visual : ${Memory.showMapInfo}`
 }
 
 global.sieze = function (roomName, ticks = 3000) {

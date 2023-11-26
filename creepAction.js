@@ -11,7 +11,7 @@ function miner(creep) {
     }
 
     if (creep.pos.getRangeTo(source) > 1) {
-        const targetPos = source.pos.getAtRange(1).filter(pos => pos.walkable && (!pos.creep || (pos.creep.my && pos.creep.memory.role !== creep.memory.role)))[0]
+        const targetPos = source.pos.getAtRange(1).find(pos => pos.walkable && (!pos.creep || (pos.creep.my && pos.creep.memory.role !== creep.memory.role)))
         if (!targetPos) {
             creep.moveMy({ pos: source.pos, range: 3 })
             return
@@ -177,7 +177,7 @@ function reserver(creep) {
     }
 
     if (creep.pos.getRangeTo(controller.pos) > 1) {
-        const targetPos = controller.pos.getAtRange(1).filter(pos => pos.walkable && (!pos.creep || (pos.creep.my && pos.creep.memory.role !== creep.memory.role)))[0]
+        const targetPos = controller.pos.getAtRange(1).find(pos => pos.walkable && (!pos.creep || (pos.creep.my && pos.creep.memory.role !== creep.memory.role)))
         if (!targetPos) {
             if (creep.pos.getRangeTo(controller.pos) > 3) {
                 creep.moveMy({ pos: controller.pos, range: 3 })
@@ -205,7 +205,16 @@ function reserver(creep) {
 
 function colonyLaborer(creep) {
     if (creep.memory.getRecycled === true) {
-        creep.getRecycled()
+        if (creep.room.name === creep.memory.base) {
+            creep.getRecycled()
+            return
+        }
+        const room = Game.rooms[creep.memory.base]
+        if (!room) {
+            creep.suicide()
+            return
+        }
+        creep.moveToRoom(creep.memory.base)
         return
     }
 
@@ -273,7 +282,16 @@ function colonyLaborer(creep) {
 
 function colonyMiner(creep) {
     if (creep.memory.getRecycled === true) {
-        creep.getRecycled()
+        if (creep.room.name === creep.memory.base) {
+            creep.getRecycled()
+            return
+        }
+        const room = Game.rooms[creep.memory.base]
+        if (!room) {
+            creep.suicide()
+            return
+        }
+        creep.moveToRoom(creep.memory.base)
         return
     }
 
@@ -311,7 +329,7 @@ function colonyMiner(creep) {
     }
 
     if (creep.pos.getRangeTo(source) > 1) {
-        const targetPos = source.pos.getAtRange(1).filter(pos => pos.walkable && (!pos.creep || (pos.creep.my && pos.creep.memory.role !== creep.memory.role)))[0]
+        const targetPos = source.pos.getAtRange(1).find(pos => pos.walkable && (!pos.creep || (pos.creep.my && pos.creep.memory.role !== creep.memory.role)))
         if (!targetPos) {
             creep.moveMy({ pos: source.pos, range: 3 })
             return
@@ -320,13 +338,8 @@ function colonyMiner(creep) {
     }
 
     creep.setWorkingInfo(source.pos, 1)
-    if (creep.harvest(source) === OK) {
-        const base = Game.rooms[creep.memory.base]
-        creep.memory.harvestPower = creep.memory.harvestPower || creep.getActiveBodyparts('work') * HARVEST_POWER
-        if (base) {
-            base.addRemoteProfit(creep.memory.colony, creep.memory.harvestPower)
-        }
-    }
+
+    creep.harvest(source)
 
     if (container && container.hits < 200000) {
         creep.repair(container)
@@ -334,24 +347,8 @@ function colonyMiner(creep) {
 }
 
 function colonyHauler(creep) {
-    if (creep.memory.getRecycled === true) {
-        creep.getRecycled()
-        return
-    }
-
     if (avoidEnemy(creep) === OK) {
         return
-    }
-
-    // 논리회로
-    if (creep.memory.supplying && creep.store[RESOURCE_ENERGY] === 0) {
-        if (creep.room.name === creep.memory.base && creep.ticksToLive < 2.2 * creep.memory.sourcePathLength) {
-            creep.memory.getRecycled = true
-            return
-        }
-        creep.memory.supplying = false
-    } else if (!creep.memory.supplying && creep.store.getFreeCapacity(RESOURCE_ENERGY) === 0 || creep.ticksToLive < 1.1 * creep.memory.sourcePathLength) {
-        creep.memory.supplying = true
     }
 
     if (creep.memory.getRecycled) {
@@ -364,7 +361,25 @@ function colonyHauler(creep) {
             creep.suicide()
             return
         }
+        creep.moveToRoom(creep.memory.base)
         return
+    }
+
+    // 논리회로
+    if (creep.memory.supplying && creep.store[RESOURCE_ENERGY] === 0) {
+        if (creep.room.name === creep.memory.base && creep.ticksToLive < 2.2 * creep.memory.sourcePathLength) {
+            creep.memory.getRecycled = true
+            return
+        }
+        creep.memory.supplying = false
+    } else if (!creep.memory.supplying && creep.store.getFreeCapacity(RESOURCE_ENERGY) === 0) {
+        const base = Game.rooms[creep.memory.base]
+        const amount = creep.store.getUsedCapacity(RESOURCE_ENERGY)
+        if (base) {
+            base.addRemoteProfit(creep.memory.colony, amount)
+        }
+        creep.say('addP', true)
+        creep.memory.supplying = true
     }
 
     // 행동
@@ -414,6 +429,17 @@ function colonyHauler(creep) {
 
         const spawn = room.structures.spawn[0]
         creep.moveMy({ pos: spawn.pos, range: 3 })
+        return
+    }
+
+    if (creep.ticksToLive < 1.1 * creep.memory.sourcePathLength) {
+        creep.memory.getRecycled = true
+        const base = Game.rooms[creep.memory.base]
+        const amount = creep.store.getUsedCapacity(RESOURCE_ENERGY)
+        if (base) {
+            base.addRemoteProfit(creep.memory.colony, amount)
+        }
+        creep.say('addP', true)
         return
     }
 

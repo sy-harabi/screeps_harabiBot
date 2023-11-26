@@ -237,13 +237,10 @@ Room.prototype.tryRemote = function (roomName) {
 
   // no competition
   if (!roomBefore) {
-
-    console.log(`Try make remote ${roomName}`)
-
     const infraPlan = this.getRemoteInfraPlan(roomName)
 
     if (infraPlan === ERR_NOT_FOUND) {
-      this.abandonRemote(roomName)
+      this.deleteRemote(roomName)
       return
     }
 
@@ -254,7 +251,6 @@ Room.prototype.tryRemote = function (roomName) {
 
 
   // competition
-  console.log(`competition for ${roomName}`)
 
   const statusBefore = roomBefore.getRemoteStatus(roomName)
 
@@ -262,15 +258,14 @@ Room.prototype.tryRemote = function (roomName) {
 
   // cannot find infraPlan
   if (infraPlan === ERR_NOT_FOUND) {
-    this.abandonRemote(roomName)
+    this.deleteRemote(roomName)
     return
   }
 
   if (!statusBefore || !statusBefore.infraPlan) {
-    console.log(`no status before`)
 
     data.recordLog(`REMOTE: No status. Abandon remote ${roomName}`, roomBefore.name)
-    roomBefore.abandonRemote(roomName)
+    roomBefore.deleteRemote(roomName)
 
     data.recordLog(`REMOTE: Colonize ${roomName} with distance ${info.distance}`, this.name)
     colonize(roomName, this.name)
@@ -282,14 +277,12 @@ Room.prototype.tryRemote = function (roomName) {
   const statusNow = this.getRemoteStatus(roomName)
 
   if (!statusNow) {
-    console.log(`no status now`)
-    this.abandonRemote(roomName)
+    this.deleteRemote(roomName)
     return
   }
 
   if (Object.keys(statusNow.infraPlan).length < Object.keys(statusBefore.infraPlan).length) {
-    console.log(`infraPlan before has more source`)
-    this.abandonRemote(roomName)
+    this.deleteRemote(roomName)
     return
   }
 
@@ -298,15 +291,12 @@ Room.prototype.tryRemote = function (roomName) {
 
   // compare
   if (totalPathLengthBefore <= totalPathLengthNow) {
-    console.log(`infraPlan before has better plan`)
-    this.abandonRemote(roomName)
+    this.deleteRemote(roomName)
     return
   }
 
-  console.log(`infraPlan now has better plan`)
-
   data.recordLog(`REMOTE: Abandon remote ${roomName}. Less efficient than ${this.name}`, roomBefore.name)
-  roomBefore.abandonRemote(roomName)
+  roomBefore.deleteRemote(roomName)
 
   data.recordLog(`REMOTE: Colonize ${roomName} with distance ${distance}`, this.name)
   colonize(roomName, this.name)

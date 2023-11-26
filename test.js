@@ -1,5 +1,7 @@
-A = {}
-A[1] = 3
-let b = A[1]
-b = 5
-console.log(A[1])
+const A = new Array(3)
+
+A.filter(a => a !== undefined)
+
+for (const e of A) {
+  console.log(e)
+}

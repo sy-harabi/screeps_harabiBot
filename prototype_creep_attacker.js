@@ -6,7 +6,7 @@ Creep.prototype.attackRoom = function (roomName) {
     const status = this.hits / this.hitsMax
     const healerStatus = (healer && !healer.spawning) ? healer.hits / healer.hitsMax : 0
 
-    this.attackNear()
+    //this.attackNear()
 
     // check status. action only if status is good
     if (!(status > 0.9 && healerStatus > 0.9)) {
@@ -441,11 +441,6 @@ Creep.prototype.fleeFrom = function (target, range = 10) {
 }
 
 Creep.prototype.activeHeal = function () {
-    if (this.hits < this.hitsMax) {
-        this.heal(this)
-        return
-    }
-
     const myCreepsInRange = this.pos.findInRange(FIND_MY_CREEPS, 1)
     const weakest = getMinObject(myCreepsInRange, creep => creep.hits / creep.hitsMax)
     this.heal(weakest)

@@ -43,6 +43,7 @@ global.SPAWN_PRIORITY = {
     'dismantler': 9,
     'pioneer': 9,
     'depositWorker': 9,
+    'looter': 9
 }
 
 Room.prototype.manageSpawn = function () {
@@ -146,9 +147,14 @@ Room.prototype.manageSpawn = function () {
         if (spawning.remainingTime === 0) {
             const adjacentCreeps = spawn.pos.findInRange(FIND_MY_CREEPS, 1)
             for (const creep of adjacentCreeps) {
-                const nextPos = creep.pos.getAtRange(1).find(pos => pos.walkable && creep.checkEmpty(pos))
-                if (nextPos) {
-                    creep.moveMy(nextPos, { ignoreOrder: true })
+                if (creep.getNextPos()) {
+                    continue
+                }
+                const posToMove = creep.pos.getAtRange(1).find(pos => pos.getRangeTo(spawn.pos) > 1 && pos.walkable && creep.checkEmpty(pos))
+                if (posToMove) {
+                    if (creep.moveMy(posToMove) === OK) {
+                        break
+                    }
                 }
             }
         }
@@ -268,16 +274,16 @@ Object.defineProperties(Room.prototype, {
 })
 
 global.RequestSpawn = function (body, name, memory, options = {}) {
-    const defaultOptions = { priority: Infinity, cost: 0, boostMultiplier: 1 }
+    const defaultOptions = { priority: Infinity, cost: 0 }
     const mergedOptions = { ...defaultOptions, ...options }
-    const { priority, cost, boostResources, boostMultiplier } = mergedOptions
+    const { priority, cost, boostResources } = mergedOptions
     this.body = body
     this.name = name
     this.memory = memory
     this.priority = priority
     this.cost = cost
     if (boostResources !== undefined) {
-        const boostRequest = new BoostRequest(this.name, this.body, boostResources, boostMultiplier)
+        const boostRequest = new BoostRequest(this.name, this.body, boostResources)
         this.boostRequest = boostRequest
     }
 }
@@ -288,15 +294,15 @@ global.RequestSpawn = function (body, name, memory, options = {}) {
  * @param {Array} resourceTypes - The array of resourceTypes
  * @param {Object} options 
  */
-function BoostRequest(creepName, body, resourceTypes, boostMultiplier) {
+function BoostRequest(creepName, body, resourceTypes) {
     this.time = Game.time
     this.creepName = creepName
     this.requiredResources = {}
     for (resourceType of resourceTypes) {
         const bodyType = BOOSTS_EFFECT[resourceType].type
         const numBodyType = body.filter(part => part === bodyType).length
-        const mineralAmount = Math.min(LAB_MINERAL_CAPACITY, 30 * numBodyType * boostMultiplier)
-        const energyAmount = Math.min(LAB_ENERGY_CAPACITY, 20 * numBodyType * boostMultiplier)
+        const mineralAmount = Math.min(LAB_MINERAL_CAPACITY, 30 * numBodyType)
+        const energyAmount = Math.min(LAB_ENERGY_CAPACITY, 20 * numBodyType)
         this.requiredResources[resourceType] = { mineralAmount, energyAmount }
     }
 }
@@ -550,7 +556,7 @@ Room.prototype.requestColonyHaulerForConstruct = function (colonyName, sourceId,
         ignoreMap: 1
     }
 
-    const request = new RequestSpawn(body, name, memory, { priority: SPAWN_PRIORITY['colonyHauler'] - 1, cost: cost })
+    const request = new RequestSpawn(body, name, memory, { priority: SPAWN_PRIORITY['colonyHauler'] - 1, cost })
     this.spawnQueue.push(request)
 }
 

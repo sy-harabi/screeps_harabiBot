@@ -1,12 +1,17 @@
 const MAX_DISTANCE = 120
-const TICKS_TO_CHECK_EFFICIENCY = 14000
-const HAULER_RATIO = 0.43 // 0.4 is ideal.
+const TICKS_TO_SQUASH_EFFICIENCY = 10000
 const TICKS_TO_CHECK_INFRA = 3000
-const NUM_WORK_TO_CONSTRUCT = 6
-const RESERVE_TICK_THRESHOLD = 1000
-const NUM_CONSTRUCTION_SITES_PER_ROOM = 6
+const TICKS_TO_CHECK_EFFICIENCY = 9000
 
 const DEFENDER_LOST_ENERGY_LIMIT_PER_RCL = 2500
+
+const RESERVE_TICK_THRESHOLD = 1000
+
+const HAULER_RATIO = 0.43 // 0.4 is ideal.
+
+const NUM_WORK_TO_CONSTRUCT = 6
+
+const NUM_CONSTRUCTION_SITES_PER_ROOM = 6
 
 const ENERGY_LEVEL_THRESHOLD_TO_DEFENSE = -5
 
@@ -24,6 +29,7 @@ Room.prototype.manageRemotes = function () {
     }
 
     if (!this.memory.activeRemotes || Game.time % 17 === 0) {
+
         const spawnCapacityAvailable = this.structures.spawn.length * 500
 
         const basicSpawnCapacity = this.getBasicSpawnCapacity()
@@ -38,8 +44,23 @@ Room.prototype.manageRemotes = function () {
         this.memory.coreRemotes = []
 
         for (const remoteName of remoteNames) {
-            const pos = new RoomPosition(5, 5, remoteName)
-            Game.map.visual.text(i, pos, { fontSize: 5, opacity: 1 })
+
+            const status = this.getRemoteStatus(remoteName)
+
+            const abandonTimerPos = new RoomPosition(25, 5, remoteName)
+
+            if (status.abandon) {
+                if (status.abandon > Game.time) {
+                    const ramainingTIcks = status.abandon - Game.time
+                    Game.map.visual.text(`⏳${ramainingTIcks}`, abandonTimerPos, { fontSize: 5, opacity: 1 })
+                    continue
+                }
+                this.resetRemoteNetIncome(remoteName)
+                delete status.abandon
+            }
+
+            const pos = new RoomPosition(45, 5, remoteName)
+            Game.map.visual.text(i, pos, { align: 'left', fontSize: 5, opacity: 1 })
             i++
             remotesSpawnCapacity += this.getRemoteSpawnCapacity(remoteName)
 
@@ -55,6 +76,12 @@ Room.prototype.manageRemotes = function () {
     }
 
     for (const remoteName of this.memory.activeRemotes) {
+        const status = this.getRemoteStatus(remoteName)
+
+        if (status.abandon && status.abandon > Game.time) {
+            continue
+        }
+
         if (!this.operateRemote(remoteName)) {
             this._remoteSpawnRequested = true
         }
@@ -109,8 +136,6 @@ Room.prototype.getRemoteNamesSortedByRange = function () {
 }
 
 Room.prototype.operateRemote = function (remoteName) {
-    const map = Overlord.map
-
     const remote = Game.rooms[remoteName]
     const status = this.getRemoteStatus(remoteName)
 
@@ -120,9 +145,7 @@ Room.prototype.operateRemote = function (remoteName) {
 
     if (status.state === undefined) {
         status.state = 'normal'
-        //set profit    
-        status.profit = status.profit || 0
-        status.cost = status.cost || 0
+        this.resetRemoteNetIncome(remoteName)
     }
 
     // pos to visual
@@ -163,13 +186,15 @@ Room.prototype.operateRemote = function (remoteName) {
     // abandon remote if room is claimed
     if (remote && remote.controller.owner) {
         data.recordLog(`REMOTE: Abandon ${remoteName}. room is claimed by ${remote.controller.owner.username}`, remoteName)
-        this.abandonRemote(remoteName)
+        this.deleteRemote(remoteName)
         return true
     }
 
     // check invader or invaderCore
     if (this.checkRemoteInvader(remoteName)) {
+        const invaderVisualPos = new RoomPosition(25, 5, remoteName)
         new RoomVisual(remoteName).text(`👿Invader`, visualPos.x, visualPos.y - 1)
+        Game.map.visual.text(`👿`, invaderVisualPos, { backgroundColor: '#000000', align: 'left', fontSize: 5, opacity: 1 })
         const defenderTotalCost = (status.enemyTotalCost || 0) * 1.2
         return this.sendTroops(remoteName, defenderTotalCost)
     } else {
@@ -298,9 +323,11 @@ Room.prototype.reserveRemote = function (remoteName) {
         // reservation visual
         const controller = remote.controller
 
+        const reservationPos = new RoomPosition(25, 35, remoteName)
+
         remote.visual.text(`⏱️${controller.reservation.ticksToEnd}`, controller.pos.x + 1, controller.pos.y + 1, { align: 'left' })
 
-        Game.map.visual.text(`⏱️${controller.reservation.ticksToEnd}`, controller.pos, { fontSize: 3, opacity: 1 })
+        Game.map.visual.text(`⏱️${controller.reservation.ticksToEnd}`, reservationPos, { fontSize: 3, opacity: 1 })
 
         // if reservation ticksToEnd in enough, break
         if (reservationTicksToEnd > RESERVE_TICK_THRESHOLD) {
@@ -346,12 +373,14 @@ Room.prototype.extractRemote = function (remoteName) {
     }
 
     // check efficiency and visualize
-    if (!status.tick || (Game.time - status.tick > TICKS_TO_CHECK_EFFICIENCY)) {
-        status.lastProfit = status.profit
-        status.lastCost = status.cost
-        status.lastTick = status.tick
-        this.checkRemoteEfficiency(remoteName)
-        return
+    const efficiency = this.getRemoteEfficiency(remoteName)
+    if (efficiency !== undefined) {
+        if (efficiency < 0) {
+            data.recordLog(`REMOTE: abandon remote ${remoteName} for low efficiency ${Math.floor(100 * efficiency) / 100}`, this.name)
+            this.abandonRemote(remoteName)
+            return
+        }
+
     }
 
     const sourceIds = Object.keys(status.infraPlan)
@@ -361,6 +390,7 @@ Room.prototype.extractRemote = function (remoteName) {
 
     const remoteExtractStat = this.getRemoteExtractStat(remoteName)
 
+    let i = 0
     for (const id of sourceIds) {
         const stat = remoteExtractStat[id]
 
@@ -454,10 +484,16 @@ Room.prototype.extractRemote = function (remoteName) {
             remote.visual.text(`⛏️${stat.numMinerWork} / ${stat.maxMinerWork}`, source.pos.x + 0.5, source.pos.y - 0.25, VISUAL_OPTION)
             remote.visual.text(`🚚${stat.numHaulerCarry} / ${stat.maxHaulerCarry}`, source.pos.x + 0.5, source.pos.y + 0.5, VISUAL_OPTION)
             remote.visual.text(` 🔋${energyAmount}/2000`, source.pos.x + 0.5, source.pos.y + 1.25, VISUAL_OPTION)
-            const color = (stat.numMinerWork < stat.maxMinerWork || stat.numHaulerCarry < stat.maxHaulerCarry || energyAmount > 2000) ? '#740001' : '#000000'
-            Game.map.visual.text(`⛏️${stat.numMinerWork} / ${stat.maxMinerWork}\n🚚${stat.numHaulerCarry} / ${stat.maxHaulerCarry}\n🔋${energyAmount}/2000`, new RoomPosition(source.pos.x, source.pos.y, remoteName), { fontSize: 3, backgroundColor: color, opacity: 1 })
-        }
 
+            const color = (stat.numMinerWork < stat.maxMinerWork || stat.numHaulerCarry < stat.maxHaulerCarry || energyAmount > 2000) ? '#740001' : '#000000'
+            const visualPos = new RoomPosition(20 + 10 * i, 25, remoteName)
+            const align = i === 0 ? 'right' : 'left'
+
+            Game.map.visual.text(`⛏️${stat.numMinerWork} / ${stat.maxMinerWork}\n🚚${stat.numHaulerCarry} / ${stat.maxHaulerCarry}\n🔋${energyAmount}/2000`, visualPos, { align, fontSize: 3, backgroundColor: color, opacity: 1 })
+
+
+        }
+        i++
     }
 
     return enoughMiner && enoughHauler
@@ -568,7 +604,7 @@ Room.prototype.constructRemote = function (remoteName) {
     if (infraPlan === ERR_NOT_FOUND) {
         // abandon if not found
         data.recordLog(`REMOTE: Abandon ${remoteName}. cannot find infraPlan`, remoteName)
-        this.abandonRemote(remoteName)
+        this.deleteRemote(remoteName)
         return true
     }
 
@@ -652,15 +688,15 @@ Room.prototype.constructRemote = function (remoteName) {
     return false
 }
 
-Room.prototype.getRemoteNetIncomePerTick = function (remoteName) {
-    this.heap.remoteNetIncome = this.heap.remoteNetIncome || {}
+Room.prototype.getRemoteIdealNetIncomePerTick = function (remoteName) {
+    this.heap.remoteIdealNetIncome = this.heap.remoteIdealNetIncome || {}
 
     if (Game.time % 13 === 0) {
-        delete this.heap.remoteNetIncome[remoteName]
+        delete this.heap.remoteIdealNetIncome[remoteName]
     }
 
-    if (this.heap.remoteNetIncome[remoteName]) {
-        return this.heap.remoteNetIncome[remoteName]
+    if (this.heap.remoteIdealNetIncome[remoteName]) {
+        return this.heap.remoteIdealNetIncome[remoteName]
     }
 
     const status = this.getRemoteStatus(remoteName)
@@ -711,7 +747,7 @@ Room.prototype.getRemoteNetIncomePerTick = function (remoteName) {
     result -= guardCost
     result -= reserverCost
 
-    return this.heap.remoteNetIncome[remoteName] = result
+    return this.heap.remoteIdealNetIncome[remoteName] = result
 }
 
 Room.prototype.getRemoteControllerDistance = function (remoteName) {
@@ -819,6 +855,13 @@ Room.prototype.getRemoteStatus = function (remoteName) {
     return this.memory.remotes[remoteName]
 }
 
+Room.prototype.deleteRemote = function (remoteName) {
+    if (this.memory.remotes !== undefined) {
+        delete this.memory.remotes[remoteName]
+        return
+    }
+}
+
 Room.prototype.abandonRemote = function (remoteName) {
     const remote = Game.rooms[remoteName]
     if (remote) {
@@ -831,11 +874,15 @@ Room.prototype.abandonRemote = function (remoteName) {
         creep.memory.getRecycled = true
     }
 
-    delete Memory.rooms[remoteName]
-    if (this.memory.remotes !== undefined) {
-        delete this.memory.remotes[remoteName]
+    const status = this.getRemoteStatus(remoteName)
+    if (!status) {
         return
     }
+
+    status.lastAbandonDuration = (status.lastAbandonDuration || 1000)
+    status.lastAbandonDuration = 2 * status.lastAbandonDuration
+    status.abandon = Game.time + status.lastAbandonDuration
+    data.recordLog(`REMOTE: abandon remote ${remoteName} for ${status.lastAbandonDuration} ticks.`, this.name)
 }
 
 /**
@@ -927,8 +974,8 @@ Room.prototype.addRemoteCost = function (remoteName, amount) {
     if (!status) {
         return
     }
-    status.cost = status.cost || 0
-    status.cost += amount
+    status.netIncome = status.netIncome || 0
+    status.netIncome -= amount
 }
 
 Room.prototype.addRemoteProfit = function (remoteName, amount) {
@@ -936,43 +983,63 @@ Room.prototype.addRemoteProfit = function (remoteName, amount) {
     if (!status) {
         return
     }
-    status.profit = status.profit || 0
-    status.profit += amount
+    status.netIncome = status.netIncome || 0
+    status.netIncome += amount
 }
 
-Room.prototype.resetRemoteEfficiency = function (remoteName) {
+Room.prototype.resetRemoteNetIncome = function (remoteName, resetAbandon = false) {
     const status = this.getRemoteStatus(remoteName)
     if (!status) {
         return
     }
-    status.lastProfit = 0
-    status.lastCost = 0
-    status.lastTick = 0
-    status.tick = Game.time
-    status.profit = 0
-    status.cost = 0
+
+    status.startTick = Game.time
+    status.netIncome = 0
+    if (resetAbandon) {
+        delete status.abandon
+        delete status.lastAbandonDuration
+    }
 }
 
-Room.prototype.checkRemoteEfficiency = function (remoteName) {
+Room.prototype.getRemoteEfficiency = function (remoteName) {
     const status = this.getRemoteStatus(remoteName)
-
     if (!status) {
         return
     }
-    if (status.tick && status.infraPlan) {
-        const numSource = Object.keys(status.infraPlan).length
-        const efficiency = Math.floor(10 * (status.profit - status.cost) / (Game.time - status.tick) / numSource) / 100
-        status.lastEfficiency = efficiency
-        if (efficiency < 0.3) {
-            this.abandonRemote(remoteName)
-            data.recordLog(`REMOTE: Abandon ${remoteName} for low efficiency ${efficiency * 100}%`, remoteName)
-            return
-        }
+
+    if (!status.infraPlan) {
+        return
     }
 
-    status.tick = Game.time
-    status.profit = 0
-    status.cost = 0
+    status.startTick = status.startTick || Game.time
+    status.netIncome = status.netIncome || 0
+
+    const ticksPassed = Game.time - status.startTick
+
+    const netIncomePerTick = status.netIncome / ticksPassed
+
+    const numSource = Object.keys(status.infraPlan).length
+
+    const efficiency = netIncomePerTick / numSource / 10
+
+    const visualPos = new RoomPosition(25, 5, remoteName)
+
+    const color = efficiency > 0.5 ? '#000000' : '#740001'
+    Game.map.visual.text(`(${Math.floor(efficiency * 100)}%)`, visualPos, { align: 'left', fontSize: 5, backgroundColor: color, opacity: 1 })
+
+    if (ticksPassed < TICKS_TO_CHECK_EFFICIENCY) {
+        return
+    }
+
+    if (ticksPassed > TICKS_TO_SQUASH_EFFICIENCY) {
+        const squashFactor = 2
+        status.startTick = Game.time - Math.floor(ticksPassed / squashFactor)
+        status.netIncome = status.netIncome || 0
+        status.netIncome = status.netIncome / squashFactor
+    }
+
+
+    return efficiency
 }
 
 /**
@@ -1004,8 +1071,6 @@ Room.prototype.getRemoteInfraPlan = function (remoteName, reconstruction = false
         return ERR_NOT_IN_RANGE
     }
 
-    console.log(`Get infraPlan for ${remoteName}`)
-
     // set a place to store plan
     status.infraPlan = {}
 
@@ -1031,7 +1096,6 @@ Room.prototype.getRemoteInfraPlan = function (remoteName, reconstruction = false
     const anchor = this.storage || this.structures.spawn[0]
 
     if (!anchor || !anchor.RCLActionable) {
-        console.log(`cannot find storage or spawn in ${this.name}`)
         return ERR_NOT_FOUND
     }
 
@@ -1147,7 +1211,6 @@ Room.prototype.getRemoteInfraPlan = function (remoteName, reconstruction = false
     }
 
     if (Object.keys(status.infraPlan).length === 0) {
-        console.log(`no infra. this room is not adequate for colonize`)
         mapInfo.notForRemote = true
         return ERR_NOT_FOUND
     }
