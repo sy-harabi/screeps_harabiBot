@@ -198,7 +198,7 @@ Business.panicBuy = function (resourceType, amount, roomName) {
     }
 
     const dealAmount = Math.min(amount, order.amount)
-    const dealResult = Game.market.deal(order.id, amount, roomName)
+    const dealResult = Game.market.deal(order.id, dealAmount, roomName)
     if (dealResult === OK) {
         return true
     }

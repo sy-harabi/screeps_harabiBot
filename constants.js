@@ -2,10 +2,6 @@ global.MY_NAME = 'Harabi'
 
 global.SHARD = Game.shard.name
 
-global.MILLION = 1000000
-
-global.KILO = 1000
-
 global.barrierCosts = new PathFinder.CostMatrix
 for (let x = 0; x < 50; x++) {
     for (let y = 0; y < 50; y++) {
@@ -123,9 +119,9 @@ global.ECONOMY_STANDARD = {
     3: 10000,
     4: 10000,
     5: 20000,
-    6: 50000,
-    7: 100000,
-    8: 150000,
+    6: 40000,
+    7: 80000,
+    8: 160000,
 }
 
 global.BUFFER = {
@@ -294,6 +290,7 @@ global.USEFULL_COMPOUNDS = [
     'UH2O',
     'UH',
     'XKHO2',
+    'XLH2O',
     'XLHO2',
     'XZH2O',
     'XZHO2',
@@ -491,3 +488,11 @@ global.COLOR_NEON_YELLOW = '#ffe700'
 global.COLOR_NEON_PURPLE = '#f000ff'
 global.COLOR_NEON_BLUE = '#001eff'
 global.COLOR_NEON_RED = '#fe0000'
+
+global.resourceColor = {
+    power: '#ec3b3d',
+    metal: '#906c59',
+    biomass: '#6d8e18',
+    silicon: '#448dc0',
+    mist: '#ca65e3',
+}

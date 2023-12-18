@@ -1,9 +1,12 @@
 require('constants')
+require('overlord')
+require('creep_combatants')
+require('creep_blinky')
 require('data')
-require('global_overlord')
 require('function_visualizeRoomInfo')
 require('global_business')
 require('global_function')
+require('grafana_stats')
 require('manager_attack')
 require('manager_base')
 require('manager_claim')
@@ -12,7 +15,6 @@ require('manager_defenseNuke')
 require('manager_dismantleRoom')
 require('manager_harass')
 require('manager_clearAll')
-require('manager_highway_mining')
 require('manager_lootRoom')
 require('manager_quad')
 require('manager_reconstruction')
@@ -21,6 +23,11 @@ require('manager_remote')
 require('manager_scout')
 require('manager_traffic')
 require('manager_war')
+require('overlord_metric')
+require('overlord_military')
+require('overlord_tasks_deposit')
+require('overlord_tasks_powerBank')
+require('overlord_tasks')
 require('prototype_creep_attacker')
 require('prototype_creep_hauler')
 require('prototype_creep_powerCreep')
@@ -55,21 +62,14 @@ const profiler = require('screeps-profiler');
 
 // This line monkey patches the global prototypes.
 profiler.enable();
-global.CPU = new Array
-console.log('reset')
 
-// when global reset happens, clean room memory
-Overlord.cleanRoomMemory()
+delete Memory.globalReset
 
 module.exports.loop = () => {
     Overlord.memHack.pretick()
 
     profiler.wrap(function () {
         // bucket check. 8000 5000 2000
-        if (Game.cpu.bucket < 100) {
-            return
-        }
-
         if (data.enoughCPU && Game.cpu.bucket < 5000) { // stop market, highwaymining
             data.enoughCPU = false
         } else if (!data.enoughCPU && Game.cpu.bucket > 8000) {
@@ -93,6 +93,20 @@ module.exports.loop = () => {
         } else if (!data.isEnoughCredit && Game.market.credits > 20000000) {
             data.isEnoughCredit = true
         }
+
+        if (Memory.globalReset === undefined) {
+            console.log(`Global reset happens at ${Game.time}`)
+            Memory.globalReset = Game.time
+            return
+        }
+
+        // Overlord 동작
+
+        Overlord.pretick()
+
+        Overlord.classifyCreeps()
+
+        Overlord.runTasks()
 
         // flag 실행
 
@@ -130,8 +144,8 @@ module.exports.loop = () => {
                 flag.lootRoom()
                 continue
             }
-            if (name.includes('dismantle')) {
-                flag.dismantleRoom()
+            if (name.includes('quad')) {
+                flag.manageQuad()
                 continue
             }
             if (name.includes('send')) {
@@ -160,28 +174,26 @@ module.exports.loop = () => {
                 flag.conductWar()
                 continue
             }
-            if (name.includes('quad')) {
-                flag.manageQuad()
-            }
-            if (name.includes('seize')) {
-                flag.seizeRoom()
+            if (name.includes('siege')) {
+                flag.siegeRoom()
+                continue
             }
         }
 
-        // creeps 방별로, 역할별로 분류
+        if (Memory.siege) {
+            for (const roomName of Object.keys(Memory.siege)) {
+                siege(roomName, Memory.siege[roomName])
+            }
+        }
 
-        Overlord.classifyCreeps()
+        if (Game.cpu.bucket < 100 || Game.cpu.getUsed() > 500) {
+            return
+        }
 
         // 방마다 roomManager 동작
         for (const room of Object.values(Game.rooms)) {
             room.runRoomManager()
         }
-
-        for (const room of Object.values(Game.rooms)) {
-            room.manageTraffic()
-        }
-
-
 
         // powerCreep 실행
         for (const powerCreep of Object.values(Game.powerCreeps)) {
@@ -200,6 +212,11 @@ module.exports.loop = () => {
             }
             Game.rooms[roomName].memory.hasOperator = true
             powerCreep.actRoomOperator()
+        }
+
+        // 방마다 traffic manager 동작
+        for (const room of Object.values(Game.rooms)) {
+            room.manageTraffic()
         }
 
         // 없어진 flag 메모리 삭제
@@ -260,16 +277,10 @@ module.exports.loop = () => {
             Overlord.purgeMapInfo()
             new RoomVisual().text('time: ' + Game.time, 0, 46, { align: 'left' })
             new RoomVisual().text('CPU: ' + Game.cpu.getUsed(), 0, 47, { align: 'left' })
-            new RoomVisual().text("AvgCPU: " + Math.round(100 * (_.sum(CPU) / CPU.length)) / 100 + `(for ${CPU.length} ticks)`, 0, 48, { align: 'left' })
             new RoomVisual().text(`bucket: ${Game.cpu.bucket}(${data.enoughCPU ? 'market, ' : ''}${data.okCPU ? 'lab' : ''})`, 0, 49, { align: 'left' })
         }
 
-
-        CPU.push(Math.floor(Game.cpu.getUsed()))
-        if (CPU.length > 200) {
-            CPU.shift()
-        }
-
+        Overlord.exportStats()
     });
 }
 

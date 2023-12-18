@@ -18,7 +18,7 @@ Room.prototype.defenseNuke = function () {
   status.state = status.state || 'init'
   this.visual.text(`☢️${status.state}`, this.controller.pos.x + 0.75, this.controller.pos.y + 1.5, { align: 'left' })
 
-  const structureTypeToDefend = ['storage', 'terminal', 'powerSpawn', 'nuker', 'factory', 'spawn', 'tower']
+  const structureTypeToDefend = ['storage', 'terminal', 'powerSpawn', 'nuker', 'factory', 'spawn', 'tower', 'lab']
 
   if (status.state === 'init') {
     // 일단 짓고있는 거 다 멈춰
@@ -79,6 +79,7 @@ Room.prototype.defenseNuke = function () {
     const constructionSites = this.find(FIND_CONSTRUCTION_SITES)
     // 아직 constructionSite 있으면 멈춰
     if (constructionSites.length) {
+      this.heap.constructing = true
       return
     }
     // 없으면 이제 rampart 다 지은거임
@@ -109,7 +110,8 @@ Room.prototype.defenseNuke = function () {
       const coord = parseCoord(packed)
       const pos = new RoomPosition(coord.x, coord.y, this.name)
 
-      this.visual.circle(pos, { fill: 'red', radius: 1 })
+      this.visual.circle(pos, { fill: 'red', radius: 0.5 })
+
       const rampart = pos.lookFor(LOOK_STRUCTURES).filter(structure => structure.structureType === 'rampart')[0]
       if (!rampart) {
         status.state = 'init'
@@ -131,12 +133,19 @@ Room.prototype.defenseNuke = function () {
         }
         threshold += 5150000
       }
-      this.visual.text(Math.ceil((threshold - rampart.hits) / 100 / this.laborer.numWork), rampart.pos)
       if (rampart.hits < threshold) {
+        this.visual.text(`${Math.floor(100 * rampart.hits / threshold)}%`, rampart.pos)
         return this.repairStructure(rampart)
+      } else {
+        this.visual.text(`✅`, rampart.pos)
       }
     }
     // 여기까지 왔다는 건 수리 끝났다는 거
+    const laborers = this.creeps.laborer
+    for (const laborer of laborers) {
+      laborer.memory.role = 'wallMaker'
+    }
+
     status.state = 'end'
     return
   }

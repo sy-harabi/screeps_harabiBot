@@ -169,6 +169,10 @@ Flag.prototype.dismantleRoom = function () {
 }
 
 Room.prototype.requestDismantler = function (targetRoomName) {
+    if (!this.hasAvailableSpawn()) {
+        return
+    }
+
     let body = []
     for (let i = 0; i < Math.min(16, Math.floor(this.energyAvailable / 250)); i++) {
         body.push(MOVE, WORK, WORK)

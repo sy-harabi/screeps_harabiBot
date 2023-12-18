@@ -1,3 +1,92 @@
+Creep.prototype.delivery = function () {
+
+    if (this.ticksToLive < 50) {
+        if (this.store.getUsedCapacity()) {
+            this.returnAll()
+            return
+        }
+
+        this.getRecycled()
+        return
+    }
+
+    if (this.isFree) {
+
+        for (const resourceType in this.store) {
+            if (resourceType !== RESOURCE_ENERGY) {
+                return this.returnAll()
+            }
+        }
+        this.beHauler = true
+        return
+    }
+
+    const deliveryRequest = this.heap.deliveryRequest
+    if (!deliveryRequest) {
+        return
+    }
+
+    if (Game.time > deliveryRequest.deadline) {
+        data.recordLog(`FAIL: ${this.name} deliver to ${deliveryRequest.to}`, this.room.name)
+        delete this.heap.deliveryRequest
+        this.say('deadline', true)
+        return
+    }
+
+    for (const resourceType of Object.keys(this.store)) {
+        if (resourceType === deliveryRequest.resourceType) {
+            continue
+        } else {
+            this.returnAll()
+            return
+        }
+    }
+
+    const target = Game.getObjectById(deliveryRequest.to)
+
+    if (this.memory.delivering === true) {
+        if (this.giveCompoundTo(target, deliveryRequest.resourceType) === OK) {
+            delete this.heap.deliveryRequest
+        }
+        return
+    }
+
+    let deposits = []
+    let deposit = false
+    if (Array.isArray(deliveryRequest.from)) {
+        deposits = deliveryRequest.from.map((id) => { return Game.getObjectById(id) }).sort((depositA, depositB) => this.pos.getRangeTo(depositA.pos) - this.pos.getRangeTo(depositB.pos))
+    } else {
+        deposit = Game.getObjectById(deliveryRequest.from)
+    }
+
+    if (Array.isArray(deliveryRequest.from)) {
+        for (const deposit of deposits) {
+            if (this.store.getFreeCapacity() === 0) {
+                this.memory.delivering = true
+                return
+            }
+
+            if (!Object.keys(deposit.store).includes(deliveryRequest.resourceType)) {
+                continue
+            }
+            this.getCompoundFrom(deposit, deliveryRequest.resourceType)
+            return
+        }
+        this.memory.delivering = true
+        return
+    } else {
+        if (!Object.keys(deposit.store).includes(deliveryRequest.resourceType)) {
+            delete this.heap.deliveryRequest
+            return
+        }
+
+        if (this.store.getFreeCapacity() === 0 || this.getCompoundFrom(deposit, deliveryRequest.resourceType) === OK) {
+            this.memory.delivering = true
+            return
+        }
+    }
+}
+
 Creep.prototype.giveCompoundTo = function (target, resourceType) {
     if (this.pos.getRangeTo(target) > 1) {
         this.moveMy({ pos: target.pos, range: 1 })
@@ -75,96 +164,6 @@ Creep.prototype.returnAll = function () {
         const storage = this.room.storage
         if (storage) {
             this.giveCompoundTo(storage, resourceType)
-            return
-        }
-    }
-}
-
-Creep.prototype.delivery = function () {
-
-    if (this.ticksToLive < 50) {
-        if (this.store.getUsedCapacity()) {
-            this.returnAll()
-            return
-        }
-
-        this.getRecycled()
-        return
-    }
-
-    if (this.isFree) {
-
-        for (const resourceType in this.store) {
-            if (resourceType !== RESOURCE_ENERGY) {
-                return this.returnAll()
-            }
-        }
-        this.beHauler = true
-        return
-    }
-
-    const deliveryRequest = this.heap.deliveryRequest
-    if (!deliveryRequest) {
-        return
-    }
-
-    const target = Game.getObjectById(deliveryRequest.to)
-
-    let deposits = []
-    let deposit = false
-    if (Array.isArray(deliveryRequest.from)) {
-        deposits = deliveryRequest.from.map((id) => { return Game.getObjectById(id) }).sort((depositA, depositB) => this.pos.getRangeTo(depositA.pos) - this.pos.getRangeTo(depositB.pos))
-    } else {
-        deposit = Game.getObjectById(deliveryRequest.from)
-    }
-
-
-    if (Game.time > deliveryRequest.deadline) {
-        data.recordLog(`FAIL: ${this.name} deliver to ${deliveryRequest.to}`, this.room.name)
-        delete this.heap.deliveryRequest
-        this.say('deadline', true)
-        return
-    }
-
-    for (const resourceType of Object.keys(this.store)) {
-        if (resourceType === deliveryRequest.resourceType) {
-            continue
-        } else {
-            this.returnAll()
-            return
-        }
-    }
-
-    if (this.memory.delivering === true) {
-        if (this.giveCompoundTo(target, deliveryRequest.resourceType) === OK) {
-            delete this.heap.deliveryRequest
-        }
-        return
-    }
-
-    if (Array.isArray(deliveryRequest.from)) {
-        for (const deposit of deposits) {
-            if (this.store.getFreeCapacity() === 0) {
-                this.memory.delivering = true
-                return
-            }
-
-            if (!Object.keys(deposit.store).includes(deliveryRequest.resourceType)) {
-                continue
-            }
-            this.getCompoundFrom(deposit, deliveryRequest.resourceType)
-            return
-        }
-        this.memory.delivering = true
-        return
-    } else {
-        if (!Object.keys(deposit.store).includes(deliveryRequest.resourceType)) {
-            delete this.heap.deliveryRequest
-            return
-        }
-
-        if (this.store.getFreeCapacity() === 0 || this.getCompoundFrom(deposit, deliveryRequest.resourceType) === OK) {
-            this.memory.delivering = true
             return
         }
     }

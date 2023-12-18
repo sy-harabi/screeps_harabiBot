@@ -34,7 +34,7 @@ Flag.prototype.attackRoom = function () {
         }
         delete this.memory
         this.remove()
-        this.pos.createFlag(this.name + '`')
+        // this.pos.createFlag(this.name + '`')
         return
     }
 
@@ -62,6 +62,9 @@ Flag.prototype.attackRoom = function () {
 }
 
 Room.prototype.requestAttacker = function (flagName, boost = false) {
+    if (!this.hasAvailableSpawn()) {
+        return
+    }
 
     let body = []
 
@@ -102,6 +105,9 @@ Room.prototype.requestAttacker = function (flagName, boost = false) {
     this.spawnQueue.push(request)
 }
 Room.prototype.requestHealer = function (flagName, boost = false) {
+    if (!this.hasAvailableSpawn()) {
+        return
+    }
 
     let body = []
 

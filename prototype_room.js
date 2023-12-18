@@ -1,6 +1,7 @@
 const RAMPART_HIT_THRESHOLD = 5000000
 const MAX_WORK = 80
 const COST_FOR_HUB_CENTER = 30
+const COST_FOR_UPGRADE_SPOT = 10
 
 Object.defineProperties(Room.prototype, {
     GRCL: {
@@ -23,11 +24,11 @@ Object.defineProperties(Room.prototype, {
                 return this._sources
             }
             const thisRoom = this
-            if (this.memory.sources) {
-                this._sources = this.memory.sources.map(id => {
+            if (this.heap.sources) {
+                this._sources = this.heap.sources.map(id => {
                     const source = Game.getObjectById(id)
                     if (!source) {
-                        delete thisRoom.memory.sources
+                        delete thisRoom.heap.sources
                         return undefined
                     }
                     return source
@@ -37,10 +38,10 @@ Object.defineProperties(Room.prototype, {
             this._sources = this.find(FIND_SOURCES)
             if (this.controller) {
                 this._sources = this._sources.sort((a, b) => a.info.maxCarry - b.info.maxCarry)
-                this.memory.sources = this._sources.map(source => source.id)
+                this.heap.sources = this._sources.map(source => source.id)
                 return this._sources
             }
-            this.memory.sources = this._sources.map(source => source.id)
+            this.heap.sources = this._sources.map(source => source.id)
             return this._sources
         }
     },
@@ -55,16 +56,12 @@ Object.defineProperties(Room.prototype, {
             }
             this._structures.obstacles = []
             this._structures.damaged = []
-            this._structures.weakProtection = []
             this._structures.minProtectionHits = 0
             for (const structure of this.find(FIND_STRUCTURES)) {
                 if (structure.structureType !== STRUCTURE_RAMPART && structure.structureType !== STRUCTURE_WALL && structure.hits / structure.hitsMax < 0.8) {
                     this._structures.damaged.push(structure)
                 }
                 if ((structure.structureType === STRUCTURE_RAMPART || structure.structureType === STRUCTURE_WALL)) {
-                    if (structure.hits < RAMPART_HIT_THRESHOLD) {
-                        this._structures.weakProtection.push(structure)
-                    }
                     if (structure.hits < this._structures.minProtectionHits || this._structures.minProtectionHits === 0) {
                         this._structures.minProtectionHits = structure.hits
                     }
@@ -112,27 +109,28 @@ Object.defineProperties(Room.prototype, {
     },
     energy: {
         get() {
-            if (!this._energy) {
-                this._energy = 0
-                if (this.storage) {
-                    this._energy = this.storage.store[RESOURCE_ENERGY]
-                }
+            if (this._energy !== undefined) {
+                return this._energy
             }
-            return this._energy
+
+            if (this.storage) {
+                return this._energy = this.storage.store[RESOURCE_ENERGY]
+            }
+
+            return this._energy = 0
         }
     },
     energyLevel: {
         get() {
-            if (this._energyLevel) {
+            if (this._energyLevel !== undefined) {
                 return this._energyLevel
             }
-            if (!this.controller) {
+
+            if (!this.isMy) {
                 return undefined
             }
-            const level = this.controller.level
-            const economyStandard = ECONOMY_STANDARD[level]
-            const buffer = BUFFER[level]
-            return this._energyLevel = (this.energy - economyStandard) / buffer
+
+            return this._energyLevel = this.getEnergyLevel()
         }
     },
     constructionSites: {
@@ -167,6 +165,11 @@ Object.defineProperties(Room.prototype, {
             for (const structure of this.structures.obstacles) {
                 costs.set(structure.pos.x, structure.pos.y, 255)
             }
+
+            for (const portal of this.structures.portal) {
+                costs.set(portal.pos.x, portal.pos.y, 255)
+            }
+
             for (const cs of this.constructionSites) {
                 if (OBSTACLE_OBJECT_TYPES.includes(cs.structureType)) {
                     costs.set(cs.pos.x, cs.pos.y, 255)
@@ -183,22 +186,16 @@ Object.defineProperties(Room.prototype, {
                 costs.set(hubCenterPos.x, hubCenterPos.y, COST_FOR_HUB_CENTER)
             }
 
+            if (this.isMy) {
+                const linkPos = this.parsePos(this.memory.basePlan.linkPositions.controller)
+                for (const pos of linkPos.getInRange(1)) {
+                    if (!pos.isWall && costs.get(pos.x, pos.y) < COST_FOR_UPGRADE_SPOT) {
+                        costs.set(pos.x, pos.y, COST_FOR_UPGRADE_SPOT)
+                    }
+                }
+            }
+
             return this.heap.basicCostmatrix = costs
-        }
-    },
-    basicCostMatrixWithCreeps: {
-        get() {
-            if (this._basicCostMatrixWithCreeps) {
-                return this._basicCostMatrixWithCreeps
-            }
-            const costs = this.basicCostmatrix.clone()
-            for (const creep of this.find(FIND_CREEPS)) {
-                costs.set(creep.pos.x, creep.pos.y, 255,)
-            }
-            for (const powerCreep of this.find(FIND_POWER_CREEPS)) {
-                costs.set(powerCreep.pos.x, powerCreep.pos.y, 255)
-            }
-            return this._basicCostMatrixWithCreeps = costs
         }
     },
     costmatrixForBattle: {
@@ -236,26 +233,6 @@ Object.defineProperties(Room.prototype, {
             return this.controller && this.controller.reservation && this.controller.reservation.username === MY_NAME
         }
     },
-    savingMode: {
-        get() {
-            if (!this._savingMode) {
-                if (this.storage) {
-                    if (this.energyLevel >= 0 && this.memory.savingMode) {
-                        this._savingMode = this.memory.savingMode = false
-                    } else if (this.energyLevel < -1 && !this.memory.savingMode) {
-                        this._savingMode = this.memory.savingMode = true
-                    }
-                } else {
-                    if (this.memory.savingMode && !this.constructionSites.length) {
-                        this._savingMode = this.memory.savingMode = false
-                    } else if ((this.constructionSites.length) && !this.memory.savingMode) {
-                        this._savingMode = this.memory.savingMode = true
-                    }
-                }
-            }
-            return this._savingMode = this.memory.savingMode
-        }
-    },
     maxWork: {
         get() {
             if (this.controller.level === 1) {
@@ -269,55 +246,7 @@ Object.defineProperties(Room.prototype, {
                 return this.heap.maxWork
             }
 
-            const numWorkEach = this.laborer.numWorkEach
-
-            if (!this.storage) {
-                if (this.constructionSites.length) {
-                    const basicNumWork = (this.storage ? 1 : (this.heap.sourceUtilizationRate || 0)) * Math.max(numWorkEach, 4)
-                    const remoteSurplusNumWork = Math.max(0, (this.heap.remoteIncome || 0))
-                    return this.heap.maxWork = Math.floor(basicNumWork + remoteSurplusNumWork / 3)
-                }
-                // former is spawn limit. latter is income limit
-                const basicNumWork = (this.storage ? 1 : (this.heap.sourceUtilizationRate || 0)) * 16
-                const remoteSurplusNumWork = Math.max(0, (this.heap.remoteIncome || 0))
-                const numUpgradeSpot = this.controller.available
-                return this.heap.maxWork = Math.min(numUpgradeSpot * numWorkEach, Math.floor(basicNumWork + remoteSurplusNumWork))
-            }
-
-            const level = this.controller.level
-
-            if (level === 8) {
-                // if downgrade is close, upgrade
-                if (this.controller.ticksToDowngrade < 5000) {
-                    this.heap.upgrading = true
-                    return this.heap.maxWork = 15
-                }
-
-                // if constructing, maxWork = energyLevel * 5
-                if (this.heap.constructing) {
-                    this.heap.upgrading = false
-                    return this.heap.maxWork = Math.max(0, 5 * Math.ceil(this.energyLevel))
-                }
-
-                // if savingMode, don't upgrade
-                if (this.savingMode) {
-                    this.heap.upgrading = false
-                    return this.heap.maxWork = 0
-                }
-
-                // else upgrade
-                this.heap.upgrading = true
-                return this.heap.maxWork = 15
-            }
-
-            if (this.energyLevel < 0) {
-                return this.heap.maxWork = 5
-            }
-
-            const max = this.controller.linkFlow || MAX_WORK
-
-            const extra = Math.max(0, Math.ceil(this.energyLevel))
-            return this.heap.maxWork = Math.min(max, numWorkEach * (1 + extra))
+            return this.heap.maxWork = this.getMaxWork()
         }
     },
     terrain: {
@@ -347,6 +276,64 @@ Object.defineProperties(Room.prototype, {
         }
     }
 })
+
+Room.prototype.getMaxWork = function () {
+    const numWorkEach = this.laborer.numWorkEach
+
+    if (!this.storage) {
+        if (this.constructionSites.length > 0) {
+            const basicNumWork = (this.heap.sourceUtilizationRate || 0) * Math.max(numWorkEach, 4)
+            const remoteSurplusNumWork = Math.max(0, (this.heap.remoteIncome || 0))
+            return this.heap.maxWork = Math.floor(basicNumWork + remoteSurplusNumWork / 3)
+        }
+        // former is spawn limit. latter is income limit
+        const basicNumWork = (this.heap.sourceUtilizationRate || 0) * 16
+        const remoteSurplusNumWork = Math.max(0, (this.heap.remoteIncome || 0))
+        const numUpgradeSpot = this.controller.available
+        return this.heap.maxWork = Math.min(numUpgradeSpot * numWorkEach, Math.floor(basicNumWork + remoteSurplusNumWork))
+    }
+
+    const level = this.controller.level
+
+    if (level === 8) {
+        // if downgrade is close, upgrade
+        if (this.controller.ticksToDowngrade < 5000) {
+            this.heap.upgrading = true
+            return 15
+        }
+
+        // if constructing, maxWork = energyLevel * 5
+        if (this.constructionSites.length > 0) {
+            this.heap.upgrading = false
+            return this.energyLevel >= 50 ? 10 : 0
+        }
+
+        this.heap.upgrading = this.energyLevel >= 100
+
+        return this.heap.upgrading ? 15 : 0
+    }
+
+    if (this.energyLevel < 100) {
+        return 5
+    }
+
+    const max = this.controller.linkFlow || MAX_WORK
+    const extra = Math.max(0, Math.ceil((this.energyLevel - 100) / 20))
+
+    return Math.min(max, numWorkEach * (1 + extra))
+}
+
+Room.prototype.getEnergyLevel = function () {
+    if (!this.storage) {
+        return 0
+    }
+
+    const standard = ECONOMY_STANDARD[this.controller.level]
+
+    const result = Math.floor(100 * this.energy / standard)
+
+    return result
+}
 
 Room.prototype.getBasicSpawnCapacity = function () {
     if (!this.isMy) {

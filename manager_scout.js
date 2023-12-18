@@ -5,19 +5,8 @@ const SCOUT_DECAY = 5000
 
 const DISTANCE_TO_DEPOSIT_MINING = 5
 
-const NUM_REMOTE_SOURCES = {
-  1: 0,
-  2: 0,
-  3: 0,
-  4: 0,
-  5: 0,
-  6: 4,
-  7: 7,
-  8: 10
-}
-
 Room.prototype.manageScout = function () {
-  const MAX_DISTANCE = 12 // 최대 거리
+  const MAX_DISTANCE = 20 // 최대 거리
 
   this.memory.scout = this.memory.scout || {}
   const status = this.memory.scout
@@ -61,6 +50,7 @@ Room.prototype.manageScout = function () {
     if (status.adjacents && status.adjacents.length > 0) {
       while (status.adjacents.length > 0) {
         status.next = status.adjacents.shift()
+
         status.state = 'scout'
         return
       }
@@ -81,6 +71,9 @@ Room.prototype.manageScout = function () {
       const thisRoomName = this.name
       status.node = node
       status.adjacents = getAdjacents(node).filter(function (roomName) {
+        if (Game.map.getRoomLinearDistance(thisRoomName, roomName) > OBSERVER_RANGE) {
+          return false
+        }
         const room = Game.rooms[roomName]
         // 닫혀있거나 novice zone, respawn zone 이면 제외
         if (Game.map.getRoomStatus(roomName).status !== 'normal') {
@@ -148,11 +141,6 @@ Room.prototype.manageScout = function () {
   }
 }
 
-function getAdjacents(roomName) {
-  const describedExits = Game.map.describeExits(roomName)
-  return Object.values(describedExits)
-}
-
 Room.prototype.resetScout = function () {
   const map = Overlord.map
   for (const roomName of Object.keys(map)) {
@@ -177,8 +165,10 @@ Room.prototype.scoutRoom = function (roomName, distance, lastScout) {
     return OK
   }
 
+  const roomType = getRoomType(roomName)
+
   // highway고 distance 5 초과면 봤다치자.
-  if (getRoomType(roomName) === 'highway' && distance > DISTANCE_TO_DEPOSIT_MINING) {
+  if (roomType === 'highway' && distance > DISTANCE_TO_DEPOSIT_MINING) {
     map[roomName] = map[roomName] || {}
 
     map[roomName].host = this.name
@@ -198,8 +188,17 @@ Room.prototype.scoutRoom = function (roomName, distance, lastScout) {
     return this.acquireVision(roomName)
   }
 
+  if (roomType === 'crossing') {
+    const portals = room.structures.portal
+    const positions = []
+    for (const portal of portals) {
+      positions.push(packCoord(portal.pos.x, portal.pos.y))
+    }
+    room.memory.portalPositions = positions
+  }
+
   // highway고 distance 5 이내면 deposit check.
-  if (getRoomType(roomName) === 'highway' && distance <= DISTANCE_TO_DEPOSIT_MINING) {
+  if (['highway', 'crossing'].includes(roomType) && distance <= DISTANCE_TO_DEPOSIT_MINING) {
     this.checkHighway(roomName)
   }
 
@@ -213,6 +212,25 @@ Room.prototype.scoutRoom = function (roomName, distance, lastScout) {
   }
 
   return OK
+}
+
+Room.prototype.checkHighway = function (roomName) {
+  const targetRoom = Game.rooms[roomName]
+  if (!targetRoom) {
+    return
+  }
+
+  if (Overlord.map[roomName] && ((Overlord.map[roomName].threat || 0) > Game.time)) {
+    return
+  }
+
+  Overlord.checkPowerBanks(roomName)
+  Overlord.checkDeposits(roomName)
+}
+
+function getAdjacents(roomName) {
+  const describedExits = Game.map.describeExits(roomName)
+  return Object.values(describedExits)
 }
 
 Room.prototype.tryRemote = function (roomName) {
@@ -381,12 +399,15 @@ Room.prototype.getInfo = function (host, distance, lastScout) {
     host,
     distance,
     lastScout,
+
     numSource,
     mineralType,
-    numTower,
+
     isClaimedByOther,
+    numTower,
+    inaccessible,
+
     isRemoteCandidate,
     isClaimCandidate,
-    inaccessible
   }
 }

@@ -67,7 +67,8 @@ Room.prototype.prepareBoostResources = function () {
     for (const resourceType of resourceTypes) {
         const amount = requiredResourcesTotal[resourceType]
 
-        const targetLab = this.getTargetLabForBoost(resourceType, resourceTypes)
+        const targetLab = this.getTargetLabForBoost(resourceType, requiredResourcesTotal)
+        targetLab._used = true
         if (targetLab === ERR_NOT_FOUND) {
             return ERR_NOT_FOUND
         }
@@ -109,15 +110,30 @@ Room.prototype.prepareBoostResources = function () {
  * @param {array} resourceTypes - an array of resourceTypes to use
  * @returns 
  */
-Room.prototype.getTargetLabForBoost = function (resourceType, resourceTypes) {
-    const labs = this.structures.lab
-    const availableLab = labs.find(lab => lab.store.getFreeCapacity(resourceType) || lab.store[resourceType] > 0)
+Room.prototype.getTargetLabForBoost = function (resourceType) {
+    const labs = this.labs.reactionLab.map(id => Game.getObjectById(id))
+
+    let maxLab = undefined
+    let maxAmount = 0
+    for (const lab of labs) {
+        const amount = lab.store[resourceType]
+        if (amount > maxAmount) {
+            maxLab = lab
+            maxAmount = amount
+        }
+    }
+
+    if (maxLab) {
+        return maxLab
+    }
+
+    const availableLab = labs.find(lab => lab.store.getFreeCapacity(resourceType))
 
     if (availableLab) {
         return availableLab
     }
 
-    const notBeingUsedLab = labs.find(lab => !resourceTypes.includes(lab.mineralType))
+    const notBeingUsedLab = labs.find(lab => !lab._used)
 
     if (notBeingUsedLab) {
         return notBeingUsedLab
@@ -139,7 +155,6 @@ Room.prototype.gatherBoostResources = function () {
         }
         const result = terminal.gatherResource(resourceType, amount, { threshold: 0 })
         if (result !== OK) {
-            console.log(`need ${resourceType} ${amount}`)
             return ERR_NOT_ENOUGH_ENERGY
         }
     }
@@ -160,9 +175,6 @@ Room.prototype.getRequiredResourcesTotal = function () {
             requiredResourcesTotal[resourceType] = requiredResourcesTotal[resourceType] || 0
             requiredResourcesTotal[resourceType] += amount
         }
-    }
-    for (const resourceType in requiredResourcesTotal) {
-        console.log(`need ${resourceType} ${requiredResourcesTotal[resourceType]}`)
     }
     return this._requiredResourcesTotal = requiredResourcesTotal
 }
@@ -187,6 +199,7 @@ Room.prototype.operateBoost = function (boostRequest) {
         delete this.memory.boostState
         delete this.boostQueue[boostRequest.creepName]
         ERR_RCL_NOT_ENOUGH
+        return
     }
 
     if ((targetCreep.ticksToLive || 1500) < CREEP_LIFE_TIME * BOOST_DEADLINE_RATIO) {
@@ -215,6 +228,11 @@ Room.prototype.operateBoost = function (boostRequest) {
 
     if (this.memory.boostState === 'prepare') {
         const result = this.prepareBoostResources()
+
+        if (result === ERR_NOT_ENOUGH_RESOURCES) {
+            this.memory.boostState = 'gather'
+            return
+        }
 
         if (result !== OK) {
             return result
@@ -249,14 +267,9 @@ Room.prototype.operateBoost = function (boostRequest) {
                 continue
             }
 
-            const lab = this.structures.lab.find(lab => lab.store[resourceType] >= LAB_BOOST_MINERAL)
+            const lab = this.structures.lab.find(lab => lab.store[resourceType] >= requiredResources[resourceType].mineralAmount)
 
             if (!lab) {
-                this.memory.boostState = 'prepare'
-                return
-            }
-
-            if (lab.store[resourceType] < requiredResources[resourceType].mineralAmount) {
                 this.memory.boostState = 'prepare'
                 return ERR_NOT_ENOUGH_RESOURCES
             }

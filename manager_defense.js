@@ -10,7 +10,9 @@ Room.prototype.manageDefense = function () {
     const status = this.memory.defense
     status.state = status.state || 'normal'
     const targets = this.find(FIND_HOSTILE_CREEPS)
+    const targetPowerCreeps = this.find(FIND_POWER_CREEPS)
     const aggressiveTargets = targets.filter(creep => creep.checkBodyParts(INVADER_BODY_PARTS))
+    aggressiveTargets.push(...targetPowerCreeps)
     if (aggressiveTargets.length === 0 && status.state === 'normal') {
         this.manageTower(targets)
         return
@@ -19,30 +21,39 @@ Room.prototype.manageDefense = function () {
 
     const strong = []
     const weak = []
+    const possible = []
 
     let attackPowerTotal = 0
     for (const target of aggressiveTargets) {
-        attackPowerTotal += target.attackPower
-        attackPowerTotal += target.dismantlePower
+        attackPowerTotal += target.attackPower || 0
+        attackPowerTotal += target.dismantlePower || 0
 
-        if ((!this.controller.safeMode) && target.owner.username !== 'Invader' && (target.totalHealPower - this.getTowersDamageFor(target) >= 0)) {
+        const survivability = this.getSurvivability(target)
+        this.visual.text(survivability, target.pos.x, target.pos.y)
+        if (this.controller.safeMode || target.owner.username === 'Invader') {
+            weak.push(target)
+        } else if (survivability < 1) {
+            weak.push(target)
+        } else if (survivability < 2) {
+            possible.push(target)
+        } else {
             strong.push(target)
-            continue
         }
-        weak.push(target)
     }
 
     if (strong.length > 0 && status.state === 'normal' && this.isWalledUp && attackPowerTotal > 0) {
         const invaderName = strong[0].owner.username
         status.state = 'emergency'
+        status.startTick = Game.time
         data.recordLog(`WAR: Emergency occured by ${invaderName}`, this.name, 0)
         this.memory.militaryThreat = true
         for (const hauler of this.creeps.hauler) {
             hauler.memory.role = 'manager'
         }
-    } else if (status.state === 'emergency' && (attackPowerTotal === 0 || this.controller.safeMode)) {
+    } else if (status.state === 'emergency' && (strong.length === 0 || attackPowerTotal === 0 || this.controller.safeMode)) {
         data.recordLog('WAR: Emergency ended', this.name)
         status.state = 'normal'
+        delete status.startTick
         this.memory.militaryThreat = false
         this.memory.level = this.memory.level - 1
         for (const creep of this.find(FIND_MY_CREEPS)) {
@@ -53,6 +64,10 @@ Room.prototype.manageDefense = function () {
                 creep.memory.role = creep.originalRole
                 creep.say('🔄', true)
             }
+        }
+        const laborers = this.creeps.laborer
+        for (const laborer of laborers) {
+            laborer.memory.role = 'wallMaker'
         }
     }
 
@@ -102,12 +117,33 @@ Room.prototype.manageDefense = function () {
             }
             creep.memory.role = 'recycle'
         }
-        this.manageEmergency()
+        if (Game.time > (status.startTick + 10 || 0)) {
+            this.manageEmergency()
+        }
     }
 
     if (weak.length > 0) {
-        this.towerAttack(weak[0])
+        const weakest = getMaxObject(weak, (creep) => {
+            return creep.room.getTowersDamageFor(creep) - creep.totalHealPower
+        })
+        this.towerAttack(weakest)
+        return
     }
+
+    if (possible.length > 0) {
+        this.towerAttackRandomly(targets)
+        return
+    }
+
+    if (Math.random() < 0.05) {
+        this.towerAttackRandomly(aggressiveTargets)
+    }
+}
+
+Room.prototype.getSurvivability = function (target) {
+    const totalHealPower = target.totalHealPower
+    const damage = this.getTowersDamageFor(target)
+    return totalHealPower / damage
 }
 
 Room.prototype.manageTower = function (targets) {
@@ -393,7 +429,7 @@ Room.prototype.assignDefenders = function () {
 
 
 Room.prototype.assignLaborers = function () {
-    // get anchors which nees defenders
+    // get anchors which needs defenders
     const anchorStatusesObject = this.getRampartAnchorsStatus()
     const anchorStatusesArray = Object.values(anchorStatusesObject)
     const anchorStatusesFiltered = anchorStatusesArray.filter(status => status.totalAttackPower > 0)
@@ -461,6 +497,7 @@ Room.prototype.assignLaborers = function () {
         }
     }
 }
+
 Room.prototype.assignRampartAnchors = function () {
     this.assignDefenders()
     this.assignLaborers()
@@ -486,6 +523,7 @@ Room.prototype.getRampartAnchorsStatus = function () {
     const intruders = this.find(FIND_HOSTILE_CREEPS).filter(creep => creep.checkBodyParts(['work', 'attack', 'ranged_attack', 'heal']))
     const result = {}
     const rampartAnchors = this.rampartAnchors
+
     if (DEFENSE_TEST) {
         intruders.push(...this.find(FIND_FLAGS))
     }
@@ -550,16 +588,12 @@ Room.prototype.getRampartAnchorsStatus = function () {
 }
 
 Room.prototype.getRampartAnchors = function () {
-    if (this._rampartAnchors) {
-        return this._rampartAnchors
-    }
-
     if (Game.time % 10 === 0) {
         delete this.heap._rampartAnchors
     }
 
     if (this.heap._rampartAnchors) {
-        return this.heap._rampartAnchors
+        this.heap._rampartAnchors
     }
 
     const costsForGroupingRampart = new PathFinder.CostMatrix
@@ -616,7 +650,16 @@ Room.prototype.getRampartAnchors = function () {
         }
         rampartClusters.push(cluster)
     }
-    return this._rampartAnchors = this.heap._rampartAnchors = rampartAnchors
+    return this.heap._rampartAnchors = rampartAnchors
+}
+
+Room.prototype.towerAttackRandomly = function (targets) {
+    const index = Math.floor(Math.random() * targets.length)
+    const target = targets[index]
+    const towers = this.structures.tower
+    for (const tower of towers) {
+        tower.attack(target)
+    }
 }
 
 /**
@@ -656,12 +699,19 @@ Room.prototype.getRequiredDamageFor = function (target, options = {}) {
     const mergedOptions = { ...defaultOptions, ...options }
     const { assumeFullPower, netDamage, visualize } = mergedOptions
 
-    // target은 hostile creep
+    // target은 hostile creep or hostile power creep
     // assumeFullPower : boolean. true면 target이 풀피라고 가정.
+
+    let goal = target.totalHealPower + netDamage
+
+    if (target instanceof PowerCreep) {
+        return goal
+    }
+
     if (!(target instanceof Creep)) {
         return 0
     }
-    let goal = target.totalHealPower + netDamage
+
     let result = 0
     const body = [...target.body]
     while (goal > 0) {
@@ -707,7 +757,10 @@ Room.prototype.getRequiredDamageFor = function (target, options = {}) {
 
 Room.prototype.getTowersDamageFor = function (target) {//target은 hostile creep
     let damage = target.pos.getTowerDamageAt()
-    let netDamage = target.getNetDamage(damage)
+    if (target instanceof PowerCreep) {
+        return damage
+    }
+    let netDamage = target.getEffectiveDamage(damage)
     return netDamage
 }
 
@@ -745,35 +798,58 @@ StructureTower.prototype.getAttackDamageTo = function (target) { //target은 roo
     return TOWER_POWER_ATTACK * (1 - fallOffRatio) * effectRatio
 }
 
-Creep.prototype.getNetDamage = function (damage) {
-    let result = 0
-    const body = this.body.filter(part => part.hits > 0)
-    for (const part of body) {
-        if (damage <= 0) {
-            break
+Creep.prototype.getEffectiveDamage = function (damage) {
+    getEffectiveDamage(this.body, damage)
+}
+
+function getEffectiveDamage(body, damage) {
+    let damageReduce = 0
+    let damageEffective = damage;
+
+    if (body.some(part => part.boost !== undefined)) {
+        for (const bodyPart of body) {
+            if (damageEffective <= 0) {
+                break;
+            }
+            let damageRatio = 1;
+            if (bodyPart.boost &&
+                BOOSTS[bodyPart.type][bodyPart.boost] &&
+                BOOSTS[bodyPart.type][bodyPart.boost].damage) {
+                damageRatio = BOOSTS[bodyPart.type][bodyPart.boost].damage;
+            }
+            const bodyPartHitsEffective = bodyPart.hits / damageRatio;
+            damageReduce += Math.min(bodyPartHitsEffective, damageEffective) * (1 - damageRatio);
+            damageEffective -= Math.min(bodyPartHitsEffective, damageEffective);
         }
-        if (part.type !== 'tough' || !part.boost) {
-            result += Math.min(part.hits, damage)
-            damage -= Math.min(part.hits, damage)
-            continue
-        }
-        let ratio = 1
-        switch (part.boost) {
-            case 'XGHO2':
-                ratio = 0.3
-                break
-            case 'GHO2':
-                ratio = 0.5
-                break
-            case 'GO':
-                ratio = 0.7
-                break
-        }
-        result += Math.min(part.hits, damage * ratio)
-        damage -= Math.min(part.hits, damage * ratio) / ratio
     }
-    result = Math.floor(result + damage)
-    return result
+    return damage - Math.round(damageReduce);
+}
+
+function applyDamage(body, damage) {
+    let damageEffective = getEffectiveDamage(body, damage);
+    for (let i = 0; i < body.length; i++) {
+        if (damageEffective <= 0) {
+            break;
+        }
+        let damageToApply = Math.min(damageEffective, body[i].hits);
+        damageEffective -= damageToApply;
+        body[i].hits -= damageToApply;
+    }
+    return body;
+}
+
+function healDamage(body, damage) {
+    if (body[body.length - 1].hits < 1) return;
+
+    for (let i = body.length - 1; i >= 0; i--) {
+        if (damage <= 0) {
+            break;
+        }
+        let damageToHeal = Math.min(damage, 100 - body[i].hits);
+        damage -= damageToHeal;
+        body[i].hits += damageToHeal;
+    }
+    return body;
 }
 
 Object.defineProperties(Room.prototype, {
@@ -909,7 +985,7 @@ Room.prototype.getDefensiveAssessment = function () {
     const sources = []
 
     // positions of creeps which can kill mine are sources
-    const killerCreeps = this.find(FIND_HOSTILE_CREEPS).filter(creep => creep.checkBodyParts(['attack', 'ranged_attack']))
+    const killerCreeps = this.find(FIND_HOSTILE_CREEPS).filter(creep => creep.checkBodyParts(['attack', 'ranged_attack', 'work', 'heal']))
     for (const creep of killerCreeps) {
         sources.push(creep.pos)
     }
@@ -1014,6 +1090,17 @@ Room.prototype.getFrontLineTowersDamageMin = function () {
     }
     return frontLineTowersDamageMin
 }
+
+Object.defineProperties(PowerCreep.prototype, {
+    totalHealPower: {
+        get() {
+            if (this._totalHealPower) {
+                return this._totalHealPower
+            }
+            return this._totalHealPower = this.room.getTotalHealPower(this)
+        }
+    },
+})
 
 Object.defineProperties(Creep.prototype, {
     healPower: {
@@ -1161,7 +1248,7 @@ Creep.prototype.getRangedAttackPower = function () {
     let result = 0
 
     //copy boostRequest.requiredResources since we doesn't want to change request
-    const boostrequiredResources = this.room.boostQueue[this.name] ? this.room.boostQueue[this.name].requiredResources : undefined
+    const boostrequiredResources = (this.room.isMy && this.room.boostQueue[this.name]) ? this.room.boostQueue[this.name].requiredResources : undefined
     const boostResources = {}
     for (const resourceType in boostrequiredResources) {
         boostResources[resourceType] = boostrequiredResources[resourceType].mineralAmount
@@ -1221,7 +1308,7 @@ Creep.prototype.getAttackPower = function () {
     let result = 0
 
     //copy boostRequest.requiredResources since we doesn't want to change request
-    const boostrequiredResources = this.room.boostQueue[this.name] ? this.room.boostQueue[this.name].requiredResources : undefined
+    const boostrequiredResources = (this.room.isMy && this.room.boostQueue[this.name]) ? this.room.boostQueue[this.name].requiredResources : undefined
     const boostResources = {}
     for (const resourceType in boostrequiredResources) {
         boostResources[resourceType] = boostrequiredResources[resourceType].mineralAmount
@@ -1318,6 +1405,10 @@ Creep.prototype.getAttackPower = function () {
 }
 
 Room.prototype.requestRoomDefender = function (boost) {
+    if (!this.hasAvailableSpawn()) {
+        return
+    }
+
     let body = []
     const bodyLength = Math.min(Math.floor((this.energyCapacityAvailable) / 210), 16)
     for (let i = 0; i < bodyLength; i++) {

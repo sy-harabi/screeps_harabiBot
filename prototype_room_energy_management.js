@@ -4,8 +4,6 @@ const TERMINAL_ENERGY_BUFFER = 3000
 
 const CONTROLLER_LINK_ENERGY_THRESHOLD = 100
 
-const ENERGY_LEVEL_TO_FILL_NUKER = 5
-
 let MinHeap = require('./util_min_heap')
 
 const ENERGY_PRIORITY = {
@@ -13,7 +11,7 @@ const ENERGY_PRIORITY = {
     spawn: 1,
     tower: 1,
     link: 1,
-    container: 6,
+    container: 2,
     terminal: 7,
     lab: 8,
     factory: 9,
@@ -69,13 +67,19 @@ Room.prototype.manageHub = function () {
 
     const hubCenterPos = this.getHubCenterPos()
     if (!hubCenterPos) {
-        console.log(`${this.name} have no hub center pos`)
         return
     }
 
     if (distributor.pos.getRangeTo(hubCenterPos) > 0) {
         distributor.moveMy(hubCenterPos)
         return
+    }
+
+    if (distributor.ticksToLive < 1000) {
+        const freeSpawn = this.structures.spawn.find(spawn => !spawn.spawning)
+        if (freeSpawn) {
+            freeSpawn.renewCreep(distributor)
+        }
     }
 
     if (distributor.supplying) {
@@ -193,6 +197,11 @@ Room.prototype.getHubEnergyRequestId = function () {
         return terminal.id
     }
 
+    const powerSpawn = this.structures.powerSpawn[0]
+    if (powerSpawn && powerSpawn.store[RESOURCE_POWER] > 0 && powerSpawn.store[RESOURCE_ENERGY] < powerSpawn.store[RESOURCE_POWER] * 50) {
+        return powerSpawn.id
+    }
+
     return undefined
 }
 
@@ -245,7 +254,7 @@ Room.prototype.manageEnergySupply = function (arrayOfCreeps) {
     for (const request of requestsArray) {
         request.applicants = new MinHeap(a => a.pos.getRangeTo(request.pos))
         for (const applicant of applicants) {
-            if (applicant.creep.memory.role === 'colonyHauler' && applicant.pos.getRangeTo(request.pos) > 5) {
+            if (request.priority === 1 && applicant.creep.memory.role === 'colonyHauler' && applicant.pos.getRangeTo(request.pos) > 5) {
                 continue
             }
             request.applicants.insert(applicant)
@@ -304,16 +313,15 @@ Room.prototype.getEnergyRequests = function (numApplicants) {
     const nuker = this.structures.nuker[0]
 
     const requests = new Map()
-    const energyLevelThreshold = this.memory.hasOperator ? 0.5 : 1
 
-    if (this.energyAvailable || 0 < energyLevelThreshold * this.energyCapacityAvailable) {
+    if (this.energyAvailable || 0 < this.energyCapacityAvailable) {
         for (const client of this.structures.extension) {
             if (client.store.getFreeCapacity(RESOURCE_ENERGY)) {
                 requests.set(client.id, new Request(client))
             }
         }
 
-        if (this.creeps.distributor.length === 0) {
+        if (!this.getHubCenterPos()) {
             for (const client of this.structures.spawn) {
                 if (client.store.getFreeCapacity(RESOURCE_ENERGY)) {
                     requests.set(client.id, new Request(client))
@@ -366,9 +374,9 @@ Room.prototype.getEnergyRequests = function (numApplicants) {
     }
 
     if (nuker) {
-        if (!this.memory.fillNuker && this.energyLevel > ENERGY_LEVEL_TO_FILL_NUKER) {
+        if (!this.memory.fillNuker && this.energyLevel >= 160) {
             this.memory.fillNuker = true
-        } else if (this.memory.fillNuker && this.energyLevel < (ENERGY_LEVEL_TO_FILL_NUKER - 1)) {
+        } else if (this.memory.fillNuker && this.energyLevel < 150) {
             this.memory.fillNuker = false
         }
 

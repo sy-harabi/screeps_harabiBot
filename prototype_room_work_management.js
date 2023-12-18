@@ -12,7 +12,7 @@ Room.prototype.manageWork = function () {
     }
 
     // 건설할 곳이 있고 downgrade가 급하지 않으면 build부터
-    if (this.constructionSites.length && !this.heap.upgradeFirst) {
+    if (this.constructionSites.length > 0 && !this.heap.upgradeFirst) {
         this.heap.constructing = true
         return this.manageBuild()
     } else {
@@ -78,31 +78,31 @@ Room.prototype.manageBuild = function () {
     let laborers = Overlord.getCreepsByRole(this.name, 'laborer')
 
     // construction site 목록 작성
-    let tasks = this.constructionSites
-    if (tasks.length && laborers.length) {
+    let constructionSites = this.constructionSites
+    if (constructionSites.length && laborers.length) {
         // 업무 배치 시작
-        const tasksByPriority = new Array(10)
-        for (let i = 0; i < tasksByPriority.length; i++) {
-            tasksByPriority[i] = []
+        const targetsByPriority = new Array(10)
+        for (let i = 0; i < targetsByPriority.length; i++) {
+            targetsByPriority[i] = []
         }
-        for (const task of tasks) {
-            tasksByPriority[BUILD_PRIORITY[task.structureType]].push(task)
+        for (const constructionSite of constructionSites) {
+            targetsByPriority[BUILD_PRIORITY[constructionSite.structureType]].push(constructionSite)
         }
-        const priorityTasks = tasksByPriority.find(tasks => tasks.length > 0)
+        const priorityTargets = targetsByPriority.find(targets => targets.length > 0)
         for (const laborer of laborers) {
             if (laborer.room.name !== this.name) {
                 continue
             }
-            if (laborer.memory.task !== undefined) {
+            if (laborer.memory.targetId !== undefined) {
                 continue
             }
-            laborer.memory.task = laborer.pos.findClosestByRange(priorityTasks).id
+            laborer.memory.targetId = laborer.pos.findClosestByRange(priorityTargets).id
         }
     }
 
     for (const laborer of laborers) {
         //storage가 가까우면 storage에서 energy 받자
-        const workPlace = Game.getObjectById(laborer.memory.task)
+        const workPlace = Game.getObjectById(laborer.memory.targetId)
         if (this.storage && (this.storage.pos.getRangeTo(workPlace) <= 5 || this.buildersGetEnergyFromStorage)) {
             laborer.needDelivery = false
         } else {
@@ -117,7 +117,7 @@ Room.prototype.manageBuild = function () {
             }
         }
         // energy 있으면 일해라
-        laborer.buildTask()
+        laborer.buildTarget()
     }
 
 }
@@ -262,7 +262,7 @@ Creep.prototype.repairMy = function (target) {
 }
 
 Creep.prototype.upgradeRCL = function () {
-    const controller = Game.getObjectById(this.memory.controller) || this.room.controller
+    const controller = this.room.controller
 
 
     if (this.pos.getRangeTo(controller) > 3) {
@@ -273,11 +273,11 @@ Creep.prototype.upgradeRCL = function () {
     this.upgradeController(controller)
 }
 
-Creep.prototype.buildTask = function () {
-    const constructionSite = Game.getObjectById(this.memory.task)
+Creep.prototype.buildTarget = function () {
+    const constructionSite = Game.getObjectById(this.memory.targetId)
 
     if (!constructionSite) {
-        delete this.memory.task
+        delete this.memory.targetId
         return
     }
 

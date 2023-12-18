@@ -1,8 +1,8 @@
 const IMPORTANT_STRUCTURE_TYPES = ['spawn', 'tower']
 
-const SEIZE_NEXT_QUAD_INTERVAL = 500
+const SIEGE_NEXT_QUAD_INTERVAL = 500
 
-Flag.prototype.seizeRoom = function () {
+Flag.prototype.siegeRoom = function () {
   if (this.memory.endTick && Game.time > this.memory.endTick) {
     this.remove()
   }
@@ -12,9 +12,14 @@ Flag.prototype.seizeRoom = function () {
     return
   }
 
+  this.memory.base = this.memory.base || this.findClosestMyRoom(8).name
+
   const flags = Object.values(Game.flags)
 
   const quadFlags = flags.filter(flag => {
+    if (flag.memory.base !== this.memory.base) {
+      return false
+    }
     if (flag.pos.roomName !== this.pos.roomName) {
       return false
     }
@@ -27,7 +32,7 @@ Flag.prototype.seizeRoom = function () {
 
   const activeQuadFlag = quadFlags.find(flag => {
     const ticksToLive = flag.memory.ticksToLive || 1500
-    if (ticksToLive < (CREEP_LIFE_TIME - SEIZE_NEXT_QUAD_INTERVAL)) {
+    if (ticksToLive < (CREEP_LIFE_TIME - SIEGE_NEXT_QUAD_INTERVAL)) {
       return false
     }
     return true
@@ -58,8 +63,8 @@ Flag.prototype.seizeRoom = function () {
     this.remove()
   }
 
-  for (let y = 25; y < 50; y++) {
-    const pos = new RoomPosition(25, y, this.pos.roomName)
+  for (let y = this.pos.y + 1; y < 50; y++) {
+    const pos = new RoomPosition(this.pos.x, y, this.pos.roomName)
 
     const found = pos.lookFor(LOOK_FLAGS)
 
@@ -67,9 +72,16 @@ Flag.prototype.seizeRoom = function () {
       continue
     }
 
-    const flagName = `${this.pos.roomName} Quad ${Game.time}`
+    const flagName = `${this.name} Quad ${Game.time}`
 
     pos.createFlag(flagName, COLOR_RED)
+
+    if (this.memory.base) {
+      Memory.flags = Memory.flags || {}
+      Memory.flags[flagName] = Memory.flags[flagName] || {}
+      Memory.flags[flagName].base = this.memory.base
+    }
+
     return
   }
 
@@ -77,14 +89,7 @@ Flag.prototype.seizeRoom = function () {
 }
 
 Flag.prototype.conductWar = function () {
-  const roomName = this.pos.roomName
-  const closestMyRoom = this.findClosestMyRoom(8)
-
-  const observer = closestMyRoom.structures.observer[0]
-  if (!observer) {
-    return
-  }
-  observer.observeRoom(roomName)
+  Overlord.observeRoom(this.pos.roomName)
 
   const room = this.room
   if (!room) {
@@ -102,8 +107,10 @@ Flag.prototype.conductWar = function () {
   const damageArray = this.room.getDamageArray()
 
   for (let i = 0; i < damageArray.length; i++) {
-    const netHeal = this.healPower - damageArray[i]
+    const netHeal = 2500 - damageArray[i]
     if (netHeal < 0) {
+      const pos = parseCoord(i)
+      room.visual.rect(pos.x - 0.5, pos.y - 0.5, 1, 1, { fill: 'red', opacity: 0.15 })
       costArray[i] = 0
     }
   }

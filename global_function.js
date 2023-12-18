@@ -2,6 +2,10 @@ global.getRoomType = function (roomName) {
     const roomCoord = getRoomCoord(roomName)
     const x = roomCoord.x
     const y = roomCoord.y
+    if (x % 10 === 0 && y % 10 === 0) {
+        return 'crossing'
+    }
+
     if (x % 10 === 0 || y % 10 === 0) {
         return 'highway'
     }
@@ -24,19 +28,11 @@ global.getRoomCoord = function (roomName) {
 }
 
 global.isValidCoord = function (x, y) {
-    if (x < 1) {
-        return false
-    }
-    if (x > 48) {
-        return false
-    }
-    if (y < 1) {
-        return false
-    }
-    if (y > 48) {
-        return false
-    }
-    return true
+    return x >= 0 && x <= 49 && y >= 0 && y <= 49
+}
+
+global.isEdgeCoord = function (x, y) {
+    return x === 0 || x === 49 || y === 0 || y === 49
 }
 
 global.packCoord = function (x, y) {
@@ -236,24 +232,50 @@ global.mapInfo = function () {
     return `show map visual : ${Memory.showMapInfo}`
 }
 
-global.sieze = function (roomName, ticks = 3000) {
+global.siege = function (roomName, options = {}) {
+    const ticks = options.ticks || 50000
+
+    const baseName = options.base ? options.base.toUpperCase() : undefined
+
+    const type = options.type || 'blinkie'
+
     roomName = roomName.toUpperCase()
-    const name = `${roomName} seize ${Game.time}`
 
-    const endTick = Game.time + ticks
-
-    const pos = new RoomPosition(25, 25, roomName)
-
-    if (!pos) {
+    if (!Game.rooms[roomName]) {
+        Overlord.observeRoom(roomName)
+        Memory.siege = Memory.siege || {}
+        Memory.siege[roomName] = options
         return
     }
 
-    pos.createFlag(name)
+    if (Memory.siege && Memory.siege[roomName]) {
+        delete Memory.siege[roomName]
+    }
 
-    Memory.flags = Memory.flags || {}
-    Memory.flags[name].endTick = endTick
+    const name = `${roomName} ${type} siege `
 
-    return
+    const endTick = Game.time + ticks
+
+    for (let x = 15; x < 50; x += 5) {
+        const pos = new RoomPosition(x, 25, roomName)
+        const found = pos.lookFor(LOOK_FLAGS)
+
+        if (found.length) {
+            continue
+        }
+
+        pos.createFlag(name)
+
+        Memory.flags = Memory.flags || {}
+        Memory.flags[name] = Memory.flags[name] || {}
+        Memory.flags[name].endTick = endTick
+
+        if (baseName !== undefined) {
+            Memory.flags[name].base = baseName
+        }
+
+        return
+    }
 }
 
 global.logSend = function (resourceType) {

@@ -136,7 +136,7 @@ Creep.prototype.setMoveIntent = function (costs, graph, creepVertex, posVertices
       if (pos.isWall) {
         continue
       }
-      if (!isValidCoord(pos.x, pos.y)) {
+      if (isEdgeCoord(pos.x, pos.y)) {
         continue
       }
 
@@ -170,7 +170,7 @@ Creep.prototype.setMoveIntent = function (costs, graph, creepVertex, posVertices
     if (pos.isWall) {
       continue
     }
-    if (!isValidCoord(pos.x, pos.y)) {
+    if (isEdgeCoord(pos.x, pos.y)) {
       continue
     }
     if (costs.get(pos.x, pos.y) > 1) {

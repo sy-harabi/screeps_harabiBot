@@ -1,5 +1,4 @@
 global.SPAWN_CAPACITY_THRESHOLD = 0.9
-const POWER_BANK_DAMAGE_THRESHOLD = 1000
 const SHOW_RCL_HISTORY = false
 
 Room.prototype.runRoomManager = function () {
@@ -31,10 +30,10 @@ Room.prototype.runRoomManager = function () {
     }
 
     // 여기서부터는 전시에는 안함
+    this.heap.powerProcessing = false
     if (!this.memory.militaryThreat) {
         this.manageExtractor()
         this.manageRemotes()
-        this.manageHighWay()
         this.manageFactory()
         this.managePowerSpawn()
         this.manageScout()
@@ -118,9 +117,25 @@ Room.prototype.checkTombstone = function () {
         const username = owner ? owner.username : undefined
 
         if (!checked[deadCreep.name] && username !== 'Invader') {
-            if (!Memory.creeps[deadCreep.name] || Memory.creeps[deadCreep.name].role !== 'scouter') {
+            const memory = Memory.creeps[deadCreep.name]
+            if (!memory || memory.role !== 'scouter') {
                 data.recordLog(`KILLED: ${deadCreep.name} by ${username}`, this.name)
             }
+
+            if (memory.task) {
+                const category = memory.task.category
+                const id = memory.task.id
+
+                const task = Overlord.getTasksWithCategory(category)[id]
+
+                if (task) {
+                    task.lostCreeps = task.lostCreeps || {}
+                    task.lostCreeps[memory.role] = task.lostCreeps[memory.role] || 0
+
+                    task.lostCreeps[memory.role]++
+                }
+            }
+
             checked[deadCreep.name] = true
         }
 
@@ -392,46 +407,18 @@ Room.prototype.manageFactory = function () {
 
 Room.prototype.managePowerSpawn = function () {
     const powerSpawn = this.structures.powerSpawn[0]
-    if (!this.savingMode && powerSpawn && this.terminal && this.storage) {
+
+    if (!powerSpawn || !this.terminal) {
+        return
+    }
+    if (!this.memory.operatePowerSpawn && this.energyLevel >= 200) {
+        this.memory.operatePowerSpawn = true
+    } else if (this.memory.operatePowerSpawn && this.energyLevel < 190) {
+        this.memory.operatePowerSpawn = false
+    }
+
+    if (this.memory.operatePowerSpawn) {
         return this.operatePowerSpawn()
-    }
-}
-
-Room.prototype.manageHighWay = function () {
-    if (!this.memory.depositRequests) {
-        return
-    }
-
-    const spawnCapacityAvailable = this.structures.spawn.length * 500
-    const spawnCapacity = this.getSpawnCapacity()
-
-    if (spawnCapacity > spawnCapacityAvailable) {
-        delete this.memory.depositRequests
-        return
-    }
-
-    for (const depositRequest of Object.values(this.memory.depositRequests)) {
-        Game.map.visual.text('deposit', new RoomPosition(25, 25, depositRequest.roomName))
-        Game.map.visual.text(`⏳${depositRequest.lastCooldown}/${depositRequest.maxCooldown}`, new RoomPosition(25, 35, depositRequest.roomName), { fontSize: 6 })
-        this.runDepositWork(depositRequest)
-    }
-
-    if (!this.memory.powerBankRequests) {
-        return
-    }
-
-    for (const powerBankRequest of Object.values(this.memory.powerBankRequests)) {
-        if (Game.time > powerBankRequest.decayTime) {
-            this.deletePowerBank(powerBankRequest)
-            continue
-        }
-        Game.map.visual.text('powerBank', new RoomPosition(25, 5, powerBankRequest.roomName), { color: '#f000ff' })
-        const requiredAttackPower = this.getRequiredAttackPowerForPowerBank(powerBankRequest)
-        if (requiredAttackPower > POWER_BANK_DAMAGE_THRESHOLD) {
-            this.deletePowerBank(powerBankRequest)
-            continue
-        }
-        Game.map.visual.text(`⚔️:${requiredAttackPower} 💰:${powerBankRequest.amount}`, new RoomPosition(25, 15, powerBankRequest.roomName), { fontSize: 6, color: '#f000ff' })
     }
 }
 

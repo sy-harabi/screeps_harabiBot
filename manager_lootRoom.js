@@ -41,12 +41,16 @@ Flag.prototype.lootRoom = function () {
         looter.lootRoom()
     }
 
-    if (looters.length < 4) {
+    if (looters.length < 10) {
         closestMyRoom.requestLooter(targetRoomName, routeLength)
     }
 }
 
 Room.prototype.requestLooter = function (targetRoomName, routeLength) {
+    if (!this.hasAvailableSpawn()) {
+        return
+    }
+
     let body = []
     for (let i = 0; i < Math.min(Math.floor(this.energyCapacityAvailable / 100), 25); i++) {
         body.push(CARRY, MOVE)

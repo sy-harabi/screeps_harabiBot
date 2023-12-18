@@ -165,6 +165,10 @@ Flag.prototype.manageReconstruction = function () {
 }
 
 Room.prototype.requestRemoteLaborer = function (roomName, number = 1) {
+    if (!this.hasAvailableSpawn()) {
+        return
+    }
+
     const myRoom = Game.rooms[roomName]
     if (!myRoom) {
         return false

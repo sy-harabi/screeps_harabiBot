@@ -32,7 +32,6 @@ Room.prototype.dijkstra = function (startPos, goals, costArray) {
   const goalsPacked = new Set()
 
   for (const goal of goals) {
-
     const goalPos = goal.pos || goal
     const range = goal.range || 0
 

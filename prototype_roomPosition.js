@@ -21,6 +21,14 @@ Object.defineProperties(RoomPosition.prototype, {
             return this.terrain === 1
         }
     },
+    isSwamp: {
+        get() {
+            if (this.isRoad) {
+                return false
+            }
+            return this.terrain === 2
+        }
+    },
     isRampart: {
         get() {
             if (this._isRampart !== undefined) {
@@ -40,7 +48,7 @@ Object.defineProperties(RoomPosition.prototype, {
                     this._workable = false
                     break
                 }
-                if (!isValidCoord(this.x, this.y)) {
+                if (isEdgeCoord(this.x, this.y)) {
                     this._workable = false
                     break
                 }
@@ -58,7 +66,7 @@ Object.defineProperties(RoomPosition.prototype, {
     },
     walkable: {
         get() {
-            if (!isValidCoord(this.x, this.y)) {
+            if (isEdgeCoord(this.x, this.y)) {
                 return false
             }
             this._walkable = true
@@ -128,10 +136,12 @@ Object.defineProperties(RoomPosition.prototype, {
 
 RoomPosition.prototype.lookForConstructible = function (vectorArray) {
     for (const vector of vectorArray) {
-        if (!isValidCoord(this.x + vector.x, this.y + vector.y)) {
+        const x = this.x + vector.x
+        const y = this.y + vector.y
+        if (!isValidCoord(x, y)) {
             return false
         }
-        const pos = new RoomPosition(this.x + vector.x, this.y + vector.y, this.roomName)
+        const pos = new RoomPosition(x, y, this.roomName)
         if (!pos.constructible) {
             return false
         }

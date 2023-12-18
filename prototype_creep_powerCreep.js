@@ -112,7 +112,7 @@ PowerCreep.prototype.moveMy = function (target, range = 0) {
 
     if (data.creeps[this.name].path[0] && data.creeps[this.name].path[0].isEqualTo(this.pos)) {
         data.creeps[this.name].path.shift()
-        if (data.creeps[this.name].path[0] && !isValidCoord(data.creeps[this.name].path[0].x, data.creeps[this.name].path[0].y)) {
+        if (data.creeps[this.name].path[0] && isEdgeCoord(data.creeps[this.name].path[0].x, data.creeps[this.name].path[0].y)) {
             data.creeps[this.name].path.shift()
         }
     }

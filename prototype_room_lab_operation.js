@@ -1,4 +1,4 @@
-const AMOUNT_TO_ACCUMULATE_BOOSTS = 10000
+global.AMOUNT_TO_ACCUMULATE_BOOSTS = 10000
 
 const AMOUNT_REQUIRED_TO_MAKE_BOOSTS = 1000
 
@@ -44,6 +44,7 @@ Room.prototype.operateLab = function (resource0, resource1) {
             return
         }
         if (sourceLabs[0].store[resource0] < AMOUNT_REQUIRED_TO_MAKE_BOOSTS) {
+
             if (researcher.isFree && terminal.store[resource0] >= AMOUNT_REQUIRED_TO_MAKE_BOOSTS - sourceLabs[0].store[resource0]) {
                 researcher.getDeliveryRequest(terminal, sourceLabs[0], resource0)
             }
@@ -86,6 +87,10 @@ Object.defineProperties(Room.prototype, {
                 return this.memory.labs
             }
             const structureLabs = this.structures.lab
+            const terminal = this.terminal
+            if (terminal) {
+                structureLabs.sort((a, b) => a.pos.getRangeTo(terminal.pos) - b.pos.getRangeTo(terminal.pos))
+            }
             labs = {}
             labs['sourceLab'] = []
             labs['reactionLab'] = []

@@ -88,7 +88,11 @@ const rcl = new VisualItem('RCL', 3.5, (room) => {
         return { content, option }
     }
     const content = `${room.controller.level}(${Math.round(100 * room.controller.progress / room.controller.progressTotal)}%)`
-    const option = { color: room.controller.level > 3 ? 'yellow' : 'magenta' }
+
+    const hue = 120 * room.controller.level / 8
+    const color = `hsl(${hue},100%,60%)`
+
+    const option = { color }
     return { content, option }
 })
 
@@ -96,7 +100,11 @@ const rcl = new VisualItem('RCL', 3.5, (room) => {
 const spawnCapacity = new VisualItem('Spawn', 3, (room) => {
     const spawnCapacityRatio = room.getSpawnCapacityRatio()
     const content = `${Math.round(100 * spawnCapacityRatio)}%`
-    const option = { color: spawnCapacityRatio < SPAWN_CAPACITY_THRESHOLD ? 'lime' : spawnCapacityRatio < 0.9 ? 'yellow' : 'magenta' }
+
+    const hue = 120 * Math.min(1, 2 - 2 * spawnCapacityRatio)
+    const color = `hsl(${hue},100%,60%)`
+
+    const option = { color }
     return { content, option }
 })
 
@@ -124,25 +132,21 @@ const nextRCL = new VisualItem('next RCL', 4, (room) => {
 })
 
 // Storage
-const storedEnergy = new VisualItem('Storage', 3, (room) => {
+const storedEnergy = new VisualItem('Storage', 4.5, (room) => {
     const energyStored = room.storage ? room.storage.store[RESOURCE_ENERGY] : 0
-    const content = energyStored ? `${Math.floor(energyStored / 1000)}K` : '-'
-    const option = { color: room.savingMode ? 'magenta' : 'lime' }
-    return { content, option }
-})
+    const content = energyStored ? `${Math.floor(energyStored / 1000)}K(${room.energyLevel})` : '-'
 
-// Harvest
-const harvest = new VisualItem('Harvest', 3, (room) => {
-    const rate = room.heap.sourceUtilizationRate
-    const content = `${Math.floor(rate * 100)}%`
-    const option = { color: rate > 0.9 ? 'lime' : 'magenta' }
+    const hue = 120 * Math.max(0, room.energyLevel - 50) / 150
+    const color = `hsl(${hue},100%,60%)`
+
+    const option = { color }
     return { content, option }
 })
 
 // Remote
-const remoteIncome = new VisualItem('Remote', 5, (room) => {
+const remoteIncome = new VisualItem('Remote', 4, (room) => {
     const num = (() => {
-        if (!room.memory.remotes) {
+        if (!room.memory.activeRemotes) {
             return 0
         }
         let result = 0
@@ -161,7 +165,7 @@ const remoteIncome = new VisualItem('Remote', 5, (room) => {
 
     if (num === 0) {
         const content = '-'
-        const option = { color: 'magenta' }
+        const option = { color: `hsl(0,100%,60%)` }
         return { content, option }
     }
 
@@ -193,8 +197,13 @@ const remoteIncome = new VisualItem('Remote', 5, (room) => {
         income += remoteIncome
     }
     room.heap.remoteIncome = income
-    const content = `${Math.floor(10 * income) / 10}e/t (S:${num})`
-    const option = { color: income / num >= 5 ? 'lime' : 'magenta' }
+    const incomePerSource = Math.floor(10 * (income / num)) / 10
+    const content = `${incomePerSource}e/t * ${num}`
+
+    const hue = 120 * Math.max(0, incomePerSource - 2) / 5
+    const color = `hsl(${hue},100%,60%)`
+
+    const option = { color }
     return { content, option }
 })
 
@@ -211,17 +220,22 @@ const lab = new VisualItem('Lab', 3, (room) => {
     }
 })
 
-// Factory
-const factory = new VisualItem('Factory', 6, (room) => {
-    const content = `${room.memory.factoryTarget ? room.memory.factoryTarget.commodity : '-'}`
-    const option = { color: room.memory.factoryTarget ? 'lime' : 'magenta' }
+//power
+const powerProcess = new VisualItem('Power', 3, (room) => {
+    const content = room.heap.powerProcessing ? 'active' : '-'
+    const option = { color: 'lime' }
     return { content, option }
 })
 
 // Rampart
 const rampart = new VisualItem('Rampart', 4, (room) => {
-    const content = `${Math.round(room.structures.minProtectionHits / 10000) / 100}M`
-    const option = { color: room.heap.rampartOK ? 'lime' : 'magenta' }
+    const value = Math.round(room.structures.minProtectionHits / 10000) / 100
+    const content = `${value}M`
+
+    const hue = 120 * value / 100
+    const color = `hsl(${hue},100%,60%)`
+
+    const option = { color }
     return { content, option }
 })
 
@@ -233,10 +247,9 @@ const items = [
     control,
     nextRCL,
     storedEnergy,
-    harvest,
     remoteIncome,
     lab,
-    factory,
+    powerProcess,
     rampart
 ]
 
@@ -246,13 +259,11 @@ Overlord.visualizeRoomInfo = function () {
 
     const option = { color: 'cyan', strokeWidth: 0.2, align: 'left', opacity: OPACITY }
     new RoomVisual().text("Time " + Game.time, 0.5, startPos.y, option)
-    new RoomVisual().text("CPU " + Math.floor(10 * Game.cpu.getUsed()) / 10, 6.5, startPos.y, option)
-    new RoomVisual().text("Bucket " + Game.cpu.bucket, 11, startPos.y, option);
-    new RoomVisual().text("Avg " + Math.round(100 * (_.sum(CPU) / CPU.length)) / 100, 16.5, startPos.y, option);
-    new RoomVisual().text("# ticks " + CPU.length, 20.5, startPos.y, option);
-    new RoomVisual().text(`Room: ${this.myRooms.length}`, 25, startPos.y, option)
-    new RoomVisual().text(`Remote: ${Memory.info ? Memory.info.numRemotes || 0 : '-'}(sources)`, 29.5, startPos.y, option)
-    new RoomVisual().text(`Creep: ${Object.keys(Game.creeps).length}`, 37.5, startPos.y, option)
+    new RoomVisual().text("CPU " + Math.floor(10 * Game.cpu.getUsed()) / 10, 6, startPos.y, option)
+    new RoomVisual().text("Bucket " + Game.cpu.bucket, 10, startPos.y, option);
+    new RoomVisual().text(`Room: ${this.myRooms.length}`, 15, startPos.y, option)
+    new RoomVisual().text(`Remote: ${Overlord.remotes.length}(rooms)`, 18.5, startPos.y, option)
+    new RoomVisual().text(`Creep: ${Object.keys(Game.creeps).length}`, 26, startPos.y, option)
 
     // 각 방마다 표시
     for (let i = -1; i < this.myRooms.length; i++) {

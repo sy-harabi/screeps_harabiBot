@@ -47,16 +47,20 @@ Room.prototype.manageRemotes = function () {
 
             const status = this.getRemoteStatus(remoteName)
 
-            const abandonTimerPos = new RoomPosition(25, 5, remoteName)
-
             if (status.abandon) {
                 if (status.abandon > Game.time) {
+                    const abandonTimerPos = new RoomPosition(25, 5, remoteName)
+
                     const ramainingTIcks = status.abandon - Game.time
+
                     Game.map.visual.text(`⏳${ramainingTIcks}`, abandonTimerPos, { fontSize: 5, opacity: 1 })
                     continue
                 }
+                this.resetRemoteInvaderStatus(remoteName)
+                this.resetRemoteThreatLevel(remoteName)
                 this.resetRemoteNetIncome(remoteName)
                 delete status.abandon
+                data.recordLog(`REMOTE: reactivate ${remoteName}`, remoteName)
             }
 
             const pos = new RoomPosition(45, 5, remoteName)
@@ -162,7 +166,7 @@ Room.prototype.operateRemote = function (remoteName) {
         const intermediateStatus = this.memory.remotes[intermediateName]
 
         // abandon when intermediate room is abandoned
-        if (!intermediateStatus) {
+        if (!intermediateStatus || (intermediateStatus.abandon && intermediateStatus.abandon > Game.time)) {
             data.recordLog(`REMOTE: abandon ${remoteName} since intermediate room is gone`, this.name)
             this.abandonRemote(remoteName)
             return true
@@ -261,24 +265,42 @@ Room.prototype.addRemoteThreatLevel = function (remoteName, amount) {
     status.threatLevel = Math.max(status.threatLevel + amount, 0)
 }
 
+Room.prototype.resetRemoteThreatLevel = function (remoteName) {
+    const status = this.getRemoteStatus(remoteName)
+
+    if (!status) {
+        return
+    }
+
+    delete status.threatLevel
+}
+
 /**
  * 
  * @param {string} roomName - roomName to send troops
  * @param {*} cost - total cost to be used to spawn troops
  * @returns whether there are enough troops or not
  */
-Room.prototype.sendTroops = function (roomName, cost) {
-    const colonyDefenders = Overlord.getCreepsByRole(roomName, 'colonyDefender')
+Room.prototype.sendTroops = function (roomName, cost, options) {
+    const defaultOptions = { distance: 0, task: undefined }
+    const mergedOptions = { ...defaultOptions, ...options }
+    const { distance, task } = mergedOptions
+
+    let colonyDefenders = Overlord.getCreepsByRole(roomName, 'colonyDefender')
+
+    if (distance > 0) {
+        colonyDefenders = colonyDefenders.filter(creep => (creep.ticksToLive || 1500) > (distance + creep.body.length * CREEP_SPAWN_TIME))
+    }
 
     const requestedCost = cost
 
     if (requestedCost === 0) {
         if (colonyDefenders.length === 0) {
-            this.requestColonyDefender(roomName, { bodyLengthMax: 1 })
+            this.requestColonyDefender(roomName, { bodyLengthMax: 3, task })
             return false
         }
         for (const colonyDefender of colonyDefenders) {
-            colonyDefender.memory.wait = false
+            colonyDefender.memory.waitForTroops = false
         }
         return true
     }
@@ -286,7 +308,8 @@ Room.prototype.sendTroops = function (roomName, cost) {
     let totalCost = 0
 
     for (const colonyDefender of colonyDefenders) {
-        totalCost += colonyDefender.getCost()
+        const multiplier = colonyDefender.memory.boosted !== undefined ? 4 : 1
+        totalCost += colonyDefender.getCost() * multiplier
     }
 
     if (totalCost >= requestedCost) {
@@ -294,14 +317,14 @@ Room.prototype.sendTroops = function (roomName, cost) {
             return true
         }
         for (const colonyDefender of colonyDefenders) {
-            colonyDefender.memory.wait = false
+            colonyDefender.memory.waitForTroops = false
         }
         return true
     }
 
-    const bodyLengthMax = Math.ceil(requestedCost / 1100)
+    const bodyLengthMax = Math.max(3, Math.ceil(requestedCost / 1100))
+    this.requestColonyDefender(roomName, { bodyLengthMax, waitForTroops: true, task })
 
-    this.requestColonyDefender(roomName, { bodyLengthMax, wait: true })
     return false
 }
 
@@ -883,6 +906,24 @@ Room.prototype.abandonRemote = function (remoteName) {
     status.lastAbandonDuration = 2 * status.lastAbandonDuration
     status.abandon = Game.time + status.lastAbandonDuration
     data.recordLog(`REMOTE: abandon remote ${remoteName} for ${status.lastAbandonDuration} ticks.`, this.name)
+}
+
+Room.prototype.resetRemoteInvaderStatus = function (remoteName) {
+    const status = this.getRemoteStatus(remoteName)
+
+    if (!status) {
+        return false
+    }
+
+    delete status.isInvader
+    delete status.isKiller
+    delete status.enemyTotalCost
+
+    if (Memory.rooms[remoteName]) {
+        delete Memory.rooms[remoteName].isInvader
+        delete Memory.rooms[remoteName].isKiller
+    }
+
 }
 
 /**

@@ -947,7 +947,10 @@ Room.prototype.getBasePlanAfterMincut = function (pos, inputCosts, mincut, costs
       const x = firstSourceLab.x + vector.x
       const y = firstSourceLab.y + vector.y
       if (isValidCoord(x, y)) {
-        secondSourceLabCandidates.push(new RoomPosition(x, y, this.name))
+        const pos = new RoomPosition(x, y, this.name)
+        if (pos.constructible) {
+          secondSourceLabCandidates.push(new RoomPosition(x, y, this.name))
+        }
       }
     })
     for (const secondSourceLab of secondSourceLabCandidates) {
@@ -1528,7 +1531,14 @@ RoomPosition.prototype.getClusterAnchor = function (costs) {
   for (const vector of CLUSTER_STAMP) {
     const x = this.x + vector.x
     const y = this.y + vector.y
-    if (!isValidCoord(x, y) || costs.get(x, y) > 0) {
+    if (!isValidCoord(x, y)) {
+      return false
+    }
+    if (costs.get(x, y) > 0) {
+      return false
+    }
+    const pos = new RoomPosition(x, y, this.roomName)
+    if (!pos.constructible) {
       return false
     }
     area.push(new RoomPosition(x, y, this.roomName))

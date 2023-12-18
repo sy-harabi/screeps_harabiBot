@@ -2,7 +2,8 @@ global.Heap = {
   rooms: new Map(),
   creeps: new Map(),
   sources: new Map(),
-  quads: new Map()
+  quads: new Map(),
+  overlord: {}
 }
 
 Object.defineProperties(Room.prototype, {
