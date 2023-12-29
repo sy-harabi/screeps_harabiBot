@@ -84,8 +84,38 @@ Flag.prototype.siegeRoom = function () {
 
     return
   }
+}
 
-
+Flag.prototype.nukeRoom = function () {
+  const pos = this.pos
+  const roomName = pos.roomName
+  const myRooms = Overlord.myRooms
+  const candidateRoom = myRooms.find(room => {
+    if (room.controller.level < 8) {
+      return false
+    }
+    const nuker = room.structures.nuker[0]
+    if (!nuker) {
+      return false
+    }
+    if (nuker.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
+      return false
+    }
+    if (nuker.store.getFreeCapacity(RESOURCE_GHODIUM) > 0) {
+      return false
+    }
+    if (nuker.cooldown && nuker.cooldown > 0) {
+      return false
+    }
+    if (Game.map.getRoomLinearDistance(room.name, roomName) > 10) {
+      return false
+    }
+    return true
+  })
+  if (candidateRoom) {
+    candidateRoom.structures.nuker[0].launchNuke(pos)
+  }
+  this.remove()
 }
 
 Flag.prototype.conductWar = function () {

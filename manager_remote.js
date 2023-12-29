@@ -13,8 +13,6 @@ const NUM_WORK_TO_CONSTRUCT = 6
 
 const NUM_CONSTRUCTION_SITES_PER_ROOM = 6
 
-const ENERGY_LEVEL_THRESHOLD_TO_DEFENSE = -5
-
 const VISUAL_OPTION = { font: 0.5, align: 'left' }
 
 Room.prototype.manageRemotes = function () {

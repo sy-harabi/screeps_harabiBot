@@ -82,6 +82,7 @@ Creep.prototype.moveMy = function (goals, options = {}) { //option = {avoidEnemy
         return OK
     }
 
+
     if (!ignoreOrder && this._moved) {
         this.say(`❌`, true)
         return ERR_BUSY
@@ -97,7 +98,7 @@ Creep.prototype.moveMy = function (goals, options = {}) { //option = {avoidEnemy
         if (this.heap.stay > Game.time) {
             this.room.visual.line(this.pos, mainTargetPos, { color: 'red', lineStyle: 'dashed' })
             this.say(`🛌${this.heap.stay - Game.time}`, true)
-            return ERR_BUSY
+            return ERR_NO_PATH
         } else {
             delete this.heap.stay
             if (this.memory.role !== 'scouter' && !this.memory.notifiedStuck) {
@@ -377,12 +378,14 @@ Creep.prototype.searchPath = function (goals, options = {}) {
                 if (Memory.map[roomName] && Memory.map[roomName].inaccessible > Game.time && Memory.map[roomName].numTower > 0) {
                     return Infinity
                 }
+                try {
+                    // 막혀있거나, novice zone이거나, respawn zone 이면 쓰지말자
+                    if (Game.map.getRoomStatus(roomName).status !== 'normal') {
+                        return Infinity
+                    }
+                } catch {
 
-                // 막혀있거나, novice zone이거나, respawn zone 이면 쓰지말자
-                if (Game.map.getRoomStatus(roomName).status !== 'normal') {
-                    return Infinity
                 }
-
                 const roomCoord = roomName.match(/[a-zA-Z]+|[0-9]+/g)
                 roomCoord[1] = Number(roomCoord[1])
                 roomCoord[3] = Number(roomCoord[3])

@@ -58,7 +58,7 @@ Room.prototype.manageScout = function () {
 
     while (status.queue.length > 0) {
       const node = status.queue.shift()
-      if (!map[node]) {
+      if (map[node] === undefined) {
         continue
       }
       if (map[node].distance >= MAX_DISTANCE) {
@@ -75,8 +75,14 @@ Room.prototype.manageScout = function () {
           return false
         }
         const room = Game.rooms[roomName]
-        // 닫혀있거나 novice zone, respawn zone 이면 제외
-        if (Game.map.getRoomStatus(roomName).status !== 'normal') {
+
+        let roomStatus = undefined
+        try {
+          // 닫혀있거나 novice zone, respawn zone 이면 제외
+          roomStatus = Game.map.getRoomStatus(roomName).status
+        } catch (err) {
+        }
+        if (roomStatus !== undefined && roomStatus !== 'normal') {
           return false
         }
 

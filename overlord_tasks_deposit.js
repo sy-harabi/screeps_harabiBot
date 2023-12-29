@@ -13,12 +13,12 @@ Overlord.manageDepositTasks = function () {
 
     if (!roomInCharge) {
       data.recordLog(`DEPOSIT: stopped deposit mining at ${targetRoomName}. no room in charge`, targetRoomName)
-      this.deleteTask('deposit', depositRequest)
+      this.deleteTask(depositRequest)
     }
 
     if (depositRequest.completed === true) {
       data.recordLog(`DEPOSIT: ${roomInCharge.name} completed DEPOSIT mining at ${targetRoomName}. returned ${depositRequest.amountReturned} ${depositRequest.depositType}`, roomInCharge.name)
-      this.deleteTask('deposit', depositRequest)
+      this.deleteTask(depositRequest)
       return
     }
 
@@ -71,6 +71,9 @@ Overlord.checkDeposits = function (targetRoomName) {
         continue
       }
       if (room.memory.militaryThreat) {
+        continue
+      }
+      if (room.isReactingToNukes()) {
         continue
       }
       if (room.energyLevel < 120) {

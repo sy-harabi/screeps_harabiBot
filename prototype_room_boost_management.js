@@ -248,7 +248,6 @@ Room.prototype.operateBoost = function (boostRequest) {
     }
 
     if (this.memory.boostState === 'boost') {
-
         if (targetCreep.spawning) {
             this.memory.boostState = 'prepare'
             return ERR_BUSY

@@ -50,6 +50,8 @@ StructureTerminal.prototype.run = function () {
                 return
             }
         }
+        Business.buy(RESOURCE_ENERGY, 20000, roomName)
+
     }
 }
 

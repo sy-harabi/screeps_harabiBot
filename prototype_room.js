@@ -100,7 +100,7 @@ Object.defineProperties(Room.prototype, {
             }
             this._laborer = {}
             this._laborer.numWork = 0
-            this._laborer.numWorkEach = Math.min(Math.floor(this.energyCapacityAvailable / 300), 12) * 2
+            this._laborer.numWorkEach = Math.min(Math.floor(this.energyCapacityAvailable / 200), 16)
             for (const laborer of this.creeps.laborer.filter(creep => (creep.ticksToLive || 1500) > 3 * creep.body.length)) {
                 this._laborer.numWork += laborer.body.filter(part => part.type === WORK).length
             }
@@ -186,7 +186,7 @@ Object.defineProperties(Room.prototype, {
                 costs.set(hubCenterPos.x, hubCenterPos.y, COST_FOR_HUB_CENTER)
             }
 
-            if (this.isMy) {
+            if (this.isMy && this.memory.basePlan) {
                 const linkPos = this.parsePos(this.memory.basePlan.linkPositions.controller)
                 for (const pos of linkPos.getInRange(1)) {
                     if (!pos.isWall && costs.get(pos.x, pos.y) < COST_FOR_UPGRADE_SPOT) {
@@ -297,7 +297,7 @@ Room.prototype.getMaxWork = function () {
 
     if (level === 8) {
         // if downgrade is close, upgrade
-        if (this.controller.ticksToDowngrade < 5000) {
+        if (this.controller.ticksToDowngrade < 120000) {
             this.heap.upgrading = true
             return 15
         }

@@ -6,7 +6,7 @@ Flag.prototype.harass = function (number = 2) {
         return
     }
     const defenders = Overlord.getCreepsByRole(roomName, 'colonyDefender')
-    const activeDefender = defenders.find(creep => creep.spawning || creep.ticksToLive > 500)
+    const activeDefender = defenders.find(creep => creep.spawning || (creep.ticksToLive > 500))
     if (!activeDefender) {
         closestMyRoom.requestColonyDefender(roomName, { doCost: false })
         return

@@ -10,7 +10,7 @@ const MANAGER_MAX_CARRY = 24
 const ENERGY_LEVEL_TO_REPAIR_RAMPARTS = 10
 
 global.EMERGENCY_WORK_MAX = 100
-global.WALL_HITS_PER_RCL = 200000
+global.RAMPART_HITS_PER_RCL = 200000
 
 global.SPAWN_PRIORITY = {
     'hauler': 2,
@@ -83,7 +83,7 @@ Room.prototype.manageSpawn = function () {
     // laborer 생산
 
     let maxWork = 0
-    const repairingForNuke = this.memory.defenseNuke && ['build', 'repair'].includes(this.memory.defenseNuke.state) && this.energyLevel > 50
+    const repairingForNuke = this.isReactingToNukes() && this.energyLevel > 50
     if (repairingForNuke) {
         maxWork = EMERGENCY_WORK_MAX
     } else {
@@ -101,11 +101,12 @@ Room.prototype.manageSpawn = function () {
     } else {
         if (numLaborer < maxNumLaborer && this.laborer.numWork < maxWork) {
             if (repairingForNuke) {
-                this.requestLaborer(Math.min(maxWork - this.laborer.numWork, this.laborer.numWorkEach), 'XLH2O')
+                const boost = this.hasEnoughCompounds('XLH2O') ? 'XLH2O' : undefined
+                this.requestLaborer(Math.min(maxWork - this.laborer.numWork, this.laborer.numWorkEach), boost)
             } else if (this.getIsNeedBoostedUpgrader()) {
                 this.requestLaborer(Math.min(maxWork - this.laborer.numWork, this.laborer.numWorkEach), 'XGH2O')
             } else {
-                this.requestLaborer(Math.min(maxWork - this.laborer.numWork, this.laborer.numWorkEach), false)
+                this.requestLaborer(Math.min(maxWork - this.laborer.numWork, this.laborer.numWorkEach))
             }
         }
     }
@@ -198,6 +199,15 @@ Room.prototype.manageSpawn = function () {
     this.heap.spawnQueue = []
 }
 
+Room.prototype.hasEnoughCompounds = function (resourceType, ratio = 0.5) {
+    if (!Memory.stats || !Memory.stats.resources) {
+        return false
+    }
+    const numMaxRclRoom = Overlord.myRooms.filter(room => room.controller.level === 8).length
+    const boostThreshold = numMaxRclRoom * AMOUNT_TO_ACCUMULATE_BOOSTS * ratio
+    return Memory.stats.resources[resourceType] > boostThreshold
+}
+
 Room.prototype.getIsNeedBoostedUpgrader = function () {
     if (this.heap.constructing) {
         return false
@@ -205,9 +215,7 @@ Room.prototype.getIsNeedBoostedUpgrader = function () {
     if (this.controller.level === 8) {
         return false
     }
-    const numMaxRclRoom = Overlord.myRooms.filter(room => room.controller.level === 8).length
-    const boostThreshold = numMaxRclRoom * AMOUNT_TO_ACCUMULATE_BOOSTS / 2
-    return Memory.stats.resources['XGH2O'] > boostThreshold
+    return this.hasEnoughCompounds('XGH2O')
 }
 
 Room.prototype.hasAvailableSpawn = function () {
@@ -225,7 +233,11 @@ Room.prototype.getMaxNumManager = function () {
     if (!this.storage) {
         return 0
     }
-    return Math.max(1, this.structures.link.length - 1)
+    let result = Math.max(1, this.structures.link.length - 1)
+    if (this.memory.militaryThreat) {
+        result += 2
+    }
+    return result
 }
 
 
@@ -246,11 +258,7 @@ Room.prototype.getNeedWallMaker = function () {
         return this.energyLevel >= 210
     }
 
-    if (this.controller.level === 8) {
-        return this.energyLevel >= 180
-    }
-
-    const threshold = (this.controller.level - 3) * WALL_HITS_PER_RCL
+    const threshold = this.controller.level === 8 ? 5000000 : (this.controller.level - 3) * RAMPART_HITS_PER_RCL
 
     // 넘으면 멈춤
     if (weakestRampart.hits > threshold) {
@@ -375,23 +383,23 @@ Room.prototype.requestMiner = function (source, priority) {
     let body = []
     if (source.linked) {
         if (maxEnergy >= 800) {
-            body = [WORK, WORK, WORK, WORK, WORK, WORK, MOVE, MOVE, MOVE, CARRY]
+            body = [WORK, WORK, WORK, WORK, WORK, MOVE, MOVE, WORK, MOVE, CARRY]
         } else if (maxEnergy >= 700) { //여력이 되면
-            body = [WORK, WORK, WORK, WORK, WORK, MOVE, MOVE, MOVE, CARRY]
+            body = [WORK, WORK, WORK, WORK, MOVE, MOVE, WORK, MOVE, CARRY]
         } else if (maxEnergy >= 550) {
-            body = [WORK, WORK, WORK, WORK, CARRY, MOVE, MOVE]
+            body = [WORK, WORK, WORK, MOVE, WORK, CARRY, MOVE]
         } else {
             body = [WORK, WORK, CARRY, MOVE]
         }
     } else {
         if (maxEnergy >= 750) {
-            body = [WORK, WORK, WORK, WORK, WORK, WORK, MOVE, MOVE, MOVE]
+            body = [WORK, WORK, WORK, WORK, WORK, MOVE, MOVE, WORK, MOVE]
         } else if (maxEnergy >= 650) { //여력이 되면
-            body = [WORK, WORK, WORK, WORK, WORK, MOVE, MOVE, MOVE]
+            body = [WORK, WORK, WORK, WORK, MOVE, MOVE, WORK, MOVE]
         } else if (maxEnergy >= 550) {
             body = [WORK, WORK, WORK, WORK, WORK, MOVE]
         } else {
-            body = [WORK, WORK, MOVE, MOVE]
+            body = [WORK, MOVE, WORK, MOVE]
         }
     }
 
@@ -466,16 +474,28 @@ Room.prototype.requestHauler = function (numCarry, option = { isUrgent: false, o
  * @param {string} boost - name of resource used to be boost
  * @returns 
  */
-Room.prototype.requestLaborer = function (numWork, boost = false) {
+Room.prototype.requestLaborer = function (numWork, boost = undefined) {
     if (!this.hasAvailableSpawn()) {
         return
     }
 
     let body = []
-    const maxWork = Math.min(2 * Math.ceil(numWork / 2), this.laborer.numWorkEach)
-    for (let i = 0; i < maxWork / 2; i++) {
-        body.push(MOVE, CARRY, WORK, WORK)
+
+    const maxWork = Math.min(numWork, this.laborer.numWorkEach)
+
+    for (let i = 0; i < maxWork - 1; i++) {
+        body.push(WORK)
     }
+
+    for (let i = 0; i < maxWork - 1; i++) {
+        body.push(CARRY)
+    }
+
+    for (let i = 0; i < maxWork - 1; i++) {
+        body.push(MOVE)
+    }
+
+    body.push(WORK, CARRY, MOVE)
 
     const name = `${this.name} laborer ${Game.time}_${this.spawnQueue.length}`
 
@@ -504,9 +524,19 @@ Room.prototype.requestWallMaker = function () {
     const maxWork = Math.min(16, Math.floor(this.energyCapacityAvailable / 200))
 
     let body = []
-    for (let i = 0; i < maxWork; i++) {
-        body.push(MOVE, CARRY, WORK)
+    for (let i = 0; i < maxWork - 1; i++) {
+        body.push(WORK)
     }
+
+    for (let i = 0; i < maxWork - 1; i++) {
+        body.push(CARRY)
+    }
+
+    for (let i = 0; i < maxWork - 1; i++) {
+        body.push(MOVE)
+    }
+
+    body.push(WORK, CARRY, MOVE)
 
     const name = `${this.name} wallMaker ${Game.time}_${this.spawnQueue.length}`
 
@@ -824,8 +854,17 @@ Room.prototype.requestDepositWorker = function (depositRequest) {
     }
 
     let body = []
-    for (let i = 0; i < 5; i++) {
-        body.push(MOVE, MOVE, MOVE, MOVE, MOVE, CARRY, CARRY, WORK, WORK, WORK)
+
+    for (let i = 0; i < 15; i++) {
+        body.push(WORK)
+    }
+
+    for (let i = 0; i < 10; i++) {
+        body.push(CARRY)
+    }
+
+    for (let i = 0; i < 25; i++) {
+        body.push(MOVE)
     }
 
     const name = `${depositRequest.depositId} depositWorker ${Game.time}_${this.spawnQueue.length}`

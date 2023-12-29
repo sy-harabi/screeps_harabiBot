@@ -36,7 +36,7 @@ const WORKSPACE_COST = 5
 const ROAD_COST = 1
 const INSIDE_COST = 0
 
-const RAMPART_BUILD_LEVEL = 5
+const RAMPART_BUILD_LEVEL = 4
 
 const CLUSTER_STAMP = [
   { x: -1, y: -1, structureType: 'spawn' },
@@ -174,6 +174,7 @@ Room.prototype.getBasePlanByPos = function (pos) {
   let result = this.getBasePlanAfterMincut(anchorPos, mincut.costsForBasePlan, mincut, costs)
 
   if (result.score === 0) {
+    console.log('score 0')
     const region = [pos]
     result = this.getBasePlanByRegion(region)
   }
@@ -684,6 +685,7 @@ Room.prototype.getBasePlanAfterMincut = function (pos, inputCosts, mincut, costs
   const firstAnchor = pos.getClusterAnchor(inputCosts)
 
   if (!firstAnchor) {
+    console.log('no first anchor')
     return { basePlan, score: 0 }
   }
   const costs = inputCosts.clone()
@@ -1538,7 +1540,7 @@ RoomPosition.prototype.getClusterAnchor = function (costs) {
       return false
     }
     const pos = new RoomPosition(x, y, this.roomName)
-    if (!pos.constructible) {
+    if (pos.isWall) {
       return false
     }
     area.push(new RoomPosition(x, y, this.roomName))

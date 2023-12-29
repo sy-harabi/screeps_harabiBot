@@ -1,7 +1,9 @@
 global.TRAFFIC_TEST = false
 
+const CPU_CHECK = false
+
 Room.prototype.manageTraffic = function () {
-  const CPUbefore = TRAFFIC_TEST ? Game.cpu.getUsed() : undefined
+  const CPUbefore = CPU_CHECK ? Game.cpu.getUsed() : undefined
 
   const creeps = this.find(FIND_MY_CREEPS).sort((a, b) => b.getStuckTick() - a.getStuckTick())
   const movingCreepIndexes = []
@@ -36,7 +38,7 @@ Room.prototype.manageTraffic = function () {
     }
   }
 
-  if (TRAFFIC_TEST && this.isMy) {
+  if (CPU_CHECK && this.isMy) {
     const usedCPU = Game.cpu.getUsed() - CPUbefore - numMoved * 0.2
     console.log(`use ${usedCPU.toFixed(2)} cpu for ${numMoved} moves`)
     console.log(`use ${(usedCPU / numMoved).toFixed(2)} cpu for each move`)

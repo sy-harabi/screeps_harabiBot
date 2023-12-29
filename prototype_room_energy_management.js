@@ -9,11 +9,11 @@ let MinHeap = require('./util_min_heap')
 const ENERGY_PRIORITY = {
     extension: 1,
     spawn: 1,
+    lab: 1,
     tower: 1,
     link: 1,
     container: 2,
     terminal: 7,
-    lab: 8,
     factory: 9,
     nuker: 10,
     storage: 11,

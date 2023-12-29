@@ -18,17 +18,9 @@ Room.prototype.defenseNuke = function () {
   status.state = status.state || 'init'
   this.visual.text(`☢️${status.state}`, this.controller.pos.x + 0.75, this.controller.pos.y + 1.5, { align: 'left' })
 
-  const structureTypeToDefend = ['storage', 'terminal', 'powerSpawn', 'nuker', 'factory', 'spawn', 'tower', 'lab']
+  const structureTypeToDefend = ['storage', 'terminal', 'powerSpawn', 'nuker', 'factory', 'spawn', 'tower', 'lab', 'rampart']
 
   if (status.state === 'init') {
-    // 일단 짓고있는 거 다 멈춰
-    const constructionSites = this.find(FIND_CONSTRUCTION_SITES)
-    for (const constructionSite of constructionSites) {
-      if (constructionSite.structureType !== 'rampart') {
-        constructionSite.remove()
-      }
-    }
-
     // 모든 nuke에 대해 실행
     for (const nuke of nukes) {
       status.nukes = status.nukes || []
@@ -133,6 +125,11 @@ Room.prototype.defenseNuke = function () {
         }
         threshold += 5150000
       }
+      const structures = rampart.pos.lookFor(LOOK_STRUCTURES)
+      const isExistingRampart = !structures.some(structure => structure.structureType !== 'rampart' && structureTypeToDefend.includes(structure.structureType))
+      if (isExistingRampart) {
+        threshold += 2000000
+      }
       if (rampart.hits < threshold) {
         this.visual.text(`${Math.floor(100 * rampart.hits / threshold)}%`, rampart.pos)
         return this.repairStructure(rampart)
@@ -183,4 +180,14 @@ Room.prototype.repairStructure = function (rampart) {
     // energy 있으면 일해라
     laborer.repairMy(rampartLowest)
   }
+}
+
+Room.prototype.isReactingToNukes = function () {
+  if (!this.memory.defenseNuke) {
+    return false
+  }
+  if (!['build', 'repair'].includes(this.memory.defenseNuke.state)) {
+    return false
+  }
+  return true
 }

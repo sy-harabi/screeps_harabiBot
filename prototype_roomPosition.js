@@ -134,6 +134,14 @@ Object.defineProperties(RoomPosition.prototype, {
     }
 })
 
+RoomPosition.prototype.getTaxiRangeTo = function (target) {
+    const targetPos = target.pos || target
+    if (this.roomName !== targetPos.roomName) {
+        return Infinity
+    }
+    return Math.abs(this.x - targetPos.x) + Math.abs(this.y - targetPos.y)
+}
+
 RoomPosition.prototype.lookForConstructible = function (vectorArray) {
     for (const vector of vectorArray) {
         const x = this.x + vector.x
@@ -224,6 +232,17 @@ RoomPosition.prototype.getClosestByPath = function (array) {
     }
     const path = search.path
     return path[path.length - 1]
+}
+
+RoomPosition.prototype.getClosestTaxiRange = function (array) {
+    let result = Infinity
+    for (const obj of array) {
+        const newResult = this.getTaxiRangeTo(obj)
+        if (newResult < result) {
+            result = newResult
+        }
+    }
+    return result
 }
 
 RoomPosition.prototype.getClosestRange = function (array) {

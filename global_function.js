@@ -54,8 +54,6 @@ global.info = function () {
     }
 }
 
-Memory.autoClaim
-
 global.autoClaim = function () {
     if (Memory.autoClaim) {
         Memory.autoClaim = false
@@ -166,7 +164,7 @@ global.claim = function (targetRoomName, baseName) {
     return `${baseName} starts claim protocol to ${targetRoomName}`
 }
 
-global.cancleAllClaim = function () {
+global.cancelAllClaim = function () {
     const myRooms = Overlord.myRooms
     for (const room of myRooms) {
         delete room.memory.claimRoom
@@ -288,4 +286,3 @@ global.logSend = function (resourceType) {
         console.log(`${transaction.from} sent ${transaction.amount} of ${transaction.resourceType} to ${transaction.to}`)
     }
 }
-

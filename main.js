@@ -7,6 +7,7 @@ require('function_visualizeRoomInfo')
 require('global_business')
 require('global_function')
 require('grafana_stats')
+require('hasRespawned')
 require('manager_attack')
 require('manager_base')
 require('manager_claim')
@@ -21,8 +22,10 @@ require('manager_reconstruction')
 require('manager_room')
 require('manager_remote')
 require('manager_scout')
+require('manager_tower')
 require('manager_traffic')
 require('manager_war')
+require('overlord_allies')
 require('overlord_metric')
 require('overlord_military')
 require('overlord_tasks_deposit')
@@ -49,6 +52,7 @@ require('prototype_room_spawn_management')
 require('prototype_room_work_management')
 require('prototype_room_powerSpawn_operation')
 require('util_base_planner')
+require('util_combat_analysis')
 require('util_defenseCostMatrix')
 require('util_dijkstra')
 require('util_distance_transform')
@@ -69,6 +73,21 @@ module.exports.loop = () => {
     Overlord.memHack.pretick()
 
     profiler.wrap(function () {
+        if (hasRespawned()) {
+            RawMemory.set('{}');
+            for (const key in Memory) {
+                delete Memory[key]
+            }
+            global.Heap = {
+                rooms: new Map(),
+                creeps: new Map(),
+                sources: new Map(),
+                quads: new Map(),
+                overlord: {}
+            }
+        }
+
+
         // bucket check. 8000 5000 2000
         if (data.enoughCPU && Game.cpu.bucket < 5000) { // stop market, highwaymining
             data.enoughCPU = false
@@ -97,16 +116,7 @@ module.exports.loop = () => {
         if (Memory.globalReset === undefined) {
             console.log(`Global reset happens at ${Game.time}`)
             Memory.globalReset = Game.time
-            return
         }
-
-        // Overlord 동작
-
-        Overlord.pretick()
-
-        Overlord.classifyCreeps()
-
-        Overlord.runTasks()
 
         // flag 실행
 
@@ -178,7 +188,23 @@ module.exports.loop = () => {
                 flag.siegeRoom()
                 continue
             }
+            if (name.includes('nuke')) {
+                flag.nukeRoom()
+                flag.remove()
+                continue
+            }
+            if (name.includes('dismantle')) {
+                flag.dismantleRoom()
+                continue
+            }
         }
+
+        // Overlord 동작
+        Overlord.classifyCreeps()
+
+        Overlord.runTasks()
+
+        Overlord.manageAllies()
 
         if (Memory.siege) {
             for (const roomName of Object.keys(Memory.siege)) {
@@ -258,12 +284,10 @@ module.exports.loop = () => {
             Overlord.observeRoom(data.observe.roomName, data.observe.tick)
         }
 
-        if (data.enoughCPU) {
-            const terminal = Overlord.structures.terminal.sort()[data.terminalOrder]
-            data.terminalOrder = (data.terminalOrder + 1) % (Overlord.structures.terminal.length)
-            if (terminal && (!Memory.abandon || !Memory.abandon.includes(terminal.room.name))) {
-                terminal.run()
-            }
+        const terminal = Overlord.structures.terminal.sort()[data.terminalOrder]
+        data.terminalOrder = (data.terminalOrder + 1) % (Overlord.structures.terminal.length)
+        if (terminal && (!Memory.abandon || !Memory.abandon.includes(terminal.room.name))) {
+            terminal.run()
         }
 
         if (data.info) {

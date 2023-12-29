@@ -16,13 +16,13 @@ Overlord.managePowerBankTasks = function () {
 
     if (!roomInCharge) {
       data.recordLog(`POWERBANK: stopped powerBank mining at ${targetRoomName}. no room in charge`, targetRoomName)
-      this.deleteTask('powerBank', powerBankRequest)
+      this.deleteTask(powerBankRequest)
       continue
     }
 
     if (powerBankRequest.completed === true) {
       data.recordLog(`POWERBANK: ${roomInCharge.name} completed powerBank mining at ${targetRoomName}. returned Power: ${powerBankRequest.amountReturned || 0}/${powerBankRequest.amount}`, roomInCharge.name)
-      this.deleteTask('powerBank', powerBankRequest)
+      this.deleteTask(powerBankRequest)
       continue
     }
 
@@ -164,7 +164,7 @@ Room.prototype.runPowerBankRequest = function (powerBankRequest) {
   if (powerBankRequest.sendHaulers) {
     const haulersCarryCapacity = highwayHaulers.reduce((prev, current) => prev + current.store.getCapacity(), 0)
     if (haulersCarryCapacity < powerBankRequest.amount) {
-      const numCarry = Math.ceil((powerBankRequest.amount - haulersCarryCapacity) / 50)
+      const numCarry = Math.max(10, Math.ceil((powerBankRequest.amount - haulersCarryCapacity) / 50))
       this.requestHighwayHauler(targetRoomName, RESOURCE_POWER, numCarry)
     }
   }
@@ -235,6 +235,9 @@ Overlord.checkPowerBanks = function (targetRoomName) {
       return false
     }
     if (room.memory.militaryThreat) {
+      return false
+    }
+    if (room.isReactingToNukes()) {
       return false
     }
     if (room.energyLevel < 120) {
@@ -446,8 +449,10 @@ Creep.prototype.highwayHaul = function (powerBankRequest) {
 
   if (isEnemyCombatant) {
     for (const combatant of enemyCombatants) {
-      if (this.pos.getRangeTo(combatant.pos) < 10) {
-        this.fleeFrom(enemyCombatants, 15)
+      const range = this.pos.getRangeTo(combatant.pos)
+      if (range < 10) {
+        const maxRooms = range < 5 ? 2 : 1
+        this.fleeFrom(enemyCombatants, 15, maxRooms)
         return
       }
     }

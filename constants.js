@@ -124,52 +124,7 @@ global.ECONOMY_STANDARD = {
     8: 160000,
 }
 
-global.BUFFER = {
-    1: 1000,
-    2: 1000,
-    3: 1000,
-    4: 2000,
-    5: 3000,
-    6: 5000,
-    7: 7000,
-    8: 10000,
-}
-
-global.WORK_BY_CONTROLLER_LEVEL = [
-    { min: 0, max: 0 },
-    { min: 4, max: 4 },
-    { min: 4, max: 16 },
-    { min: 4, max: 20 },
-    { min: 6, max: 24 },
-    { min: 9, max: 27 },
-    { min: 10, max: 33 },
-    { min: 10, max: 32 },
-]
-
 global.BASIC_MINERALS = ['H', 'O', 'Z', 'K', 'U', 'L', 'X']
-
-global.ATTACK_BOOST_COMPOUNDS_TIER2 = {
-    UH2O: { ratio: 2, resourceType0: 'UH', resourceType1: 'OH' },
-    KHO2: { ratio: 2, resourceType0: 'KO', resourceType1: 'OH' },
-    LHO2: { ratio: 2, resourceType0: 'LO', resourceType1: 'OH' },
-    ZHO2: { ratio: 2, resourceType0: 'ZO', resourceType1: 'OH' },
-    GHO2: { ratio: 2, resourceType0: 'GO', resourceType1: 'OH' },
-}
-
-global.ATTACK_BOOST_COMPOUNDS_TIER3 = {
-    XUH2O: { ratio: 2, resourceType0: 'UH2O', resourceType1: 'X' },
-    XKHO2: { ratio: 2, resourceType0: 'KHO2', resourceType1: 'X' },
-    XLHO2: { ratio: 2, resourceType0: 'LHO2', resourceType1: 'X' },
-    XZHO2: { ratio: 2, resourceType0: 'ZHO2', resourceType1: 'X' },
-    XGHO2: { ratio: 2, resourceType0: 'GHO2', resourceType1: 'X' },
-}
-
-global.BASE_COMPOUNDS = {
-    OH: { ratio: 2, resourceType0: 'O', resourceType1: 'H' },
-    ZK: { ratio: 2, resourceType0: 'Z', resourceType1: 'K' },
-    UL: { ratio: 2, resourceType0: 'U', resourceType1: 'L' },
-    G: { ratio: 2, resourceType0: 'ZK', resourceType1: 'UL' },
-}
 
 global.TIER1_COMPOUNDS = {
     UH: { ratio: 2, resourceType0: 'U', resourceType1: 'H' },
@@ -286,46 +241,29 @@ global.BOOSTS_EFFECT = {
 }
 
 global.USEFULL_COMPOUNDS = [
+    // for defense
     'XUH2O',
     'UH2O',
     'UH',
+
+    // for blinky quad
     'XKHO2',
-    'XLH2O',
     'XLHO2',
-    'XZH2O',
     'XZHO2',
     'XGHO2',
+
+    // for defense (reparing)
+    'XLH2O',
+
+    // for dismantler
+    'XZH2O',
+
+    // for upgrade
     'XGH2O',
+
+    // for nuke
     'G'
 ]
-
-global.COMPOUNDS_MANUFACTURING_TIME = {
-    ZO: 10,
-    KO: 10,
-    UH: 10,
-    LO: 10,
-    OH: 20,
-    ZK: 5,
-    UL: 5,
-    UO: 10,
-    UH2O: 35,
-    UHO2: 35,
-    KHO2: 35,
-    LHO2: 35,
-    ZHO2: 35,
-    G: 15,
-    GO: 25,
-    GH: 25,
-    GHO2: 75,
-    GH2O: 60,
-    XUH2O: 95,
-    XUHO2: 95,
-    XKHO2: 95,
-    XLHO2: 95,
-    XZHO2: 95,
-    XGH2O: 140,
-    XGHO2: 225,
-}
 
 global.CONTROLLER_PROGRESS_TO_LEVELS = {
     1: 0,
@@ -364,13 +302,6 @@ global.FACTORY_COMPONENTS = {
     oxidant: { O: 500, energy: 200 }
 }
 
-global.FACTORY_OBJECTIVES = {
-    biological: ['cell', 'phlegm', 'tissue', 'muscle', 'organoid', 'organism', 'biomass'],
-    mystical: ['condensate', 'concentrate', 'extract', 'spirit', 'emanation', 'essence', 'mist'],
-    mechanical: ['alloy', 'tube', 'fixtures', 'frame', 'hydraulics', 'machine', 'metal'],
-    electronical: ['wire', 'switch', 'transistor', 'microchip', 'circuit', 'device', 'silicon']
-}
-
 global.COMMODITIES_TO_SELL = [
     'biomass', 'mist', 'metal', 'silicon',
     'cell', 'phlegm', 'tissue', 'muscle', 'organoid', 'organism',
@@ -378,8 +309,6 @@ global.COMMODITIES_TO_SELL = [
     'alloy', 'tube', 'fixtures', 'frame', 'hydraulics', 'machine',
     'wire', 'switch', 'transistor', 'microchip', 'circuit', 'device',
 ]
-
-global.COMMODITIES_AMOUNT_TO_KEEP = [5000, 300, 30, 10, 5, 5]
 
 global.RESOURCES_TO_FACTORY = {
     RESOURCE_SILICON: 'silicon',

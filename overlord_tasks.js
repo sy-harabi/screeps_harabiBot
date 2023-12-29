@@ -28,7 +28,8 @@ Overlord.registerTask = function (category, task) {
   tasks[task.id] = task
 }
 
-Overlord.deleteTask = function (category, task) {
+Overlord.deleteTask = function (task) {
+  const category = task.category
   const tasks = this.getTasksWithCategory(category)
   delete tasks[task.id]
   return

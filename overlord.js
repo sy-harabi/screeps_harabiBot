@@ -163,8 +163,8 @@ Overlord.observeRoom = function (roomName) {
 }
 
 Overlord.classifyCreeps = function () {
-  if (this._classifiedCreeps !== undefined) {
-    return this._classifiedCreeps
+  if (Game._classifiedCreeps !== undefined) {
+    return Game._classifiedCreeps
   }
 
   const creeps = Object.values(Game.creeps)
@@ -205,12 +205,7 @@ Overlord.classifyCreeps = function () {
       result[creep.assignedRoom][creep.memory.role].push(creep)
     }
   }
-  return this._classifiedCreeps = result
-}
-
-Overlord.pretick = function () {
-  delete this._numClassified
-  delete this._classifiedCreeps
+  return Game._classifiedCreeps = result
 }
 
 Overlord.getNumCreepsByRole = function (roomName, role) {

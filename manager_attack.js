@@ -34,7 +34,7 @@ Flag.prototype.attackRoom = function () {
         }
         delete this.memory
         this.remove()
-        // this.pos.createFlag(this.name + '`')
+        this.pos.createFlag(this.name + '`')
         return
     }
 

@@ -23,7 +23,6 @@ Room.prototype.runRoomManager = function () {
     this.manageLink()
 
     this.manageDefense()
-    this.defenseNuke()
 
     if (!this.memory.defenseNuke || this.memory.defenseNuke.state !== 'repair' || this.memory.militaryThreat) {
         this.manageWork()
@@ -39,6 +38,7 @@ Room.prototype.runRoomManager = function () {
         this.manageScout()
         this.manageClaim()
         this.fillNuker()
+        this.defenseNuke()
     }
 
     this.manageEnergy()
@@ -359,22 +359,18 @@ Room.prototype.manageLink = function () {
 }
 
 Room.prototype.manageLab = function () {
-    const boostRequests = Object.values(this.boostQueue)
-    if (boostRequests.length > 0) {
-        this.manageBoost(boostRequests)
-        return
-    }
-
-    if (!data.okCPU) {
-        return
-    }
-
     const terminal = this.terminal
     if (!terminal) {
         return
     }
 
     if (!this.labs) {
+        return
+    }
+
+    const boostRequests = Object.values(this.boostQueue)
+    if (boostRequests.length > 0) {
+        this.manageBoost(boostRequests)
         return
     }
 

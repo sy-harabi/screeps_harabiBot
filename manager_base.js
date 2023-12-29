@@ -4,7 +4,8 @@ Room.prototype.manageConstruction = function () {
     }
 
     if (this.controller.level < this.memory.level) {
-        return this.memory.level = 0
+        this.memory.level = 0
+        return
     }
 
     if (this.controller.level === this.memory.level) {
@@ -36,7 +37,9 @@ Room.prototype.constructByBasePlan = function (level) {
             this.memory.doOptimizeBasePlan = true
             return false
         }
-        if (!this.getBasePlanBySpawn(spawn)) {
+        console.log('get base plan by spawn')
+        if (!this.getBasePlanBySpawn()) {
+            console.log('fail')
             return false
         }
     }

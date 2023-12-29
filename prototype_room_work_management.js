@@ -132,6 +132,7 @@ Room.prototype.manageUpgrade = function () {
     const tombstones = this.controller.pos.findInRange(FIND_TOMBSTONES, 3).filter(tombstone => tombstone.store[RESOURCE_ENERGY] > 0)
     const droppedEnergies = this.controller.pos.findInRange(FIND_DROPPED_RESOURCES, 3).filter(droppedResource => droppedResource.resourceType === RESOURCE_ENERGY)
     const droppedEnergy = droppedEnergies[0]
+
     for (const laborer of laborers) {
         if (laborer.memory.boosted === false && laborer.ticksToLive > 0.8 * CREEP_LIFE_TIME) { // boost 예약이 안되어있으면 undefined. boost 되었으면 true
             continue
@@ -264,6 +265,13 @@ Creep.prototype.repairMy = function (target) {
 Creep.prototype.upgradeRCL = function () {
     const controller = this.room.controller
 
+    if (!controller.sign || controller.sign.username !== this.owner.username) {
+        if (this.pos.getRangeTo(controller.pos) > 1) {
+            this.moveMy({ pos: controller.pos, range: 1 })
+            return
+        }
+        this.signController(controller, "A creep can do what he wants, but not want what he wants.")
+    }
 
     if (this.pos.getRangeTo(controller) > 3) {
         this.moveMy({ pos: controller.pos, range: 3 })

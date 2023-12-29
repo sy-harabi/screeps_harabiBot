@@ -427,7 +427,9 @@ function colonyHauler(creep) {
         }
 
         const spawn = room.structures.spawn[0]
-        creep.moveMy({ pos: spawn.pos, range: 3 })
+        if (spawn) {
+            creep.moveMy({ pos: spawn.pos, range: 3 })
+        }
         return
     }
 
