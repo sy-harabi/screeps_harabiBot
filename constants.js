@@ -1,4 +1,14 @@
-global.MY_NAME = 'Harabi'
+global.MY_NAME = (function () {
+    const rooms = Object.values(Game.rooms)
+    for (const room of rooms) {
+        if (!room.controller) {
+            continue
+        }
+        if (room.controller.my) {
+            return room.controller.owner.username
+        }
+    }
+})()
 
 global.SHARD = Game.shard.name
 
@@ -251,19 +261,22 @@ global.USEFULL_COMPOUNDS = [
     'XLHO2',
     'XZHO2',
     'XGHO2',
-
-    // for defense (reparing)
-    'XLH2O',
-
-    // for dismantler
-    'XZH2O',
-
-    // for upgrade
-    'XGH2O',
-
-    // for nuke
-    'G'
 ]
+
+if (SHARD !== 'swc') {
+    USEFULL_COMPOUNDS.push(
+        // for defense (reparing)
+        'XLH2O',
+
+        // for dismantler
+        'XZH2O',
+
+        // for upgrade
+        'XGH2O',
+
+        // for nuke
+        'G')
+}
 
 global.CONTROLLER_PROGRESS_TO_LEVELS = {
     1: 0,

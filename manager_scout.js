@@ -194,13 +194,24 @@ Room.prototype.scoutRoom = function (roomName, distance, lastScout) {
     return this.acquireVision(roomName)
   }
 
-  if (roomType === 'crossing') {
+  if (['highway', 'crossing'].includes(roomType)) {
     const portals = room.structures.portal
-    const positions = []
+
     for (const portal of portals) {
-      positions.push(packCoord(portal.pos.x, portal.pos.y))
+      const packed = packCoord(portal.pos.x, portal.pos.y)
+
+      const destination = portal.destination
+
+      const shard = destination.shard
+      const destinationPosPacked = destination.roomName ? packCoord(destination.x, destination.y) : undefined
+      const roomName = shard ? destination.room : destination.roomName
+
+      const portalInfo = { shard, roomName, packed: destinationPosPacked }
+
+      room.memory.portalInfo = room.memory.portalInfo || {}
+
+      room.memory.portalInfo[packed] = portalInfo
     }
-    room.memory.portalPositions = positions
   }
 
   // highway고 distance 5 이내면 deposit check.
@@ -211,7 +222,9 @@ Room.prototype.scoutRoom = function (roomName, distance, lastScout) {
   const info = room.getInfo(this.name, distance, lastScout)
   map[roomName] = { ...map[roomName], ...info }
 
-  this.tryRemote(roomName)
+  if (info.isRemoteCandidate) {
+    this.tryRemote(roomName)
+  }
 
   if (Memory.autoClaim && map[roomName].isClaimCandidate && Overlord.myRooms.length < Game.gcl.level) {
     claim(roomName, this.name)
@@ -230,7 +243,9 @@ Room.prototype.checkHighway = function (roomName) {
     return
   }
 
-  Overlord.checkPowerBanks(roomName)
+  if (SHARD !== 'swc') {
+    Overlord.checkPowerBanks(roomName)
+  }
   Overlord.checkDeposits(roomName)
 }
 
@@ -391,18 +406,21 @@ Room.prototype.getInfo = function (host, distance, lastScout) {
   const mineralType = this.mineral ? this.mineral.mineralType : undefined
 
   const isController = this.controller ? true : false
-  const isClaimedByOther = isController && this.controller.owner && (this.controller.owner.username !== MY_NAME)
+  const owner = isController && this.controller.owner ? this.controller.owner.username : undefined
+  const isClaimedByOther = owner && (owner !== MY_NAME)
+  const isReservedByAllies = isController && this.controller.reservation && allies.includes(this.controller.reservation.username)
 
   const numTower = this.structures.tower.filter(tower => tower.RCLActionable).length
 
   const isAccessibleToContorller = this.getAccessibleToController()
   const inaccessible = (((!this.isMy) && numTower > 0) || (isController && !isAccessibleToContorller)) ? (Game.time + SCOUT_DECAY) : 0
 
-  const isRemoteCandidate = isAccessibleToContorller && inaccessible < Game.time && !isClaimedByOther && (numSource > 0)
+  const isRemoteCandidate = isAccessibleToContorller && inaccessible < Game.time && !isReservedByAllies && !isClaimedByOther && (numSource > 0)
   const isClaimCandidate = isAccessibleToContorller && inaccessible < Game.time && !isClaimedByOther && (distance > 2) && (numSource > 1) && !Overlord.remotes.includes(this.name)
 
   return {
     host,
+    owner,
     distance,
     lastScout,
 

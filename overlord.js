@@ -66,15 +66,6 @@ global.Overlord = {
   }
 }
 
-Overlord.purgeMapInfo = function () {
-  const map = this.map
-  for (const roomName in map) {
-    if (!map[roomName].lastScout || Game.time > map[roomName].lastScout + EXPIRATION_PERIOD) {
-      delete map[roomName]
-    }
-  }
-}
-
 Overlord.mapInfo = function () {
   if (Memory.showMapInfo === 0) {
     return

@@ -1,10 +1,6 @@
 "use strict";
-
-const allies = [
-  'MarvinTMB',
-];
 // This is the conventional segment used for team communication
-const allySegmentID = 90;
+const allySegmentID = 77;
 
 // This isn't in the docs for some reason, so we need to add it
 const maxSegmentsOpen = 10;
@@ -15,6 +11,16 @@ const EFunnelGoalType = {
   RCL7: 1,
   RCL8: 2
 };
+
+const requestTypes = [
+  'resource',
+  'defense',
+  'attack',
+  'player',
+  'work',
+  'funnel',
+  'room',
+]
 
 //
 class SimpleAllies {
@@ -28,17 +34,12 @@ class SimpleAllies {
   /**
    * To call before any requests are made or responded to. Configures some required values and gets ally requests
    */
-  initRun() {
-    // Reset the data of myRequests
-    this.myRequests = {
-      resource: [],
-      defense: [],
-      attack: [],
-      player: [],
-      work: [],
-      funnel: [],
-      room: [],
-    };
+  initRun(roomName) {
+    // Reset the data of myRequests for roomName
+    for (const requestType of requestTypes) {
+      const requests = this.myRequests[requestType] || []
+      this.myRequests[requestType] = requests.filter(request => request.roomName !== roomName)
+    }
     this.readAllySegment();
   }
 
@@ -46,7 +47,7 @@ class SimpleAllies {
    * Try to get segment data from our current ally. If successful, assign to the instane
    */
   readAllySegment() {
-    if (!allies.length) {
+    if (allies.length === undefined) {
       throw Error("Failed to find an ally for simpleAllies, you probably have none :(");
     }
     this.currentAlly = allies[Game.time % allies.length];
@@ -178,7 +179,6 @@ class SimpleAllies {
 }
 
 module.exports = {
-  allies: allies,
   allySegmentID: allySegmentID,
   EFunnelGoalType: EFunnelGoalType,
   simpleAllies: new SimpleAllies()

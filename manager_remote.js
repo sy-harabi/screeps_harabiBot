@@ -3,11 +3,11 @@ const TICKS_TO_SQUASH_EFFICIENCY = 10000
 const TICKS_TO_CHECK_INFRA = 3000
 const TICKS_TO_CHECK_EFFICIENCY = 9000
 
-const DEFENDER_LOST_ENERGY_LIMIT_PER_RCL = 2500
+const DEFENDER_LOST_ENERGY_LIMIT_PER_RCL = 1000
 
 const RESERVE_TICK_THRESHOLD = 1000
 
-const HAULER_RATIO = 0.43 // 0.4 is ideal.
+global.HAULER_RATIO = 0.43 // 0.4 is ideal.
 
 const NUM_WORK_TO_CONSTRUCT = 6
 
@@ -45,6 +45,10 @@ Room.prototype.manageRemotes = function () {
 
             const status = this.getRemoteStatus(remoteName)
 
+            if (Memory.rooms[remoteName].forbidden) {
+                continue
+            }
+
             if (status.abandon) {
                 if (status.abandon > Game.time) {
                     const abandonTimerPos = new RoomPosition(25, 5, remoteName)
@@ -79,7 +83,6 @@ Room.prototype.manageRemotes = function () {
 
     for (const remoteName of this.memory.activeRemotes) {
         const status = this.getRemoteStatus(remoteName)
-
         if (status.abandon && status.abandon > Game.time) {
             continue
         }
@@ -198,6 +201,11 @@ Room.prototype.operateRemote = function (remoteName) {
         new RoomVisual(remoteName).text(`👿Invader`, visualPos.x, visualPos.y - 1)
         Game.map.visual.text(`👿`, invaderVisualPos, { backgroundColor: '#000000', align: 'left', fontSize: 5, opacity: 1 })
         const defenderTotalCost = (status.enemyTotalCost || 0) * 1.2
+
+        if (defenderTotalCost > threshold) {
+            this.abandonRemote(remoteName)
+        }
+
         return this.sendTroops(remoteName, defenderTotalCost)
     } else {
         this.addRemoteThreatLevel(remoteName, -1)
@@ -223,7 +231,7 @@ Room.prototype.getEnemyCombatants = function () {
     if (this._enemyCombatants !== undefined) {
         return this._enemyCombatants
     }
-    const enemyCreeps = this.find(FIND_HOSTILE_CREEPS)
+    const enemyCreeps = this.findHostileCreeps()
     const enemyCombatants = enemyCreeps.filter(creep => creep.checkBodyParts(['attack', 'ranged_attack']))
     return this._enemyCombatants = enemyCombatants
 }
@@ -284,10 +292,12 @@ Room.prototype.sendTroops = function (roomName, cost, options) {
     const mergedOptions = { ...defaultOptions, ...options }
     const { distance, task } = mergedOptions
 
+    const buffer = 100
+
     let colonyDefenders = Overlord.getCreepsByRole(roomName, 'colonyDefender')
 
     if (distance > 0) {
-        colonyDefenders = colonyDefenders.filter(creep => (creep.ticksToLive || 1500) > (distance + creep.body.length * CREEP_SPAWN_TIME))
+        colonyDefenders = colonyDefenders.filter(creep => (creep.ticksToLive || 1500) > (distance + creep.body.length * CREEP_SPAWN_TIME + buffer))
     }
 
     const requestedCost = cost
@@ -585,8 +595,6 @@ Room.prototype.getRemoteExtractStat = function (remoteName) {
 
     return this._remoteExtractStatus[remoteName] = result
 }
-
-
 
 Room.prototype.constructRemote = function (remoteName) {
     const remote = Game.rooms[remoteName]
@@ -942,7 +950,7 @@ Room.prototype.checkRemoteInvader = function (remoteName) {
         return status.isInvader
     }
 
-    const hostileCreeps = remote.find(FIND_HOSTILE_CREEPS).filter(creep => creep.checkBodyParts(['work', 'attack', 'ranged_attack', 'heal', 'claim']))
+    const hostileCreeps = remote.findHostileCreeps().filter(creep => creep.checkBodyParts(['work', 'attack', 'ranged_attack', 'heal', 'claim']))
     const hostileAttackers = []
     const hostileCombatants = []
 
@@ -1151,8 +1159,8 @@ Room.prototype.getRemoteInfraPlan = function (remoteName, reconstruction = false
             plainCost: 2,
             swampCost: 4, // swampCost higher since road is more expensive on swamp
             roomCallback: function (roomName) {
-                const remoteNames = thisRoom.memory.remotes ? Object.keys(thisRoom.memory.remotes) : []
-                // if room is not target room and not base room and not one of my remote, do not use that room.
+                const remoteNames = thisRoom.memory.activeRemotes ? thisRoom.memory.activeRemotes : []
+                // if room is not target room and not base room and not one of my active remote, do not use that room.
                 if (roomName !== remoteName && roomName !== thisRoom.name && !remoteNames.includes(roomName)) {
                     return false
                 }

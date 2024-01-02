@@ -1,3 +1,4 @@
+require('allies')
 require('constants')
 require('overlord')
 require('creep_combatants')
@@ -14,6 +15,7 @@ require('manager_claim')
 require('manager_defense')
 require('manager_defenseNuke')
 require('manager_dismantleRoom')
+require('manager_harass_portal')
 require('manager_harass')
 require('manager_clearAll')
 require('manager_lootRoom')
@@ -197,14 +199,16 @@ module.exports.loop = () => {
                 flag.dismantleRoom()
                 continue
             }
+            if (name.includes('flanking')) {
+                flag.portalFlanking()
+                continue
+            }
         }
 
         // Overlord 동작
         Overlord.classifyCreeps()
 
         Overlord.runTasks()
-
-        Overlord.manageAllies()
 
         if (Memory.siege) {
             for (const roomName of Object.keys(Memory.siege)) {
@@ -298,7 +302,6 @@ module.exports.loop = () => {
                 console.log(err)
             }
         } else {
-            Overlord.purgeMapInfo()
             new RoomVisual().text('time: ' + Game.time, 0, 46, { align: 'left' })
             new RoomVisual().text('CPU: ' + Game.cpu.getUsed(), 0, 47, { align: 'left' })
             new RoomVisual().text(`bucket: ${Game.cpu.bucket}(${data.enoughCPU ? 'market, ' : ''}${data.okCPU ? 'lab' : ''})`, 0, 49, { align: 'left' })

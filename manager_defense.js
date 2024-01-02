@@ -7,11 +7,34 @@ global.DANGER_TILE_COST = 254
 
 Room.prototype.manageDefense = function () {
     this.memory.defense = this.memory.defense || {}
+
     const status = this.memory.defense
     status.state = status.state || 'normal'
-    const targets = this.find(FIND_HOSTILE_CREEPS)
-    const targetPowerCreeps = this.find(FIND_POWER_CREEPS)
+
+    const targets = this.findHostileCreeps()
+
+    if (targets.length > 0) {
+        this.memory.lastHostileTick = Game.time
+    }
+
+    if (this.memory.level >= 4) {
+        if (this.memory.publicRampart && targets.length > 0) {
+            for (const rampart of this.structures.rampart) {
+                rampart.setPublic(false)
+            }
+            this.memory.publicRampart = false
+        } else if (!this.memory.publicRampart && Game.time > (this.memory.lastHostileTick || 0) + 10) {
+            for (const rampart of this.structures.rampart) {
+                rampart.setPublic(true)
+            }
+            this.memory.publicRampart = true
+        }
+    }
+
+    const targetPowerCreeps = this.find(FIND_POWER_CREEPS).filter(creep => !creep.my)
+
     const aggressiveTargets = targets.filter(creep => creep.checkBodyParts(INVADER_BODY_PARTS))
+
     aggressiveTargets.push(...targetPowerCreeps)
 
     if (aggressiveTargets.length === 0 && status.state === 'normal') {
@@ -37,7 +60,7 @@ Room.prototype.manageDefense = function () {
         for (const hauler of this.creeps.hauler) {
             hauler.memory.role = 'manager'
         }
-    } else if (status.state === 'emergency' && (invulnerables.length === 0 || attackPowerTotal === 0 || this.controller.safeMode)) {
+    } else if (status.state === 'emergency' && invulnerables.length === 0 && (attackPowerTotal === 0 || this.controller.safeMode)) {
         data.recordLog('WAR: Emergency ended', this.name)
         status.state = 'normal'
         delete status.startTick
@@ -61,7 +84,7 @@ Room.prototype.manageDefense = function () {
         }
     }
 
-    if (invulnerables.length > 0 && !this.isWalledUp && this.controller.level >= 3 && !this.controller.safeMode && !this.controller.safeModeCooldown) {
+    if (invulnerables.length > 0 && !this.isWalledUp && this.controller.level >= 2 && !this.controller.safeMode && !this.controller.safeModeCooldown) {
         const invaderName = invulnerables[0].owner.username
         data.recordLog(`WAR: Emergency occured by ${invaderName}. safemode activated`, this.name, 0)
         this.controller.activateSafeMode()
@@ -190,6 +213,10 @@ Room.prototype.manageTower = function (targets) {
 }
 
 Room.prototype.manageEmergency = function () {
+    if (!this.isWalledUp) {
+        return
+    }
+
     // get rampart anchors and visualize
     const rampartAnchors = this.rampartAnchors
     for (const pos of rampartAnchors) {
@@ -464,7 +491,7 @@ Room.prototype.getRampartAnchorsStatus = function () {
     if (this._rampartAnchorsStatus) {
         return this._rampartAnchorsStatus
     }
-    const intruders = this.find(FIND_HOSTILE_CREEPS).filter(creep => creep.checkBodyParts(['work', 'attack', 'ranged_attack', 'heal']))
+    const intruders = this.findHostileCreeps().filter(creep => creep.checkBodyParts(['work', 'attack', 'ranged_attack', 'heal']))
     const result = {}
     const rampartAnchors = this.rampartAnchors
 
@@ -782,7 +809,7 @@ Room.prototype.getDefensiveAssessment = function () {
     const sources = []
 
     // positions of creeps which can kill mine are sources
-    const killerCreeps = this.find(FIND_HOSTILE_CREEPS).filter(creep => creep.checkBodyParts(['attack', 'ranged_attack', 'work', 'heal']))
+    const killerCreeps = this.findHostileCreeps().filter(creep => creep.checkBodyParts(['attack', 'ranged_attack', 'work', 'heal']))
     for (const creep of killerCreeps) {
         sources.push(creep.pos)
     }
@@ -1266,16 +1293,10 @@ Room.prototype.requestRoomDefender = function (boost) {
 }
 
 Creep.prototype.holdBunker = function () {
-    const adjacentTargets = this.pos.findInRange(FIND_HOSTILE_CREEPS, 1).sort((a, b) => a.hits - b.hits)
+    const hostileCreeps = this.room.findHostileCreeps()
+    const adjacentTargets = this.pos.findInRange(hostileCreeps, 1).sort((a, b) => a.hits - b.hits)
     if (adjacentTargets.length > 0) {
         if (this.attack(adjacentTargets[0]) === OK) {
-            this.say('⚔️', true)
-            return OK
-        }
-    }
-    const rangedTargets = this.pos.findInRange(FIND_HOSTILE_CREEPS, 3).sort((a, b) => a.hits - b.hits)
-    if (rangedTargets.length > 0) {
-        if (this.rangedAttack(rangedTargets[0]) === OK) {
             this.say('⚔️', true)
             return OK
         }

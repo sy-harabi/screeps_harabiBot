@@ -31,7 +31,7 @@ Creep.prototype.fleeFrom = function (from, range = 10, maxRooms = 2) {
     return
   }
 
-  visualizePath(path)
+  visualizePath(path, this.pos)
   const nextPos = path[0]
 
   if (nextPos) {

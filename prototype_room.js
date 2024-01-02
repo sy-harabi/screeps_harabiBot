@@ -38,7 +38,9 @@ Object.defineProperties(Room.prototype, {
             this._sources = this.find(FIND_SOURCES)
             if (this.controller) {
                 this._sources = this._sources.sort((a, b) => a.info.maxCarry - b.info.maxCarry)
-                this.heap.sources = this._sources.map(source => source.id)
+                if (this.structures.spawn.length > 0) {
+                    this.heap.sources = this._sources.map(source => source.id)
+                }
                 return this._sources
             }
             this.heap.sources = this._sources.map(source => source.id)
@@ -186,15 +188,6 @@ Object.defineProperties(Room.prototype, {
                 costs.set(hubCenterPos.x, hubCenterPos.y, COST_FOR_HUB_CENTER)
             }
 
-            if (this.isMy && this.memory.basePlan) {
-                const linkPos = this.parsePos(this.memory.basePlan.linkPositions.controller)
-                for (const pos of linkPos.getInRange(1)) {
-                    if (!pos.isWall && costs.get(pos.x, pos.y) < COST_FOR_UPGRADE_SPOT) {
-                        costs.set(pos.x, pos.y, COST_FOR_UPGRADE_SPOT)
-                    }
-                }
-            }
-
             return this.heap.basicCostmatrix = costs
         }
     },
@@ -284,7 +277,7 @@ Room.prototype.getMaxWork = function () {
         if (this.constructionSites.length > 0) {
             const basicNumWork = (this.heap.sourceUtilizationRate || 0) * Math.max(numWorkEach, 4)
             const remoteSurplusNumWork = Math.max(0, (this.heap.remoteIncome || 0))
-            return this.heap.maxWork = Math.floor(basicNumWork + remoteSurplusNumWork / 3)
+            return this.heap.maxWork = Math.floor(basicNumWork + remoteSurplusNumWork / 2)
         }
         // former is spawn limit. latter is income limit
         const basicNumWork = (this.heap.sourceUtilizationRate || 0) * 16
@@ -363,13 +356,12 @@ Room.prototype.getBasicSpawnCapacity = function () {
     result += 3 * Math.min(12, Math.floor(this.energyCapacityAvailable / 150), 16) * numManager
 
     //laborer
-    const basicNumWork = (this.storage ? 1 : (this.heap.sourceUtilizationRate || 0)) * 16
-    const remoteSurplusNumWork = Math.max(0, (this.heap.remoteIncome || 0))
-    result += Math.floor(basicNumWork + remoteSurplusNumWork) * 2
+    const basicNumWork = (this.storage ? 1 : (this.heap.sourceUtilizationRate || 0)) * 12
+    result += Math.floor(basicNumWork) * 3
 
     //extractor
-    if (level >= 6 && this.structures.extractor.length > 0) {
-        result += 50
+    if (level >= 6 && this.structures.extractor.length > 0 && this.mineral.mineralAmount > 0) {
+        result += Math.min(10, Math.floor(this.energyAvailable / 450)) * 5
     }
 
     return this._basicSpawnCapacity = result
@@ -388,14 +380,17 @@ Room.prototype.getRemoteSpawnCapacity = function (remoteName) {
 
     let result = 0
 
+    const reserve = this.energyCapacityAvailable > 650
+
     for (const info of Object.values(status.infraPlan)) {
+        if (this.controller.level < 8) {
+            result += 3 * (reserve ? 6 : 3) // upgrader. assume income is 6e/tick
+        }
         result += 13 // miner
-        result += Math.floor(info.pathLength * 0.45 * 1.5) // hauler
+        result += Math.floor(info.pathLength * HAULER_RATIO * 1.5) // hauler
     }
 
-    const reserving = this.getRemoteReserveTick(remoteName) > 0
-
-    if (!reserving) {
+    if (!reserve) {
         result = result * 0.5
     } else if (result > 0) {
         result += 10 // reserver. 2/tick

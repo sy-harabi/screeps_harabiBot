@@ -747,7 +747,13 @@ Room.prototype.getBasePlanAfterMincut = function (pos, inputCosts, mincut, costs
   // source
   // find closest position by Path
   const containerPositions = {}
-  for (const source of this.sources.sort((a, b) => b.range.spawn - a.range.spawn)) {
+  const option = { ignoreCreeps: true, range: 1 }
+  const sourcesSorted = this.sources.sort((a, b) => {
+    const aPathLength = a.pos.findPathTo(firstSpawnPos, option).length
+    const bPathLength = b.pos.findPathTo(firstSpawnPos, option).length
+    return bPathLength - aPathLength
+  })
+  for (const source of sourcesSorted) {
     const containerPos = firstAnchor.pos.getClosestByPath(source.pos.getAtRange(1).filter(pos => !pos.isWall && costs.get(pos.x, pos.y) !== ROAD_COST))
     if (!containerPos) {
       console.log(`cannot find container pos of ${source.id}`)
@@ -824,7 +830,7 @@ Room.prototype.getBasePlanAfterMincut = function (pos, inputCosts, mincut, costs
     console.log(`cannot find container pos of controller`)
   }
 
-  // Flood fill labs && extensions && observer, factory, nuker
+  // Flood fill 10 labs && 60 extensions && 1 observer, 1 factory, 1 nuker
   const floodFill = this.floodFill(structures.road, { costMatrix: costs, visual: false })
 
   const floodFillPositions = floodFill.positions
@@ -895,6 +901,7 @@ Room.prototype.getBasePlanAfterMincut = function (pos, inputCosts, mincut, costs
       costsForRoad.set(pos.x, pos.y, STRUCTURE_COST)
     }
   }
+
   if (floodFillResults.length < 63) {
     console.log(`not enough extensions`)
     return { basePlan: basePlan, score: 0 }
@@ -1251,16 +1258,13 @@ Room.prototype.getBasePlanAfterMincut = function (pos, inputCosts, mincut, costs
 
   // place towers
   const ramparts = [...cuts]
-  let towerPosCandidates = insides.filter(pos => costs.get(pos.x, pos.y) === 0)
+  const floodFillAllPositions = floodFill.allPositions
+  let towerPosCandidates = floodFillAllPositions.filter(pos => costs.get(pos.x, pos.y) === 0)
   towerPosCandidates.push(...floodFillResults)
 
   while (structures.tower.length < 6) {
     if (structures.tower.length === 0) {
-      const rampartPos = ramparts[0]
-
-      const range = rampartPos.getClosestRange(towerPosCandidates)
-      const candidates = towerPosCandidates.filter(pos => pos.getRangeTo(rampartPos) <= range)
-      const towerPos = candidates.sort((a, b) => a.getAverageRange(ramparts) - b.getAverageRange(ramparts))[0]
+      const towerPos = towerPosCandidates.sort((a, b) => a.getAverageRange(ramparts) - b.getAverageRange(ramparts))[0]
 
       structures.tower.push(towerPos)
 
@@ -1300,6 +1304,8 @@ Room.prototype.getBasePlanAfterMincut = function (pos, inputCosts, mincut, costs
       towerPosCandidates = towerPosCandidates.filter(pos => !pos.isEqualTo(towerPos))
     }
   }
+
+  structures.tower.sort((a, b) => a.getRangeTo(firstSpawnPos) - b.getRangeTo(firstSpawnPos))
 
   // road to tower
   for (const towerPos of structures.tower) {

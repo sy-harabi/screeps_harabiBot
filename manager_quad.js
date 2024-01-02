@@ -490,7 +490,7 @@ Quad.prototype.attackRoom = function () {
   const nextPos = this.pos.getNextPosFromPath(path)
 
   if (nextPos) {
-    visualizePath(path, nextPos)
+    visualizePath(path, this.pos)
     if (this.isAbleToStep(nextPos)) {
       const direction = this.pos.getDirectionTo(nextPos)
       this.move(direction)
@@ -818,10 +818,10 @@ Quad.prototype.getSkirmishPath = function (quadCostArray) {
   }
 
   const hostileStructures = this.room.find(FIND_HOSTILE_STRUCTURES).filter(structure => structure.hits)
-  const hostileCreeps = this.room.find(FIND_HOSTILE_CREEPS)
+  const hostileCreeps = this.room.findHostileCreeps()
   const goals = []
 
-  const structureRange = 1
+  const structureRange = 0
   for (const structure of hostileStructures) {
     const pos = structure.pos
     for (const vector of FORMATION_VECTORS_REVERSED) {
@@ -920,9 +920,10 @@ Quad.prototype.getCostArrayForBulldoze = function () {
 }
 
 Quad.prototype.rangedMassAttack = function () {
+  const hostileCreeps = this.room.findHostileCreeps()
   for (const creep of this.creeps) {
-    const hostileCreeps = creep.pos.findInRange(FIND_HOSTILE_CREEPS, 3)
-    if (hostileCreeps.length > 0) {
+    const hostileCreepsInRange = creep.pos.findInRange(hostileCreeps, 3)
+    if (hostileCreepsInRange.length > 0) {
       creep.rangedMassAttack()
     }
   }
@@ -1430,7 +1431,7 @@ Quad.prototype.moveInFormation = function (goals) {
 
 
   const path = search.path
-  visualizePath(path)
+  visualizePath(path, this.pos)
 
   const nextPos = path[0]
 
@@ -1505,7 +1506,7 @@ Quad.prototype.getDamageArray = function () {
     costArray[i] = towerDamageArray[i]
   }
 
-  const hostileCreeps = this.room.find(FIND_HOSTILE_CREEPS)
+  const hostileCreeps = this.room.findHostileCreeps()
   for (const creep of hostileCreeps) {
     if (creep.attackPower > 0) {
       for (const pos of creep.pos.getInRange(1)) {

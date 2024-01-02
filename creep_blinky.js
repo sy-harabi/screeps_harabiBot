@@ -74,6 +74,8 @@ Creep.prototype.handleCombatants = function (targets) {
 }
 
 Creep.prototype.harasserRangedAttack = function () {
+  const allies = this.room.find(FIND_CREEPS).filter(creep => creep.isAlly)
+  const isAlly = this.pos.findInRange(allies)
 
   let rangedMassAttackTotalDamage = 0
 
@@ -83,7 +85,7 @@ Creep.prototype.harasserRangedAttack = function () {
   let rangedAttackTarget = undefined
 
   for (const pos of positions) {
-    const priorityTarget = pos.lookFor(LOOK_CREEPS).find(creep => !creep.my)
+    const priorityTarget = pos.lookFor(LOOK_CREEPS).find(creep => !creep.my && !creep.isAlly())
 
     if (!priorityTarget) {
       continue
@@ -100,7 +102,7 @@ Creep.prototype.harasserRangedAttack = function () {
     if (priorityTarget.my === false) {
       const range = this.pos.getRangeTo(pos)
 
-      if (range <= 1) {
+      if (range <= 1 && !isAlly) {
         this.rangedMassAttack()
         return OK
       }
@@ -113,7 +115,7 @@ Creep.prototype.harasserRangedAttack = function () {
     }
   }
 
-  if (rangedMassAttackTotalDamage >= rangedAttackPower) {
+  if (rangedMassAttackTotalDamage >= rangedAttackPower && !isAlly) {
     this.rangedMassAttack()
     return OK
   }

@@ -193,7 +193,7 @@ Room.prototype.operateBoost = function (boostRequest) {
         return ERR_INVALID_ARGS
     }
 
-    if (!terminal || reactionLabs.length < resourceTypes.length) {
+    if (!terminal || reactionLabs.length < resourceTypes.length + 2) {
         data.recordLog(`ERROR: boosting ${targetCreep.name} failed. no terminal or lab`, this.name)
         delete targetCreep.memory.boosted
         delete this.memory.boostState

@@ -10,7 +10,7 @@ const MANAGER_MAX_CARRY = 24
 const ENERGY_LEVEL_TO_REPAIR_RAMPARTS = 10
 
 global.EMERGENCY_WORK_MAX = 100
-global.RAMPART_HITS_PER_RCL = 200000
+global.RAMPART_HITS_PER_RCL = 100000
 
 global.SPAWN_PRIORITY = {
     'hauler': 2,
@@ -19,31 +19,31 @@ global.SPAWN_PRIORITY = {
 
     'attacker': 2,
     'healer': 2,
+    'claimer': 2,
+    'pioneer': 2,
 
     'manager': 3,
-    'scouter': 3,
-    'laborer': 3,
-    'wallMaker': 3,
     'distributor': 3,
+    'laborer': 3,
 
-    'powerBankAttacker': 4,
-    'powerBankHealer': 4,
+    'colonyDefender': 4,
+    'reserver': 4.1,
+    'colonyMiner': 4.2,
+    'colonyHauler': 4.3,
 
-    'highwayHauler': 5,
-    'colonyDefender': 5,
+    'wallMaker': 5.1,
+    'scouter': 5.2,
 
-    'reserver': 6,
-    'colonyMiner': 6,
+    'powerBankAttacker': 6,
+    'powerBankHealer': 6,
 
-    'colonyHauler': 7,
-
+    'highwayHauler': 7,
 
     'researcher': 8,
-    'extractor': 8,
+    'extractor': 8.1,
 
-    'claimer': 9,
     'dismantler': 9,
-    'pioneer': 9,
+
     'depositWorker': 9,
     'looter': 9
 }
@@ -53,7 +53,7 @@ Room.prototype.manageSpawn = function () {
         return ERR_BUSY
     }
 
-    if (!this.structures.tower.length && this.find(FIND_HOSTILE_CREEPS).length && !this.creeps.colonyDefender.length) {
+    if (!this.structures.tower.length && this.findHostileCreeps().length && !this.creeps.colonyDefender.length) {
         this.requestColonyDefender(this.name)
     }
 
@@ -215,6 +215,9 @@ Room.prototype.getIsNeedBoostedUpgrader = function () {
     if (this.controller.level === 8) {
         return false
     }
+    if (!this.terminal || this.structures.lab.length < 3) {
+        return false
+    }
     return this.hasEnoughCompounds('XGH2O')
 }
 
@@ -240,7 +243,6 @@ Room.prototype.getMaxNumManager = function () {
     return result
 }
 
-
 Room.prototype.getNeedWallMaker = function () {
     if (this.structures.rampart.length === 0) {
         return false
@@ -258,7 +260,9 @@ Room.prototype.getNeedWallMaker = function () {
         return this.energyLevel >= 210
     }
 
-    const threshold = this.controller.level === 8 ? 5000000 : (this.controller.level - 3) * RAMPART_HITS_PER_RCL
+    const rampartsHitsPerRcl = this.memory.rampartsHitsPerRcl || RAMPART_HITS_PER_RCL
+
+    const threshold = this.controller.level === 8 ? 5000000 : (this.controller.level - 3) * rampartsHitsPerRcl
 
     // 넘으면 멈춤
     if (weakestRampart.hits > threshold) {
@@ -681,9 +685,9 @@ Room.prototype.requestColonyDefender = function (colonyName, options = {}) {
         return
     }
 
-    const defaultOptions = { doCost: true, bodyLengthMax: 5, waitForTroops: false, task: undefined }
+    const defaultOptions = { doCost: true, bodyLengthMax: 5, waitForTroops: false, task: undefined, portalFlag: undefined }
     const mergedOptions = { ...defaultOptions, ...options }
-    const { doCost, bodyLengthMax, waitForTroops, task } = mergedOptions
+    const { doCost, bodyLengthMax, waitForTroops, task, portalFlag } = mergedOptions
 
     let body = []
     let cost = 0
@@ -728,6 +732,10 @@ Room.prototype.requestColonyDefender = function (colonyName, options = {}) {
         base: this.name,
         colony: colonyName,
         waitForTroops: waitForTroops
+    }
+
+    if (portalFlag) {
+        memory.portalFlag = portalFlag
     }
 
     if (task) {

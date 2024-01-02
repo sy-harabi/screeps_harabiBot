@@ -254,7 +254,7 @@ Room.prototype.manageEnergySupply = function (arrayOfCreeps) {
     for (const request of requestsArray) {
         request.applicants = new MinHeap(a => a.pos.getRangeTo(request.pos))
         for (const applicant of applicants) {
-            if (request.priority === 1 && applicant.creep.memory.role === 'colonyHauler' && applicant.pos.getRangeTo(request.pos) > 5) {
+            if (this.storage && applicant.creep.memory.role === 'colonyHauler' && applicant.pos.getRangeTo(request.pos) > 5) {
                 continue
             }
             request.applicants.insert(applicant)

@@ -1,18 +1,21 @@
+const { simpleAllies } = require("./simpleAllies")
+
 const MINERAL_AMOUNT_TO_KEEP = 3600
 const MINERAL_AMOUNT_TO_SELL = 50000
 const MINERAL_AMOUNT_BUFFER = 10000
-const BOOST_RCL_ENERGY_LEVEL_GOAL = 3
-const ENERGY_LEVEL_TO_BE_HELPED = -5
 const TERMINAL_ENERGY_THRESHOLD_TO_HELP = 20000
 
 StructureTerminal.prototype.run = function () {
     const roomName = this.room.name
+    simpleAllies.initRun(roomName)
 
     if (Memory.abandon && Memory.abandon.includes(roomName)) {
+        simpleAllies.endRun()
         return
     }
 
     if (this.cooldown) {
+        simpleAllies.endRun()
         return
     }
 
@@ -47,12 +50,14 @@ StructureTerminal.prototype.run = function () {
             }
             const amount = Math.floor(TERMINAL_ENERGY_THRESHOLD_TO_HELP / 2)
             if (room.terminal.send(RESOURCE_ENERGY, amount, roomName) === OK) {
+                simpleAllies.endRun()
                 return
             }
         }
         Business.buy(RESOURCE_ENERGY, 20000, roomName)
-
     }
+
+    simpleAllies.endRun()
 }
 
 Room.prototype.getNeedsHelp = function () {
@@ -116,21 +121,40 @@ StructureTerminal.prototype.gatherResource = function (resourceType, amount, opt
 }
 
 StructureTerminal.prototype.manageMinerals = function () {
+    const roomName = this.room.name
     const resourceTypes = [...BASIC_MINERALS].sort((a, b) => this.store[a] - this.store[b])
+    const mineralAmountToSell = Math.min(MINERAL_AMOUNT_TO_SELL, 7200 + Overlord.myRooms.length * 2000)
+    const mineralAmountToSend = 7200 + Overlord.myRooms.length * 1000
+
+    const requests = simpleAllies.allySegmentData ? simpleAllies.allySegmentData.requests : undefined
+    const resourceRequests = requests ? requests.resource : undefined
+    const resourceRequestsSorted = resourceRequests ? resourceRequests.sort((a, b) => b.priority - a.priority) : undefined
+
     for (const resourceType of resourceTypes) {
-        const roomName = this.room.name
         const storeAmount = this.store[resourceType]
         const energyAmount = this.store[RESOURCE_ENERGY]
         // sell if amount excess threshold
 
-        if (!this.room.memory[`sell${resourceType}`] && storeAmount > MINERAL_AMOUNT_TO_SELL) {
+        if (storeAmount > mineralAmountToSend) {
+            if (resourceRequestsSorted) {
+                const priorityRequest = resourceRequestsSorted.find(request => request.resourceType === resourceType && request.terminal)
+                if (priorityRequest) {
+                    const amount = Math.min(1000, priorityRequest.amount)
+                    if (this.send(resourceType, amount, priorityRequest.roomName, 'my gift for ally')) {
+                        continue
+                    }
+                }
+            }
+        }
+
+        if (!this.room.memory[`sell${resourceType}`] && storeAmount > mineralAmountToSell) {
             this.room.memory[`sell${resourceType}`] = true
-        } else if (this.room.memory[`sell${resourceType}`] && storeAmount <= MINERAL_AMOUNT_TO_SELL - MINERAL_AMOUNT_BUFFER) {
+        } else if (this.room.memory[`sell${resourceType}`] && storeAmount <= mineralAmountToSell - MINERAL_AMOUNT_BUFFER) {
             this.room.memory[`sell${resourceType}`] = false
         }
 
-        if (this.room.memory[`sell${resourceType}`]) {
-            const amount = Math.min(energyAmount, storeAmount - MINERAL_AMOUNT_TO_SELL + MINERAL_AMOUNT_BUFFER)
+        if (this.room.memory[`sell${resourceType}`] && (SHARD !== 'swc' || resourceType !== 'X')) {
+            const amount = Math.min(energyAmount, storeAmount - mineralAmountToSell + 1000)
             Business.sell(resourceType, amount, roomName)
             continue
         }
@@ -149,7 +173,19 @@ StructureTerminal.prototype.manageMinerals = function () {
             continue
         }
 
+        const request = {
+            priority: 0.5,
+            roomName: roomName,
+            resourceType: resourceType,
+            amount: amountNeeded,
+            terminal: true
+        }
+
+        simpleAllies.requestResource(request)
+
         //try buy
-        Business.buy(resourceType, amountNeeded, roomName)
+        if (SHARD !== 'swc' || resourceType !== 'X') {
+            Business.buy(resourceType, amountNeeded, roomName)
+        }
     }
 }

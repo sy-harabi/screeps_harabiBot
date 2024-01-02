@@ -98,7 +98,7 @@ Creep.prototype.attackRoom = function (roomName) {
     }
 
     // attack anything else
-    const hostileCreeps = this.room.find(FIND_HOSTILE_CREEPS)
+    const hostileCreeps = this.room.findHostileCreeps()
     const hostileStructures = this.room.find(FIND_HOSTILE_STRUCTURES).filter(structure => {
         if (structure.structureType === 'controller') {
             return false
@@ -236,7 +236,7 @@ Room.prototype.getDamageArray = function () {
         costArray[i] = towerDamageArray[i]
     }
 
-    const hostileCreeps = this.find(FIND_HOSTILE_CREEPS)
+    const hostileCreeps = this.findHostileCreeps()
     for (const creep of hostileCreeps) {
         if (creep.attackPower > 0) {
             for (const pos of creep.pos.getInRange(1 + addedRange)) {
@@ -306,7 +306,7 @@ RoomPosition.prototype.getTotalHits = function () {
 }
 
 Creep.prototype.attackNear = function () {
-    const nearHostileCreep = this.room.find(FIND_HOSTILE_CREEPS).find(creep => this.pos.getRangeTo(creep) <= 1)
+    const nearHostileCreep = this.room.findHostileCreeps().find(creep => this.pos.getRangeTo(creep) <= 1)
 
     if (nearHostileCreep) {
         this.attack(nearHostileCreep)

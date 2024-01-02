@@ -286,3 +286,17 @@ global.logSend = function (resourceType) {
         console.log(`${transaction.from} sent ${transaction.amount} of ${transaction.resourceType} to ${transaction.to}`)
     }
 }
+
+global.setRampartsHits = function (roomName, threshold = undefined) {
+    roomName = roomName.toUpperCase()
+    const room = Game.rooms[roomName]
+    if (!room || !room.isMy) {
+        return
+    }
+    if (threshold) {
+        room.memory.rampartsHitsPerRcl = threshold
+    } else {
+        delete room.memory.rampartsHitsPerRcl
+    }
+    return
+}

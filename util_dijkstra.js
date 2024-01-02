@@ -58,11 +58,13 @@ Room.prototype.dijkstra = function (startPos, goals, costArray) {
   while (queue.getSize() > 0) {
 
     const currentPacked = queue.remove()
-    const currentCost = costs[currentPacked]
-    if (currentCost > costs[currentPacked]) {
-      console.log('current cost is higher')
-      continue
+
+    if (goalsPacked.has(currentPacked)) {
+      packedPath.unshift(currentPacked)
+      break
     }
+
+    const currentCost = costs[currentPacked]
     const parsed = parseCoord(currentPacked)
     // this.visual.text(currentCost, parsed.x, parsed.y, { font: 0.3 })
     const neighbors = surroundingPoses(parsed).map(parsed => packCoord(parsed.x, parsed.y))
@@ -80,10 +82,6 @@ Room.prototype.dijkstra = function (startPos, goals, costArray) {
       }
     }
 
-    if (goalsPacked.has(currentPacked)) {
-      packedPath.unshift(currentPacked)
-      break
-    }
   }
 
   if (packedPath.length === 0) {

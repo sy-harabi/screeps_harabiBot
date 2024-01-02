@@ -12,11 +12,15 @@ Overlord.respondToResourceRequests = function () {
 
   // Other players want resources, let's send them some!
 
-  const resourceRequests = simpleAllies.allySegmentData ? simpleAllies.allySegmentData.requests.resource : undefined
+  const requests = simpleAllies.allySegmentData ? simpleAllies.allySegmentData.requests : undefined
+  // console.log(JSON.stringify(requests))
+
+  const resourceRequests = requests ? requests.resource : undefined
+
   if (!resourceRequests) return
 
   for (const request of resourceRequests) {
-    // console.log(JSON.stringify(request))
+
   }
 }
 

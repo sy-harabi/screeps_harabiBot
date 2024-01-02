@@ -56,7 +56,7 @@
   }
 
   // check for 1 spawn
-  if (Object.keys(Game.spawns).length !== 1) {
+  if (Object.keys(Game.spawns).length > 1) {
     return false;
   }
 

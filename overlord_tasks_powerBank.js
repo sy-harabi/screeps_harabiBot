@@ -439,7 +439,7 @@ Creep.prototype.highwayHaul = function (powerBankRequest) {
     return
   }
 
-  if (!this.memory.supplying && (this.store.getUsedCapacity() > 0 || powerBankRequest.nothingLeft)) {
+  if (!this.memory.supplying && powerBankRequest.destroyed && (this.store.getFreeCapacity() === 0 || powerBankRequest.nothingLeft)) {
     this.memory.supplying = true
   }
 
@@ -576,7 +576,8 @@ Creep.prototype.attackPowerBank = function (powerBankRequest) {
     return
   }
 
-  const targets = this.pos.findInRange(FIND_HOSTILE_CREEPS, 1)
+  const hostileCreeps = this.room.findHostileCreeps()
+  const targets = this.pos.findInRange(hostileCreeps, 1)
   if (targets.length > 0) {
     this.attack(targets[0])
   }
@@ -598,9 +599,9 @@ Creep.prototype.attackPowerBank = function (powerBankRequest) {
   const enemyCombatants = this.room.getEnemyCombatants()
 
   if (enemyCombatants.length > 0) {
-
+    const range = this.memory.end ? 50 : 5
     const closesestEnemy = this.pos.findClosestByRange(enemyCombatants)
-    if (this.pos.getRangeTo(closesestEnemy) <= 5) {
+    if (this.pos.getRangeTo(closesestEnemy) <= range) {
       this.say('💢', true)
       this.heap.enemyDetected = Game.time
       this.moveMy(closesestEnemy)
@@ -616,6 +617,7 @@ Creep.prototype.attackPowerBank = function (powerBankRequest) {
   const powerBank = Game.getObjectById(powerBankRequest.powerBankId)
 
   if (!powerBank) {
+    this.memory.end = true
     return
   }
 

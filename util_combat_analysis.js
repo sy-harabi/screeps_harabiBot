@@ -38,7 +38,7 @@ Room.prototype.getInvulnerables = function (targets) {
 
   const result = []
 
-  const damage = this.frontLineTowersDamageMin * 0.9
+  const damage = (this.frontLineTowersDamageMin || (this.structures.tower.length * 300)) * 0.9
 
   const damageArray = new Uint16Array(2500)
   damageArray.fill(damage)
