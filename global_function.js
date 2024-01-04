@@ -1,3 +1,49 @@
+global.getRoomType = function (roomName) {
+    const roomCoord = getRoomCoord(roomName)
+    const x = roomCoord.x
+    const y = roomCoord.y
+    if (x % 10 === 0 && y % 10 === 0) {
+        return 'crossing'
+    }
+
+    if (x % 10 === 0 || y % 10 === 0) {
+        return 'highway'
+    }
+
+    if (x < 4 || x > 6 || y < 4 || y > 6) {
+        return 'normal'
+    }
+
+    return 'sourceKeeper'
+}
+
+global.getRoomCoord = function (roomName) {
+    roomName = roomName.name || roomName
+    const roomCoord = roomName.match(/[a-zA-Z]+|[0-9]+/g)
+    roomCoord[1] = Number(roomCoord[1])
+    roomCoord[3] = Number(roomCoord[3])
+    const x = roomCoord[1]
+    const y = roomCoord[3]
+    return { x, y }
+}
+
+global.isValidCoord = function (x, y) {
+    return x >= 0 && x <= 49 && y >= 0 && y <= 49
+}
+
+global.isEdgeCoord = function (x, y) {
+    return x === 0 || x === 49 || y === 0 || y === 49
+}
+
+global.packCoord = function (x, y) {
+    return 50 * y + x
+}
+global.parseCoord = function (packed) {
+    const x = packed % 50
+    const y = (packed - x) / 50
+    return { x, y }
+}
+
 global.info = function () {
     if (data.info) {
         data.info = false
@@ -8,44 +54,15 @@ global.info = function () {
     }
 }
 
-global.isValidCoord = function (x, y) {
-    if (x < 1) {
-        return false
+global.autoClaim = function () {
+    if (Memory.autoClaim) {
+        Memory.autoClaim = false
+        return 'deactivate automated claim'
+    } else {
+        Memory.autoClaim = true
+        return 'atcivate automated claim'
     }
-    if (x > 48) {
-        return false
-    }
-    if (y < 1) {
-        return false
-    }
-    if (y > 48) {
-        return false
-    }
-    return true
 }
-
-global.cleanRoomMemory = function () {
-    const colonyList = []
-    for (const myRoom of OVERLORD.myRooms) {
-        if (!myRoom.memory.colony) {
-            continue
-        }
-        for (const colonyName of Object.keys(myRoom.memory.colony)) {
-            colonyList.push(colonyName)
-        }
-    }
-    Memory.info = Memory.info || {}
-    Memory.info.numRemotes = colonyList.length
-    Object.keys(Memory.rooms).forEach( //메모리에 있는 방이름마다 검사
-        function (roomName) {
-            if (!Game.rooms[roomName] && !colonyList.includes(roomName)) { //해당 이름을 가진 방이 존재하지 않으면
-                delete Memory.rooms[roomName]; //메모리를 지운다
-            }
-        }
-    )
-    return 'cleaned room memory'
-}
-
 
 global.basePlan = function (roomName, numIteration = 10) {
 
@@ -53,56 +70,29 @@ global.basePlan = function (roomName, numIteration = 10) {
     return `observe room and get basePlan ${roomName.toUpperCase()} start`
 }
 
-global.observeRoom = function (roomName, tick) {
-
-    new RoomVisual().text(`ticks left: ${tick}`, 25, 45)
-    data.observe.tick--
-
-    const room = Game.rooms[roomName]
-
-    if (tick <= 0) {
-        data.info = true
-        if (room && !room.isMy) {
-            delete room.memory
-            delete room.heap
-        }
-        delete data.observe
-        return
-    }
-
-    data.info = false
-    const observer = OVERLORD.structures.observer.find(observer => Game.map.getRoomLinearDistance(observer.room.name, roomName) <= 10)
-    if (observer) {
-        observer.observeRoom(roomName)
-    }
-
-    if (!room) {
-        return
-    }
-
-    if (tick <= 5) {
-        Game.rooms[roomName].visualizeBasePlan()
-        return
-    }
-
-    Game.rooms[roomName].optimizeBasePlan(tick)
-    return
-}
-
-global.getMaximumPoint = function (array, func) {
+/**
+ * 
+ * @param {array} array - array of object 
+ * @param {function} func - function to calculate value 
+ * @returns - object which has maximum function value. undefined if array is empty
+ */
+global.getMaxObject = function (array, func) {
     if (!array.length) {
         return undefined
     }
     let maximumPoint = array[0]
+    let maximumValue = func(maximumPoint)
     for (const point of array) {
-        if (func(point) > func(maximumPoint)) {
+        const value = func(point)
+        if (value > maximumValue) {
             maximumPoint = point
+            maximumValue = value
         }
     }
     return maximumPoint
 }
 
-global.getMinimumPoint = function (array, func) {
+global.getMinObject = function (array, func) {
     if (!array.length) {
         return undefined
     }
@@ -115,164 +105,70 @@ global.getMinimumPoint = function (array, func) {
     return minimumPoint
 }
 
-global.abondon = function (roomName) {
-    if (!Memory.abondon) {
-        Memory.abondon = []
+global.abandon = function (roomName) {
+    if (!Memory.abandon) {
+        Memory.abandon = []
     }
-    Memory.abondon.push(roomName)
+    Memory.abandon.push(roomName)
 }
 
 global.checkCPU = function (name) {
-    if (!data.cpu) {
-        data.cpu = Game.cpu.getUsed()
+    if (!Game._cpu) {
+        Game._cpu = Game.cpu.getUsed()
     }
+
+    if (!name) {
+        Game._cpu = Game.cpu.getUsed()
+        return
+    }
+
     const cpu = Game.cpu.getUsed()
-    const cpuUsed = cpu - data.cpu
-    if (cpuUsed > 1) {
+    const cpuUsed = cpu - Game._cpu
+    if (cpuUsed > 0) {
         console.log(`tick: ${Game.time} | name: ${name} | used: ${cpuUsed} at `)
     }
-    data.cpu = cpu
+    Game._cpu = cpu
 }
 
-global.colonize = function (colonyName, baseName) {
-    colonyName = colonyName.toUpperCase()
-    const base = baseName ? Game.rooms[baseName.toUpperCase()] : findClosestMyRoom(colonyName)
+global.colonize = function (remoteName, baseName) {
+    remoteName = remoteName.toUpperCase()
+    const base = baseName ? Game.rooms[baseName.toUpperCase()] : Overlord.findClosestMyRoom(colonyName, 4)
     if (!base || !base.isMy) {
         console.log('invalid base')
         return
     }
-    baseName = base.name
-    if (base.memory.colony && base.memory.colony[colonyName]) {
+
+    const distance = Game.map.getRoomLinearDistance(baseName, remoteName)
+
+    if (distance > 2) {
+        console.log(`Remote ${remoteName} is too far from your base ${baseName}. distance is ${distance}`)
         return
     }
 
-    if (Memory.rooms[colonyName]) {
-        if (Memory.rooms[colonyName].host && Memory.rooms[colonyName].host !== baseName) {
-            return
-        }
-    }
+    base.memory.remotes = base.memory.remotes || {}
+    base.memory.remotes[remoteName] = base.memory.remotes[remoteName] || {}
 
-    if (!(base && base.isMy)) {
-        console.log(`Base ${baseName} is not your room`)
-        return
-    }
+    Memory.rooms[remoteName] = Memory.rooms[remoteName] || {}
+    Memory.rooms[remoteName].host = base.name
 
-    const distance = Game.map.getRoomLinearDistance(baseName, colonyName)
-
-    if (distance > 1) {
-        console.log(`Colony ${colonyName} is too far from your base ${baseName}. distance is ${distance}`)
-        return
-    }
-
-    base.memory.colony = base.memory.colony || {}
-    base.memory.colony[colonyName] = {}
-    return
+    console.log(`${baseName} colonize ${remoteName}. distance is ${distance}`)
+    return OK
 }
 
 global.claim = function (targetRoomName, baseName) {
     targetRoomName = targetRoomName.toUpperCase()
-    const base = baseName ? Game.rooms[baseName.toUpperCase()] : findClosestMyRoom(targetRoomName, 4)
+    const base = baseName ? Game.rooms[baseName.toUpperCase()] : Overlord.findClosestMyRoom(targetRoomName, 4)
     baseName = base.name
     base.memory.claimRoom = base.memory.claimRoom || {}
     base.memory.claimRoom[targetRoomName] = base.memory.claimRoom[targetRoomName] || {}
     return `${baseName} starts claim protocol to ${targetRoomName}`
 }
 
-global.classifyCreeps = function () {
-    const creepAction = require('creepAction')
-
-    if (Game._classifiedCreeps) {
-        return Game._classifiedCreeps
+global.cancelAllClaim = function () {
+    const myRooms = Overlord.myRooms
+    for (const room of myRooms) {
+        delete room.memory.claimRoom
     }
-    const creeps = Object.values(Game.creeps)
-    const result = {}
-    for (const roomName of Object.keys(Game.rooms)) {
-        result[roomName] = {}
-        for (const creepRole of CREEP_ROELS) {
-            result[roomName][creepRole] = []
-        }
-        result[roomName].wounded = []
-    }
-    for (const creep of creeps) {
-        if (!result[creep.assignedRoom]) {
-            result[creep.assignedRoom] = {}
-        }
-
-        if (creep.hitsMax - creep.hits) {
-            if (!result[creep.assignedRoom].wounded) {
-                result[creep.assignedRoom].wounded = []
-            }
-            result[creep.assignedRoom].wounded.push(creep)
-        }
-
-        if (creep.memory.role) {
-            if (!creep.spawning && SELF_DIRECTED_CREEP_ROELS.includes(creep.memory.role)) {
-                creepAction[creep.memory.role](creep)
-            }
-
-            if (!result[creep.assignedRoom][creep.memory.role]) {
-                result[creep.assignedRoom][creep.memory.role] = []
-            }
-            result[creep.assignedRoom][creep.memory.role].push(creep)
-        }
-    }
-    Game._classifiedCreeps = result
-    return Game._classifiedCreeps
-}
-
-global.getNumCreepsByRole = function (roomName, role) {
-    const creeps = classifyCreeps()
-    if (!creeps[roomName]) {
-        return 0
-    }
-    if (!creeps[roomName][role]) {
-        return 0
-    }
-    return creeps[roomName][role].length
-}
-
-global.getCreepsByRole = function (roomName, role) {
-    const creeps = classifyCreeps()
-    if (!creeps[roomName]) {
-        return []
-    }
-    if (!creeps[roomName][role]) {
-        return []
-    }
-    return creeps[roomName][role]
-}
-
-global.getCreepsByRoomName = function (roomName) {
-    const creeps = classifyCreeps()
-    if (!creeps[roomName]) {
-        return []
-    }
-    const result = []
-    for (const roleName in creeps[roomName]) {
-        result.push(...creeps[roomName][roleName])
-    }
-    return result
-}
-
-global.findClosestMyRoom = function (fromRoomName, level = 0) {
-    const closestRoomName = Object.keys(Game.rooms).filter(roomName => roomName !== fromRoomName && Game.rooms[roomName].isMy && Game.rooms[roomName].controller.level >= level).sort((a, b) => {
-        return Game.map.findRoute(fromRoomName, a, {
-            routeCallback(roomName) {
-                if (ROOMNAMES_TO_AVOID.includes(roomName)) {
-                    return Infinity;
-                }
-                return 1;
-            }
-        }).length - Game.map.findRoute(fromRoomName, b, {
-            routeCallback(roomName) {
-                if (ROOMNAMES_TO_AVOID.includes(roomName)) {
-                    return Infinity;
-                }
-                return 1;
-            }
-        }).length
-    })[0]
-    return Game.rooms[closestRoomName]
 }
 
 global.visual = function () {
@@ -286,114 +182,12 @@ global.visual = function () {
     return "show basePlan"
 }
 
-
-const EXPIRATION_PERIOD = 40000
-
-Overlord.prototype.purgeMapInfo = function () {
-    const map = this.map
-    for (const roomName in map) {
-        if (!map[roomName].lastScout || Game.time > map[roomName].lastScout + EXPIRATION_PERIOD) {
-            delete map[roomName]
-        }
-    }
-}
-
-Overlord.prototype.mapInfo = function () {
-    const map = this.map
-    for (const roomName of Object.keys(map)) {
-        try {
-            const info = map[roomName]
-            const center = new RoomPosition(25, 25, roomName)
-
-            if (!info.lastScout || Game.time > info.lastScout + EXPIRATION_PERIOD) {
-                delete map[roomName]
-            }
-
-            if (info.lastScout !== undefined) {
-                Game.map.visual.text(`⏳${info.lastScout + EXPIRATION_PERIOD - Game.time}`, new RoomPosition(center.x - 20, center.y + 15, center.roomName), { fontSize: 7, align: 'left' })
-            }
-
-            if (info.isClaimCandidate) {
-                Game.map.visual.text(`🚩`, new RoomPosition(center.x - 15, center.y, center.roomName))
-            }
-            if (info.isRemoteCandidate) {
-                Game.map.visual.text(`⛏️`, new RoomPosition(center.x + 15, center.y, center.roomName), { align: 'left' })
-            }
-            if (info.inaccessible && info.inaccessible > Game.time) {
-                Game.map.visual.text(`🚫${info.inaccessible - Game.time}`, new RoomPosition(center.x, center.y - 15, center.roomName), { fontSize: 7, color: '#f000ff' })
-            }
-
-            // 내 방인지 체크
-            const room = Game.rooms[roomName]
-            if (room && room.isMy) {
-                Game.map.visual.text(`${room.controller.level}`, new RoomPosition(center.x - 18, center.y - 20, center.roomName), { fontSize: 13, color: '#74ee15' })
-                if (room.memory.scout) {
-                    Game.map.visual.text(`${room.memory.scout.state}`, new RoomPosition(center.x + 5, center.y - 20, center.roomName), { fontSize: 13, color: '#74ee15' })
-                    if (room.memory.scout.next) {
-                        Game.map.visual.line(center, new RoomPosition(25, 25, room.memory.scout.next), { color: '#ffe700', width: '2', opacity: 1 })
-                        Game.map.visual.circle(new RoomPosition(25, 25, room.memory.scout.next), { fill: '#ffe700' })
-                    }
-                }
-            } else {
-                Game.map.visual.text(`🚶${info.distance}`, new RoomPosition(center.x + 15, center.y + 15, center.roomName), { fontSize: 7 })
-            }
-
-            // host가 있는 info인지 체크. 즉 scouter가 확인한 방인지 체크
-            if (!info.host) {
-                continue
-            }
-
-            const hostPos = new RoomPosition(25, 25, info.host)
-            // Game.map.visual.line(hostPos, center, { color: '#00ffe8', width: '1', opacity: 0.2 })
-
-            const describedExits = Game.map.describeExits(roomName)
-            for (const direction of ['1', '3', '5', '7']) {
-                const adjacentName = describedExits[direction]
-                if (describedExits[direction] && map[adjacentName] && info.host === map[adjacentName].host) {
-                    continue
-                }
-                let startPos = undefined
-                let endPos = undefined
-                switch (direction) {
-                    case '1':
-                        startPos = new RoomPosition(0, 0, roomName)
-                        endPos = new RoomPosition(49, 0, roomName)
-                        break
-                    case '3':
-                        startPos = new RoomPosition(49, 49, roomName)
-                        endPos = new RoomPosition(49, 0, roomName)
-                        break
-                    case '5':
-                        startPos = new RoomPosition(0, 49, roomName)
-                        endPos = new RoomPosition(49, 49, roomName)
-                        break
-                    case '7':
-                        startPos = new RoomPosition(0, 0, roomName)
-                        endPos = new RoomPosition(0, 49, roomName)
-                        break
-                }
-                if (!startPos || !endPos) {
-                    continue
-                }
-                Game.map.visual.line(startPos, endPos, { color: '#00ffe8', width: '2', opacity: 1 })
-            }
-
-
-        }
-        catch (error) {
-            console.log(error)
-            data.recordLog(`MAP: ${error}`, roomName)
-            // delete map[roomName]
-        }
-    }
-}
-
 global.resetMap = function (roomName) {
     if (roomName === undefined) {
         Memory.map = {}
-        for (const myRoom of OVERLORD.myRooms) {
+        for (const myRoom of Overlord.myRooms) {
             delete myRoom.memory.scout
-            const scouters = getCreepsByRole(myRoom.name, 'scouter')
+            const scouters = Overlord.getCreepsByRole(myRoom.name, 'scouter')
             for (const scouter of scouters) {
                 scouter.suicide()
             }
@@ -414,10 +208,95 @@ global.resetMap = function (roomName) {
             }
         }
         delete room.memory.scout
-        const scouter = getCreepsByRole(roomName, 'scouter')[0]
+        const scouter = Overlord.getCreepsByRole(roomName, 'scouter')[0]
         if (scouter) {
             scouter.suicide()
         }
         return `reset map of ${roomName}`
     }
+}
+
+global.link = function () {
+    for (const myRoom of Overlord.myRooms) {
+        console.log(myRoom.hyperLink)
+    }
+}
+
+global.mapInfo = function () {
+    Memory.showMapInfo = (Memory.showMapInfo || 0) ^ 1
+    if (Memory.showMapInfo === 1) {
+        Memory.mapInfoTime = Game.time
+    }
+    return `show map visual : ${Memory.showMapInfo}`
+}
+
+global.siege = function (roomName, options = {}) {
+    const ticks = options.ticks || 50000
+
+    const baseName = options.base ? options.base.toUpperCase() : undefined
+
+    const type = options.type || 'blinkie'
+
+    roomName = roomName.toUpperCase()
+
+    if (!Game.rooms[roomName]) {
+        Overlord.observeRoom(roomName)
+        Memory.siege = Memory.siege || {}
+        Memory.siege[roomName] = options
+        return
+    }
+
+    if (Memory.siege && Memory.siege[roomName]) {
+        delete Memory.siege[roomName]
+    }
+
+    const name = `${roomName} ${type} siege `
+
+    const endTick = Game.time + ticks
+
+    for (let x = 15; x < 50; x += 5) {
+        const pos = new RoomPosition(x, 25, roomName)
+        const found = pos.lookFor(LOOK_FLAGS)
+
+        if (found.length) {
+            continue
+        }
+
+        pos.createFlag(name)
+
+        Memory.flags = Memory.flags || {}
+        Memory.flags[name] = Memory.flags[name] || {}
+        Memory.flags[name].endTick = endTick
+
+        if (baseName !== undefined) {
+            Memory.flags[name].base = baseName
+        }
+
+        return
+    }
+}
+
+global.logSend = function (resourceType) {
+    const outgoingTransactions = Game.market.outgoingTransactions
+
+    for (const transaction of outgoingTransactions) {
+        if (resourceType && transaction.resourceType !== resourceType) {
+            continue
+        }
+        console.log(`${transaction.from} sent ${transaction.amount} of ${transaction.resourceType} to ${transaction.to}`)
+    }
+}
+
+global.setRampartsHits = function (roomName, threshold = undefined) {
+    roomName = roomName.toUpperCase()
+    const room = Game.rooms[roomName]
+    if (!room || !room.isMy) {
+        return
+    }
+    if (threshold) {
+        room.memory.rampartsHitsPerRcl = threshold
+    } else {
+        delete room.memory.rampartsHitsPerRcl
+    }
+    return
 }

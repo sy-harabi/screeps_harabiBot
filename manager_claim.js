@@ -1,17 +1,18 @@
 Room.prototype.manageClaim = function () {
     this.memory.claimRoom = this.memory.claimRoom || {}
-    if (Object.keys(this.memory.claimRoom).length === 0) {
+    const roomNames = Object.keys(this.memory.claimRoom)
+    if (roomNames.length === 0) {
         return
     }
+
     for (const roomName of Object.keys(this.memory.claimRoom)) {
         Game.map.visual.line(new RoomPosition(25, 25, this.name), new RoomPosition(25, 25, roomName), { color: '#001eff', width: '2', opacity: 1 })
         Game.map.visual.circle(new RoomPosition(25, 25, roomName), { fill: '#001eff' })
-        this.claimRoom(roomName)
+        return this.claimRoom(roomName)
     }
 }
 
 Room.prototype.claimRoom = function (roomName) {
-
     // room memory에 status object 만들기
     this.memory.claimRoom = this.memory.claimRoom || {}
     this.memory.claimRoom[roomName] = this.memory.claimRoom[roomName] || {}
@@ -20,12 +21,34 @@ Room.prototype.claimRoom = function (roomName) {
     // targetRoom (안보이면 undefined)
     const targetRoom = Game.rooms[roomName]
 
+    // defense part
+
+    // defender가 죽은거면 방어 어려우니까 포기
+    if (targetRoom) {
+        targetRoom.checkTombstone()
+    }
+
+    // const map = Overlord.map
+    // if (map[roomName] && map[roomName].threat) {
+    //     delete this.memory.claimRoom[roomName]
+    //     const centerPos = new RoomPosition(25, 25, roomName)
+    //     centerPos.createFlag(`clear ${roomName}`)
+    //     data.recordLog(`claim ${roomName} faild. clear ${roomName}.`, roomName)
+    //     return
+    // }
+
+    const cost = this.controller.level * 1000
+    if (!this.sendTroops(roomName, cost, { distance: 600 })) {
+        return
+    }
+
+
     // claim part
     if (targetRoom && targetRoom.isMy) {
         status.isClaimed = true
     } else {
         status.isClaimed = false
-        const claimer = getCreepsByRole(roomName, 'claimer')[0]
+        const claimer = Overlord.getCreepsByRole(roomName, 'claimer')[0]
         if (!claimer) {
             this.requestClaimer(roomName)
         }
@@ -38,6 +61,7 @@ Room.prototype.claimRoom = function (roomName) {
         }
         const structures = targetRoom.find(FIND_STRUCTURES)
         let numLeft = 0
+        let numDone = 0
         for (const structure of structures) {
             // 내 건물은 넘어가
             if (structure.my) {
@@ -52,30 +76,17 @@ Room.prototype.claimRoom = function (roomName) {
                 numLeft++
                 continue
             }
+            numDone++
             structure.destroy()
         }
-        status.isClearedOnce = true
-        if (numLeft === 0) {
+
+        if (numDone === 0) {
+            status.isClearedOnce = true
+        }
+
+        if (numLeft === 0 && numDone === 0) {
             status.isCleared = true
         }
-    }
-
-    // defense part
-
-    // defender가 죽은거면 방어 어려우니까 포기
-    if (targetRoom) {
-        targetRoom.checkTombstone()
-    }
-    const map = OVERLORD.map
-    if (map[roomName] && map[roomName].threat) {
-        delete this.memory.claimRoom[roomName]
-        // const centerPos = new RoomPosition(25, 25, roomName)
-        // centerPos.createFlag(`clear ${roomName}`)
-        return
-    }
-    const defenders = getCreepsByRole(roomName, 'colonyDefender')
-    if (defenders.length === 0) {
-        this.requestColonyDefender(roomName)
     }
 
     // 아직 claim 안된거면 여기서 멈춰
@@ -98,7 +109,7 @@ Room.prototype.claimRoom = function (roomName) {
         return
     }
 
-    const pioneers = getCreepsByRole(roomName, 'pioneer')
+    const pioneers = Overlord.getCreepsByRole(roomName, 'pioneer').filter(creep => (creep.spawning || creep.ticksToLive > CREEP_LIFE_TIME - 600))
     let numWork = 0
     for (const pioneer of pioneers) {
         numWork += pioneer.getNumParts('work')

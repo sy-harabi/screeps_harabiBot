@@ -1,186 +1,191 @@
-Object.defineProperties(StructureTerminal.prototype, {
-    notEnoughBasicMinerals: {
-        get() {
-            const notEnoughBasicMinerals = []
-            for (const resourceType of Object.keys(BASIC_MINERALS)) {
-                if ((this.store[resourceType] / BASIC_MINERALS[resourceType]['ratio']) < 1000) {
-                    notEnoughBasicMinerals.push({ resourceType: resourceType, amount: this.store[resourceType] })
-                }
-            }
-            return notEnoughBasicMinerals
-        }
-    },
-    lowestBaseCompound: {
-        get() {
-            this._lowestBaseCompound = {}
-            for (const resourceType of Object.keys(BASE_COMPOUNDS)) {
-                if (!this._lowestBaseCompound.resourceType || (this._lowestBaseCompound.amount / BASE_COMPOUNDS[this._lowestBaseCompound.resourceType]['ratio']) > (this.store[resourceType] / BASE_COMPOUNDS[resourceType]['ratio'])) {
-                    this._lowestBaseCompound = { resourceType: resourceType, amount: this.store[resourceType] }
-                }
-            }
-            return this._lowestBaseCompound
-        }
-    },
-    hasNotEnoughBaseCompounds: {
-        get() {
-            if ((this.lowestBaseCompound.amount / BASE_COMPOUNDS[this.lowestBaseCompound.resourceType]['ratio']) < 1000) {
-                return true
-            }
-            return false
-        }
-    },
-    lowestTier2Compound: {
-        get() {
-            this._lowestTier2Compound = {}
-            for (const resourceType of Object.keys(TIER2_COMPOUNDS)) {
-                if (!this._lowestTier2Compound.resourceType || (this._lowestTier2Compound.amount / TIER2_COMPOUNDS[this._lowestTier2Compound.resourceType]['ratio']) > (this.store[resourceType] / TIER2_COMPOUNDS[resourceType]['ratio'])) {
-                    this._lowestTier2Compound = { resourceType: resourceType, amount: this.store[resourceType] }
-                }
-            }
-            return this._lowestTier2Compound
-        }
-    },
-    hasNotEnoughTier2Compounds: {
-        get() {
-            if ((this.lowestTier2Compound.amount / TIER2_COMPOUNDS[this.lowestTier2Compound.resourceType]['ratio']) < 1000) {
-                return true
-            }
-            return false
-        }
-    },
-    lowestTier3Compound: {
-        get() {
-            this._lowestTier3Compound = {}
-            for (const resourceType of Object.keys(TIER3_COMPOUNDS)) {
-                if (!this._lowestTier3Compound.resourceType || (this._lowestTier3Compound.amount / TIER3_COMPOUNDS[this._lowestTier3Compound.resourceType]['ratio']) > (this.store[resourceType] / TIER3_COMPOUNDS[resourceType]['ratio'])) {
-                    this._lowestTier3Compound = { resourceType: resourceType, amount: this.store[resourceType] }
-                }
-            }
-            return this._lowestTier3Compound
-        }
-    },
-    hasNotEnoughTier3Compounds: {
-        get() {
-            if ((this.lowestTier3Compound.amount / TIER3_COMPOUNDS[this.lowestTier3Compound.resourceType]['ratio']) < 1000) {
-                return true
-            }
-            return false
-        }
-    },
-    RegionalCommodity: {
-        get() {
-            for (const resourceType of Object.keys(BASIC_REGIONAL_COMMODITIES)) {
-                if (this.store[resourceType] >= 500) {
-                    return resourceType
-                }
-            }
-            return false
-        }
-    }
-})
+const { simpleAllies } = require("./simpleAllies")
 
+const MINERAL_AMOUNT_TO_KEEP = 3600
+const MINERAL_AMOUNT_TO_SELL = 50000
+const MINERAL_AMOUNT_BUFFER = 10000
+const TERMINAL_ENERGY_THRESHOLD_TO_HELP = 20000
 
 StructureTerminal.prototype.run = function () {
-    if (Memory.abondon && Memory.abondon.includes(this.room.name)) {
+    const roomName = this.room.name
+    simpleAllies.initRun(roomName)
+
+    if (Memory.abandon && Memory.abandon.includes(roomName)) {
+        simpleAllies.endRun()
         return
     }
 
-    if (this.store[this.room.mineral.mineralType] > 100000) {
-        this.room.heap.extract = false
-        business.sell(this.room.mineral.mineralType, this.store[this.room.mineral.mineralType] - 70000, this.room.name)
-    } else {
-        this.room.heap.extract = true
+    if (this.cooldown) {
+        simpleAllies.endRun()
+        return
     }
 
-    if (Memory.boostRCL && this.room.controller.level < 8) {
-        let received = false
-        if (this.store['XGH2O'] < 1000) {
-            for (const room of Object.values(Game.rooms)) {
-                if (room.name === this.room.name) {
-                    continue
-                }
-                if (!room.isMy || room.controller.level < 8) {
-                    continue
-                }
-                if (!room.terminal || room.terminal.cooldown) {
-                    continue
-                }
-                if (room.terminal.store['XGH2O'] < 1000) {
-                    continue
-                }
-                if (room.terminal.send('XGH2O', 1000, this.room.name) === OK) {
-                    received = true
-                    data.recordLog(`SEND: 1000 XGH2O to ${this.room.name}`, room.name)
-                    break
-                }
-            }
-            if (!received) {
-                business.buy('XGH2O', 1000, this.room.name)
-            }
-        }
-
-        if (this.room.storage && this.room.storage.store.getUsedCapacity(RESOURCE_ENERGY) >= 500000) {
-            return
-        }
-        for (const room of Object.values(Game.rooms)) {
-            if (room.name === this.room.name) {
-                continue
-            }
-            if (!room.isMy || room.controller.level < 8) {
-                continue
-            }
-            if (room.savingMode) {
-                continue
-            }
-            if (!room.terminal || room.terminal.cooldown || room.terminal.store[RESOURCE_ENERGY] < 40000) {
-                continue
-            }
-            const amount = Math.floor(room.terminal.store[RESOURCE_ENERGY] / 2)
-            if (room.terminal.send(RESOURCE_ENERGY, amount, this.room.name) === OK) {
-                data.recordLog(`SEND: ${amount} energy to ${this.room.name}`, room.name)
-            }
-        }
-    } else if (this.room.storage && this.room.storage.store[RESOURCE_ENERGY] < 300000) {
-        for (const room of Object.values(Game.rooms)) {
-            if (room.name === this.room.name) {
-                continue
-            }
-            if (!room.isMy || room.controller.level < 8) {
-                continue
-            }
-            if (room.savingMode) {
-                continue
-            }
-            if (!room.terminal || room.terminal.cooldown || room.terminal.store[RESOURCE_ENERGY] < 40000) {
-                continue
-            }
-            const amount = Math.floor(room.terminal.store[RESOURCE_ENERGY] / 2)
-            if (room.terminal.send(RESOURCE_ENERGY, amount, this.room.name) === OK) {
-                data.recordLog(`SEND: ${amount} energy to ${this.room.name}`, room.name)
-            }
-        }
-    }
-
-    const notEnoughBasicMinerals = this.notEnoughBasicMinerals
-    if (notEnoughBasicMinerals.length) {
-        for (const notEnoughBasicMineral of notEnoughBasicMinerals) {
-            business.buy(notEnoughBasicMineral.resourceType, BASIC_MINERALS[notEnoughBasicMineral.resourceType].ratio * 1000 - notEnoughBasicMineral.amount, this.room.name)
-        }
-    }
-
-    if (data.isEnoughCredit && this.room.structures.powerSpawn.length && this.store[RESOURCE_POWER] < 500) {
-        business.buy('power', 1000, this.room.name)
-    }
-
-    if (!this.hasNotEnoughTier3Compounds) {
-        for (const resourceType of business.profitableCompounds) {
-            business.sell(resourceType, this.store[resourceType] / 2, this.room.name)
-        }
-    }
+    this.manageMinerals()
 
     for (const resourceType of Object.keys(this.store)) {
         if (COMMODITIES_TO_SELL.includes(resourceType)) {
-            business.sell(resourceType, this.store[resourceType], this.room.name)
+            Business.sell(resourceType, this.store[resourceType], roomName)
+        }
+    }
+
+    if (this.store[RESOURCE_POWER] > 10000) {
+        Business.sell('power', 1000, roomName)
+    }
+
+    const neeedsHelp = this.room.getNeedsHelp()
+
+    if (neeedsHelp) {
+        const rooms = [...Overlord.myRooms].sort((a, b) => Game.map.getRoomLinearDistance(roomName, a.name) - Game.map.getRoomLinearDistance(roomName, b.name))
+        for (const room of rooms) {
+            if (room.name === roomName) {
+                continue
+            }
+            if (room.controller.level < 8) {
+                continue
+            }
+            if (room.energyLevel < 150) {
+                continue
+            }
+            if (!room.terminal || room.terminal.cooldown || room.terminal.store[RESOURCE_ENERGY] < TERMINAL_ENERGY_THRESHOLD_TO_HELP) {
+                continue
+            }
+            const amount = Math.floor(TERMINAL_ENERGY_THRESHOLD_TO_HELP / 2)
+            if (room.terminal.send(RESOURCE_ENERGY, amount, roomName) === OK) {
+                simpleAllies.endRun()
+                return
+            }
+        }
+        Business.buy(RESOURCE_ENERGY, 20000, roomName)
+    }
+
+    simpleAllies.endRun()
+}
+
+Room.prototype.getNeedsHelp = function () {
+    if (!this.terminal || !this.storage) {
+        return false
+    }
+
+    if (this.controller.level === 8) {
+        return this.energyLevel < 110
+    }
+
+    return this.energyLevel < 160
+}
+
+/**
+ * 
+ * @param {string} resourceType - resourceType to gather
+ * @param {number} amount - goal amount to gather
+ * @param {*} options 
+ * @returns 
+ */
+StructureTerminal.prototype.gatherResource = function (resourceType, amount, options = {}) {
+    const defaultOptions = { threshold: 2 * amount - this.store[resourceType], RCLthreshold: 6, rooms: undefined }
+    const { threshold, RCLthreshold, rooms } = { ...defaultOptions, ...options }
+
+    if (this.store[resourceType] >= amount) {
+        return OK
+    }
+
+    const terminals = rooms
+        ? rooms.map(room => room.terminal).filter(terminal => terminal !== undefined)
+        : Overlord.structures.terminal.sort((a, b) => b.store[resourceType] - a.store[resourceType])
+    for (const terminal of terminals) {
+        if (terminal.room.name === this.room.name) {
+            continue
+        }
+
+        if (terminal.room.controller.level < RCLthreshold) {
+            continue
+        }
+
+        if (terminal.cooldown) {
+            continue
+        }
+        if (terminal.store[resourceType] <= threshold) {
+            continue
+        }
+
+        const amountToSend = Math.min(terminal.store[resourceType], amount - this.store[resourceType])
+
+        if (terminal.send(resourceType, amountToSend, this.room.name) === OK) {
+            Overlord.structures.terminal.filter(element => element.id !== terminal.id)
+            if (amountToSend + this.store[resourceType] >= amount) {
+                return OK
+            } else {
+                amount -= amountToSend
+            }
+        }
+    }
+    return ERR_NOT_ENOUGH_RESOURCES
+}
+
+StructureTerminal.prototype.manageMinerals = function () {
+    const roomName = this.room.name
+    const resourceTypes = [...BASIC_MINERALS].sort((a, b) => this.store[a] - this.store[b])
+    const mineralAmountToSell = Math.min(MINERAL_AMOUNT_TO_SELL, 7200 + Overlord.myRooms.length * 2000)
+    const mineralAmountToSend = 7200 + Overlord.myRooms.length * 1000
+
+    const requests = simpleAllies.allySegmentData ? simpleAllies.allySegmentData.requests : undefined
+    const resourceRequests = requests ? requests.resource : undefined
+    const resourceRequestsSorted = resourceRequests ? resourceRequests.sort((a, b) => b.priority - a.priority) : undefined
+
+    for (const resourceType of resourceTypes) {
+        const storeAmount = this.store[resourceType]
+        const energyAmount = this.store[RESOURCE_ENERGY]
+        // sell if amount excess threshold
+
+        if (storeAmount > mineralAmountToSend) {
+            if (resourceRequestsSorted) {
+                const priorityRequest = resourceRequestsSorted.find(request => request.resourceType === resourceType && request.terminal)
+                if (priorityRequest) {
+                    const amount = Math.min(1000, priorityRequest.amount)
+                    if (this.send(resourceType, amount, priorityRequest.roomName, 'my gift for ally')) {
+                        continue
+                    }
+                }
+            }
+        }
+
+        if (!this.room.memory[`sell${resourceType}`] && storeAmount > mineralAmountToSell) {
+            this.room.memory[`sell${resourceType}`] = true
+        } else if (this.room.memory[`sell${resourceType}`] && storeAmount <= mineralAmountToSell - MINERAL_AMOUNT_BUFFER) {
+            this.room.memory[`sell${resourceType}`] = false
+        }
+
+        if (this.room.memory[`sell${resourceType}`] && (SHARD !== 'swc' || resourceType !== 'X')) {
+            const amount = Math.min(energyAmount, storeAmount - mineralAmountToSell + 1000)
+            Business.sell(resourceType, amount, roomName)
+            continue
+        }
+
+        // continue if sufficient
+        if (storeAmount >= MINERAL_AMOUNT_TO_KEEP) {
+            Business.cancelAllOrder(resourceType, roomName, ORDER_BUY)
+            continue
+        }
+
+        const amountNeeded = Math.min(1000, MINERAL_AMOUNT_TO_KEEP - storeAmount)
+
+        //try gather. continue if success
+        if (this.gatherResource(resourceType, MINERAL_AMOUNT_TO_KEEP, { threshold: MINERAL_AMOUNT_TO_KEEP + amountNeeded }) === OK) {
+            Business.cancelAllOrder(resourceType, roomName, ORDER_BUY)
+            continue
+        }
+
+        const request = {
+            priority: 0.5,
+            roomName: roomName,
+            resourceType: resourceType,
+            amount: amountNeeded,
+            terminal: true
+        }
+
+        simpleAllies.requestResource(request)
+
+        //try buy
+        if (SHARD !== 'swc' || resourceType !== 'X') {
+            Business.buy(resourceType, amountNeeded, roomName)
         }
     }
 }

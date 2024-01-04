@@ -27,7 +27,7 @@ PowerCreep.prototype.actRoomOperator = function () {
         if (!spot) {
             return
         }
-        this.moveMy(spot, 0)
+        this.moveMy(spot)
     }
 }
 
@@ -37,9 +37,6 @@ PowerCreep.prototype.searchPath = function (target, range = 0, maxRooms = 1, ign
         plainCost: 2,
         swampCost: 10,
         roomCallback: function (roomName) {
-            if (ROOMNAMES_TO_AVOID.includes(roomName)) {
-                return false
-            }
             if (Game.rooms[roomName]) {
                 const costs = Game.rooms[roomName].basicCostmatrix
                 if (!ignoreCreeps && thisCreep.room.name === roomName) {
@@ -115,7 +112,7 @@ PowerCreep.prototype.moveMy = function (target, range = 0) {
 
     if (data.creeps[this.name].path[0] && data.creeps[this.name].path[0].isEqualTo(this.pos)) {
         data.creeps[this.name].path.shift()
-        if (data.creeps[this.name].path[0] && !isValidCoord(data.creeps[this.name].path[0].x, data.creeps[this.name].path[0].y)) {
+        if (data.creeps[this.name].path[0] && isEdgeCoord(data.creeps[this.name].path[0].x, data.creeps[this.name].path[0].y)) {
             data.creeps[this.name].path.shift()
         }
     }

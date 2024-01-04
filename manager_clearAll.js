@@ -6,11 +6,8 @@ Flag.prototype.manageClearAll = function () {
     if (targetRoom && targetRoom.isMy) {
         const structures = targetRoom.find(FIND_STRUCTURES)
 
-        if (structures.length > 1) {
-            for (const structure of structures) {
-                structure.destroy()
-            }
-            return
+        for (const structure of structures) {
+            structure.destroy()
         }
 
         for (const constructionSite of targetRoom.constructionSites) {
@@ -30,7 +27,7 @@ Flag.prototype.manageClearAll = function () {
         return
     }
 
-    if ((!targetRoom || !targetRoom.controller.reservation || targetRoom.controller.reservation.ticksToEnd < 200 || targetRoom.controller.reservation.username === MY_NAME) && !getNumCreepsByRole(targetRoomName, 'claimer')) {
+    if ((!targetRoom || !targetRoom.controller.reservation || targetRoom.controller.reservation.ticksToEnd < 200 || targetRoom.controller.reservation.username === MY_NAME) && !Overlord.getNumCreepsByRole(targetRoomName, 'claimer')) {
         closestMyRoom.requestClaimer(targetRoomName)
         return
     }

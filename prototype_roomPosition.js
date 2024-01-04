@@ -21,6 +21,14 @@ Object.defineProperties(RoomPosition.prototype, {
             return this.terrain === 1
         }
     },
+    isSwamp: {
+        get() {
+            if (this.isRoad) {
+                return false
+            }
+            return this.terrain === 2
+        }
+    },
     isRampart: {
         get() {
             if (this._isRampart !== undefined) {
@@ -31,29 +39,26 @@ Object.defineProperties(RoomPosition.prototype, {
     },
     workable: {
         get() {
-            if (!this._workable) {
-                this._workable = true
-                for (const lookObject of this.look()) {
-                    if (lookObject.type === LOOK_TERRAIN && lookObject[LOOK_TERRAIN] === 'wall') {
-                        this._workable = false
-                        break
-                    }
-                    if (!isValidCoord(this.x, this.y)) {
-                        this._workable = false
-                        break
-                    }
-                    if (lookObject.type === LOOK_STRUCTURES && OBSTACLE_OBJECT_TYPES.includes(lookObject[LOOK_STRUCTURES].structureType)) {
-                        this._workable = false
-                        break
-                    }
-                    if (lookObject.type === LOOK_STRUCTURES && lookObject[LOOK_STRUCTURES].structureType === STRUCTURE_ROAD) {
-                        this._workable = false
-                        break
-                    }
-                    if (lookObject.type === LOOK_CONSTRUCTION_SITES) {
-                        this._workable = false
-                        break
-                    }
+            if (this._workable !== undefined) {
+                return this._workable
+            }
+            this._workable = true
+            for (const lookObject of this.look()) {
+                if (lookObject.type === 'terrain' && lookObject.terrain === 'wall') {
+                    this._workable = false
+                    break
+                }
+                if (isEdgeCoord(this.x, this.y)) {
+                    this._workable = false
+                    break
+                }
+                if (lookObject.type === LOOK_STRUCTURES && OBSTACLE_OBJECT_TYPES.includes(lookObject[LOOK_STRUCTURES].structureType)) {
+                    this._workable = false
+                    break
+                }
+                if (lookObject.type === LOOK_CONSTRUCTION_SITES) {
+                    this._workable = false
+                    break
                 }
             }
             return this._workable
@@ -61,7 +66,7 @@ Object.defineProperties(RoomPosition.prototype, {
     },
     walkable: {
         get() {
-            if (!isValidCoord(this.x, this.y)) {
+            if (isEdgeCoord(this.x, this.y)) {
                 return false
             }
             this._walkable = true
@@ -75,8 +80,11 @@ Object.defineProperties(RoomPosition.prototype, {
                     break
                 }
                 if (lookObject.type === LOOK_CONSTRUCTION_SITES) {
-                    this._walkable = false
-                    break
+                    const structureType = lookObject.constructionSite.structureType
+                    if (OBSTACLE_OBJECT_TYPES.includes(structureType)) {
+                        this._walkable = false
+                        break
+                    }
                 }
             }
             return this._walkable
@@ -126,12 +134,22 @@ Object.defineProperties(RoomPosition.prototype, {
     }
 })
 
+RoomPosition.prototype.getTaxiRangeTo = function (target) {
+    const targetPos = target.pos || target
+    if (this.roomName !== targetPos.roomName) {
+        return Infinity
+    }
+    return Math.abs(this.x - targetPos.x) + Math.abs(this.y - targetPos.y)
+}
+
 RoomPosition.prototype.lookForConstructible = function (vectorArray) {
     for (const vector of vectorArray) {
-        if (!isValidCoord(this.x + vector.x, this.y + vector.y)) {
+        const x = this.x + vector.x
+        const y = this.y + vector.y
+        if (!isValidCoord(x, y)) {
             return false
         }
-        const pos = new RoomPosition(this.x + vector.x, this.y + vector.y, this.roomName)
+        const pos = new RoomPosition(x, y, this.roomName)
         if (!pos.constructible) {
             return false
         }
@@ -149,12 +167,10 @@ Room.prototype.parsePos = function (packed) {
     return new RoomPosition(x, y, this.name)
 }
 
-RoomPosition.prototype.isEqualTo = function (target) {
-    const pos = target.pos || target
-    return this.x === pos.x && this.y === pos.y && this.roomName === pos.roomName
-}
-
 RoomPosition.prototype.getAtRange = function (range) {
+    if (i = 0) {
+        return [this]
+    }
     const result = []
     for (let i = -range; i <= range; i++) {
         if (isValidCoord(this.x + i, this.y + range)) {
@@ -194,11 +210,16 @@ RoomPosition.prototype.getAverageRange = function (array) {
     return result / (array.length)
 }
 
-RoomPosition.prototype.getClosestPathLength = function (array) {
+RoomPosition.prototype.getClosestPathLength = function (array, costs) {
+    if (costs === undefined) {
+        costs = new PathFinder.CostMatrix
+    }
     const goals = array.map(obj => obj.pos || obj)
-    const search = PathFinder.search(this, goals)
+    const search = PathFinder.search(this, goals, {
+        roomCallback: roomName => costs
+    })
     if (search.incomplete) {
-        return undefined
+        return 255
     }
     return search.path.length
 }
@@ -211,6 +232,17 @@ RoomPosition.prototype.getClosestByPath = function (array) {
     }
     const path = search.path
     return path[path.length - 1]
+}
+
+RoomPosition.prototype.getClosestTaxiRange = function (array) {
+    let result = Infinity
+    for (const obj of array) {
+        const newResult = this.getTaxiRangeTo(obj)
+        if (newResult < result) {
+            result = newResult
+        }
+    }
+    return result
 }
 
 RoomPosition.prototype.getClosestRange = function (array) {

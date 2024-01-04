@@ -481,6 +481,26 @@ RoomVisual.prototype.connectRoads = function (opts = {}) {
   return this;
 }
 
+RoomVisual.prototype.arrow = function (pos1, pos2, opts = {}) {
+  if (pos1.getRangeTo(pos2) > 1) {
+    return
+  }
+  let color = !!opts.color ? opts.color : 'blue'
+  let opacity = !!opts.opacity ? opts.opacity : 0.5
+  this.line(pos1, pos2, { width: 0.1, color, opacity })
+  const x1 = pos1.x
+  const y1 = pos1.y
+  const x2 = pos2.x
+  const y2 = pos2.y
+  const point1x = ((x1 + 3 * x2) / 4) + ((y1 - y2) / 8)
+  const point1y = ((y1 + 3 * y2) / 4) + ((x2 - x1) / 8)
+  const point1 = [point1x, point1y]
+  const point2x = ((x1 + 3 * x2) / 4) + ((-y1 + y2) / 8)
+  const point2y = ((y1 + 3 * y2) / 4) + ((-x2 + x1) / 8)
+  const point2 = [point2x, point2y]
+  this.poly([pos2, point1, point2, pos2], { fill: color, opacity })
+}
+
 
 RoomVisual.prototype.speech = function (text, x, y, opts = {}) {
   var background = !!opts.background ? opts.background : colors.speechBackground
@@ -782,4 +802,97 @@ RoomVisual.prototype._compound = function (type, x, y, size = 0.25) {
     backgroundPadding: 0.3 * size,
   })
 };
+
+RoomVisual.prototype.softShell = function (aPointList, aOptions) {
+  if (aPointList.length <= 1) {
+    return
+  }
+
+  let border = [];
+  let at = _.first(aPointList);
+  let atAngle = 0;
+
+  for (let i = 0; i < 100; i++) {
+    border.push(at);
+    let next;
+    let nextAngle;
+    let nextValue = Math.PI * 2;
+    for (let p of aPointList) {
+      if (p === at) {
+        continue;
+      }
+
+      let angle = Math.atan2(p.x - at.x, p.y - at.y);
+      let diff = angle - atAngle;
+      if (diff < 0) {
+        diff += Math.PI * 2;
+      }
+
+      if (diff < nextValue) {
+        nextValue = diff;
+        next = p;
+        nextAngle = angle;
+      }
+    };
+
+    let index = border.indexOf(next);
+    if (index > 0) {
+      border.splice(0, index);
+      border.push(next);
+      break;
+    }
+
+    at = next;
+    atAngle = nextAngle;
+  }
+  this.softPoly(border, aOptions);
+}
+
+RoomVisual.prototype.softPoly = function (aPointList, aOptions) {
+  let opts = aOptions || {};
+  _.defaults(opts, { radius: 0.5, angularResolution: 0.3, strokeWidth: 0.03 });
+
+  let processed = [];
+
+  let angle;
+
+  {
+    let deltaX = aPointList[aPointList.length - 1].x - aPointList[0].x;
+    let deltaY = aPointList[aPointList.length - 1].y - aPointList[0].y;
+
+    angle = Math.atan2(deltaY, -deltaX);
+  }
+
+  for (let i = 1; i < aPointList.length; i++) {
+    let deltaX = aPointList[i - 1].x - aPointList[i].x;
+    let deltaY = aPointList[i - 1].y - aPointList[i].y;
+
+    let scale = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+
+    let normalX = deltaY / scale;
+    let normalY = -deltaX / scale;
+
+    let nextangle = Math.atan2(normalX, normalY);
+
+    let span = nextangle - angle;
+    if (span < 0)
+      span += Math.PI * 2;
+
+    for (let a = 0; a < span; a += opts.angularResolution) {
+      let ang = angle + a;
+      ang = ang % (Math.PI * 2);
+
+      processed.push([
+        aPointList[i - 1].x + Math.sin(ang) * opts.radius,
+        aPointList[i - 1].y + Math.cos(ang) * opts.radius]);
+    }
+
+    angle = nextangle;
+
+    processed.push([aPointList[i - 1].x + normalX * opts.radius, aPointList[i - 1].y + normalY * opts.radius]);
+    processed.push([aPointList[i].x + normalX * opts.radius, aPointList[i].y + normalY * opts.radius]);
+  }
+  this.poly(processed, opts);
+}
+
 /// #endregion
